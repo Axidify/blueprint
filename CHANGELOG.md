@@ -11,6 +11,22 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+### Added
+- Issuing: "issue v1.3 to the client" (`tools/project.py issue`) records which SRS version went to whom
+  and when, and locks it. Its files become read-only and the generator refuses to overwrite it, so later
+  changes become a new version. The status list shows the last issued version.
+- Every mock-up version is kept in `mockup/versions/`, and `present.cmd <project> --version 0.2` shows an
+  earlier one again.
+- Documents are filed with dated, descriptive names, e.g. `2026-11-12 client comments on v1.3.docx`
+  (`tools/project.py file`, used by the inbox and new-project skills).
+- Archiving: delivered projects move to `projects/_archive/` and leave the status list; they can be
+  restored.
+- `tools/project.py check` finds projects missing parts of the standard layout; `--fix` adds them.
+
+### Fixed
+- The documentation check that runs before commits made through Claude Code could block every shell
+  command while the docs were incomplete. It now only ever acts on `git commit`.
+
 ## [0.2.0] - 2026-11-06
 
 ### Added

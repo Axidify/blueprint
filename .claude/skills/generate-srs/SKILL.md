@@ -37,7 +37,13 @@ requirement tables and screenshots all come from the spec, so they cannot contra
 3. Read the warnings it prints (literal cross-references, unknown `{ref:...}`, requirements that mention the
    mock-up, missing images). Do not issue a version with warnings.
 
-## 3. Review before it goes out
+## 3. Never overwrite an issued version
+
+If the spec's version was already issued to the client, the generator stops with a message. Bump
+`project.version` (and add a `history` entry), then generate again. Never unlock an issued version to
+regenerate it: the client has that file.
+
+## 4. Review before it goes out
 
 Run the `review-srs` skill on the generated document. Generated documents are consistent by
 construction, so the review should focus on what generation cannot guarantee: missing workflow edge
@@ -47,7 +53,13 @@ rather than editing the Word file by hand. Hand edits are lost at the next gener
 If the client needs something the generator does not produce (for example a process-flow diagram), add
 it as a spec file (`spec/process-flow.png`) or extend `tools/generate_srs.py`.
 
-## 4. Report
+## 5. Issue it
+
+When the user says the document has gone (or is going) to the client, record it:
+`python -I tools/project.py issue <slug> --to "<recipient>"`. This locks the version: its files become
+read-only, and any later change needs a new version.
+
+## 6. Report
 
 Give the user the paths to the `.docx` and `.pdf`, the number of open issues included, and the review
 verdict.

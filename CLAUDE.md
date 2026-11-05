@@ -40,7 +40,12 @@ Never write a company or client name into the app's files. Company details come 
 - `spec/app.yaml` – the project spec (roles, statuses, screens, fields, sample data, requirements). It
   drives both the mock-up and the generated SRS. Format: `docs/spec-format.md`.
 - `mockup/` – the built mock-up and screenshots. `feedback/feedback.json` – comments from sessions.
-- `output/` – generated SRS `.docx`/`.pdf` and a spec snapshot per version.
+- `output/` – generated SRS `.docx`/`.pdf` and a spec snapshot per version; `issued.json` records which
+  versions went to the client. Issued versions are locked: change the spec version instead.
+- `mockup/versions/v<version>/` – every mock-up version is kept and can be shown again.
+- `projects/_archive/<slug>/` – delivered projects, out of the active list (`tools/project.py`).
+
+File new documents with dated names through `tools/project.py file`.
 
 ## Knowledge (`knowledge/`)
 
@@ -72,7 +77,8 @@ Planned: `estimate`, `prep-workshop`, `price-cr`, a Figma connection.
 Run Python scripts with `python -I tools/<script>.py`: `doctor.py` (machine check), `status.py`
 (projects and next steps), `new_project.py`, `extract.py` (documents to text and images), `register.py`
 (register validation and Excel), `mockup.py` (build, serve, screenshot, feedback), `generate_srs.py`,
-`srs_format.py` (show, learn, preview the SRS format), `check_docs.py`.
+`srs_format.py` (show, learn, preview the SRS format), `project.py` (issue, file, archive, check),
+`check_docs.py`.
 
 ## Documentation and changelog
 

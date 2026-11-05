@@ -16,6 +16,8 @@ python -I tools/doctor.py
 | The SRS shows a different font from the design | Run `setup.cmd` to install Geist and Geist Mono, restart Word, and generate again |
 | The SRS has an old table of contents | Word was not available. Open the document, right-click the table of contents and choose Update Field |
 | The generator prints warnings | Fix them in the spec, not in the Word file (literal "section 3.2" references, requirements that mention the mock-up, missing images), then generate again |
+| The generator says a version is issued and locked | That version went to the client. Bump `project.version` in the spec (and add a history entry), then generate again |
+| I need to show the client an earlier mock-up | `present.cmd <project> --version 0.2` (every mock-up version is kept in `mockup/versions/`) |
 | `present.cmd` says no mock-up spec found | The project has no `spec/app.yaml` yet. Ask Blueprint to "build a mock-up" first |
 | Feedback comments are not saved | The mock-up was opened as a file instead of through `present.cmd`. Comments are kept in the browser: press **Export feedback** and drop the file in `inbox/` |
 | Others in the room cannot open the mock-up | Start it with `present.cmd <project> --lan`, allow it through Windows Firewall, and share your machine's address |

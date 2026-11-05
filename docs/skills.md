@@ -60,6 +60,8 @@ and mock-up remarks in requirements, then reviews the document with `review-srs`
 See [SRS format](srs-format.md).
 **Output:** `projects/<name>/output/<System> – System Requirement Specifications v<version>.docx`, a PDF
 when Word is installed, and a snapshot of the spec used.
+When the document goes to the client, say "issue v1.3 to the client": the version is recorded and
+locked, so later changes become a new version.
 
 ### srs-format
 
@@ -75,7 +77,7 @@ pages in `examples/leave-request/output/preview/`. See [SRS format](srs-format.m
 Records estimate vs actual effort and each CR, maps every CR to a gap pattern, and proposes updates to
 the knowledge base.
 **Output:** `knowledge/actuals/<name>.md`, a row in `knowledge/projects-log.md`, proposed gap-pattern and
-building-block updates.
+building-block updates. Afterwards it offers to archive the project (`projects/_archive/`).
 
 ### release
 

@@ -1,6 +1,7 @@
 @echo off
 rem Double-click to present a project's mock-up and collect feedback, or run: present courier-booking
 rem Add --lan to let others in the room comment from their own laptops: present courier-booking --lan
+rem Show an earlier mock-up version: present courier-booking --version 0.2
 setlocal
 cd /d "%~dp0"
 set PROJECT=%~1
@@ -18,4 +19,4 @@ if not exist "projects\%PROJECT%\spec\app.yaml" (
 echo.
 echo Opening the mock-up. Press Feedback in the bottom-right corner to collect comments.
 echo Keep this window open during the session; close it when you are done.
-python -I tools\mockup.py serve "projects\%PROJECT%" %2
+python -I tools\mockup.py serve "projects\%PROJECT%" %2 %3 %4

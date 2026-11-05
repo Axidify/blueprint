@@ -35,7 +35,9 @@ Use AskUserQuestion with these options (the tool adds "Other" automatically):
 
 If they pick "Other", or mention generating the SRS, presenting a mock-up or closing a project, use the
 matching skill: `generate-srs`, presenting (`present.cmd <project>` or
-`python -I tools/mockup.py serve projects/<slug>`), `close-project`.
+`python -I tools/mockup.py serve projects/<slug>`; add `--version 0.2` for an earlier mock-up),
+`close-project`. Recording that a document went to the client: `python -I tools/project.py issue <slug>`.
+If `python -I tools/project.py check` reports problems, offer to fix them with `--fix`.
 
 If a project is involved and it is not obvious which, ask which one, listing the projects by name.
 

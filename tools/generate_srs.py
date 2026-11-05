@@ -538,6 +538,12 @@ def short(ref):
 def build(project):
     project = Path(project)
     spec = json.loads(json.dumps(yaml.safe_load((project / "spec" / "app.yaml").read_text(encoding="utf-8")), default=str))
+    import project as project_tool  # issued versions are locked
+
+    issued = project_tool.is_issued(project, spec["project"].get("version", ""))
+    if issued:
+        sys.exit(f"v{issued['version']} was issued to {issued['to']} on {issued['date']} and is locked. "
+                 "Bump project.version in the spec (e.g. to the next minor version) and generate again.")
     shots_file = project / "mockup" / "shots.json"
     if not shots_file.exists():
         sys.exit("No screenshots yet. Run: python -I tools/mockup.py screenshots " + str(project))

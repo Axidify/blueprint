@@ -32,6 +32,10 @@ Show a short plan, one line per file: file → project → what you will do. Ask
 
 ## 3. Do it
 
-Move each file into `projects/<slug>/docs/` (feedback exports go into `feedback/`), then run each next
+File each document with a dated, descriptive name:
+`python -I tools/project.py file <slug> "inbox/<file>" --kind "<what it is>" [--responds-to <version>]`,
+for example `--kind "client comments" --responds-to 1.3` gives `docs/2026-11-12 client comments on
+v1.3.docx` (the date is when the file was last saved; pass `--date` for the date it was received if the
+user tells you). Mock-up feedback exports go into `projects/<slug>/feedback/` instead. Then run each next
 step. Leave nothing in `inbox/` that you have handled. Report what was filed where and what each step
 produced.

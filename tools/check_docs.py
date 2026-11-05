@@ -109,7 +109,8 @@ def workspace_names():
             m = re.search(rf"^{key}:\s*(.+?)\s*$", company.read_text(encoding="utf-8"), re.M)
             if m and not m.group(1).startswith("#"):
                 names.add(m.group(1).strip("\"'"))
-    for reg in (ws / "projects").glob("*/register.json") if (ws / "projects").exists() else []:
+    regs = list((ws / "projects").glob("*/register.json")) + list((ws / "projects").glob("_archive/*/register.json")) if (ws / "projects").exists() else []
+    for reg in regs:
         try:
             r = json.loads(reg.read_text(encoding="utf-8"))
         except Exception:
@@ -148,7 +149,18 @@ def check_staged(errors):
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
-    pre_commit = "--pre-commit" in sys.argv
+    if "--hook" in sys.argv or ("--pre-commit" in sys.argv and not sys.stdin.isatty()):
+        # Called by the Claude Code hook before every shell command, with the command as JSON on stdin:
+        # act only on `git commit`. The hook's own filter is not relied on, so a failing check can never
+        # block ordinary commands.
+        try:
+            payload = json.loads(sys.stdin.read() or "{}")
+        except Exception:
+            payload = {}
+        command = (payload.get("tool_input") or {}).get("command")
+        if command is not None and not re.search(r"\bgit\b[^|;&]*\bcommit\b", command):
+            sys.exit(0)
+    pre_commit = "--pre-commit" in sys.argv or "--hook" in sys.argv
     errors = []
     check_skills(errors)
     check_tools(errors)

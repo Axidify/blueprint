@@ -22,7 +22,7 @@ def main():
     ap.add_argument("client")
     ap.add_argument("--platform", default="Joget DX")
     a = ap.parse_args()
-    if not re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", a.slug):
+    if not re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", a.slug):  # also rules out names starting with "_"
         sys.exit("The slug must be lowercase words joined by hyphens, e.g. courier-booking")
     project = ROOT / "projects" / a.slug
     if project.exists():

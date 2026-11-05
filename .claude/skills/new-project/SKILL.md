@@ -22,7 +22,9 @@ Check it is not already in `projects/`.
 ## 3. File what they already have
 
 If the user mentioned or attached documents (brief, SOW, notes, an SRS draft, a Figma export), or there
-are files in `inbox/` for this client, move them into `projects/<slug>/docs/`. Never edit the originals.
+are files in `inbox/` for this client, file them with
+`python -I tools/project.py file <slug> "<file>" --kind "<what it is>"` (dated, descriptive names). Never
+edit the originals.
 
 ## 4. Suggest the next step
 

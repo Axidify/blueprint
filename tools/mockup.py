@@ -12,6 +12,7 @@ docs/spec-format.md.
 build        validates the spec and writes <project_dir>/mockup/ (self-contained: open index.html).
 serve        serves the mock-up on http://localhost:<port>; feedback comments are saved to
              <project_dir>/feedback/feedback.json. --lan lets others on the network open it and comment.
+             --version 0.2 serves a saved earlier version (every build keeps one in mockup/versions/).
 screenshots  builds, then captures every screen (and extra shots from the spec) with Microsoft Edge into
              <project_dir>/mockup/screenshots/, listed in shots.json.
 feedback     prints the saved comments, grouped by screen.
@@ -127,14 +128,32 @@ def build(project):
     (out / "spec.js").write_text("window.SPEC = " + json.dumps(spec, indent=1, ensure_ascii=False) + ";\n", encoding="utf-8")
     p = spec["project"]
     (out / "index.html").write_text(INDEX.format(title=f"{p['name']} – Mock-up v{p.get('version', '')}"), encoding="utf-8")
+    snapshot(project, spec)
     print(f"Built {out / 'index.html'} ({len(spec['screens'])} screens, theme {theme})")
     return spec
 
 
 # ------------------------------------------------------------------ serve
-def serve(project, port, lan):
-    build(project)
+def snapshot(project, spec):
+    """Keep a copy of this mock-up version in mockup/versions/v<version>/, so it can be shown again later."""
+    out = Path(project) / "mockup"
+    version = str(spec["project"].get("version", "draft"))
+    dest = out / "versions" / f"v{version}"
+    if dest.exists():
+        shutil.rmtree(dest)
+    shutil.copytree(out, dest, ignore=lambda d, names: ["versions"] if Path(d) == out else [])
+
+
+def serve(project, port, lan, version=None):
+    if not version:
+        build(project)
     mock = (Path(project) / "mockup").resolve()
+    if version:
+        mock = mock / "versions" / f"v{version.lstrip('v')}"
+        if not mock.exists():
+            have = sorted(p.name for p in (Path(project) / "mockup" / "versions").glob("v*"))
+            sys.exit(f"No mock-up v{version.lstrip('v')}. Available: {', '.join(have) or 'none'}")
+        print(f"Showing the saved mock-up {mock.name} (comments are still saved to the project).")
     fb_file = (Path(project) / "feedback" / "feedback.json").resolve()
     fb_file.parent.mkdir(exist_ok=True)
     lock = threading.Lock()
@@ -235,6 +254,7 @@ def screenshots(project):
     result = subprocess.run(["node", str(script), str(mock / "index.html"), str(plan), str(out)], cwd=ROOT)
     if result.returncode:
         sys.exit(result.returncode)
+    snapshot(project, spec)
     print(f"Wrote {len(shots)} screenshots to {out}")
 
 
@@ -261,11 +281,12 @@ def main():
     ap.add_argument("project")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--lan", action="store_true")
+    ap.add_argument("--version", help="serve a saved mock-up version, e.g. 0.2")
     a = ap.parse_args()
     if a.command == "build":
         build(a.project)
     elif a.command == "serve":
-        serve(a.project, a.port, a.lan)
+        serve(a.project, a.port, a.lan, a.version)
     elif a.command == "screenshots":
         screenshots(a.project)
     else:

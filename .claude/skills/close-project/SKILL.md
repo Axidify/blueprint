@@ -38,7 +38,13 @@ overruns were visible in it), lessons. Keep it factual; no blame.
    effort per block is actually known; record the evidence and adjust the confidence. If only the total is
    known, add a calibration note instead of inventing per-block rates.
 
-## 4. Report
+## 4. Archive the project
+
+Once the knowledge base is updated, offer to archive the project so it leaves the active list:
+`python -I tools/project.py archive <slug>` (restore it any time with `restore`). Its files stay in
+`projects/_archive/<slug>/`.
+
+## 5. Report
 
 Summarise to the user: variance and its cost, which gap patterns the CRs fell into, what changed in the
 knowledge base, and what data to capture better next time.

@@ -73,6 +73,23 @@ company profile, branding and [SRS format](srs-format.md). Prints warnings for a
 spec. With Word installed it also updates the table of contents and page numbers, embeds the fonts and
 writes a PDF.
 
+### project.py
+
+```bash
+python -I tools/project.py issue   <slug> [--to "the client"] [--date 2026-11-12] [--note "..."]
+python -I tools/project.py issued  <slug>
+python -I tools/project.py file    <slug> "<file>" --kind "client comments" [--responds-to 1.3] [--date 2026-11-12] [--copy]
+python -I tools/project.py archive <slug>
+python -I tools/project.py restore <slug>
+python -I tools/project.py check   [<slug>] [--fix]
+```
+Project housekeeping. `issue` records that the current SRS version went to the client and locks it (its
+files become read-only and the generator refuses to overwrite it, so the next change needs a new version).
+`file` moves a document into `docs/` with a dated, descriptive name such as
+`2026-11-12 client comments on v1.3.docx`. `archive` moves a delivered project to `projects/_archive/`,
+out of the status list; `restore` brings it back. `check` reports projects missing parts of the standard
+layout, and `--fix` creates them.
+
 ### srs_format.py
 
 ```bash

@@ -60,6 +60,23 @@ works on the same projects and knowledge base:
 Two people editing the same project at the same moment can conflict in a synced folder. Agree who is
 working on which project, especially during a session.
 
+## Inside a project folder
+
+| Folder or file | What it holds | Managed by |
+|---|---|---|
+| `docs/` | Documents from the client and your team. New ones are named with the date and what they are, e.g. `2026-11-12 client comments on v1.3.docx` | `process-inbox`, `new-project`, `tools/project.py file` |
+| `reviews/<document and version>/` | One folder per reviewed document version: extraction and review report | `review-srs` |
+| `spec/` | The project spec, client logo, process-flow image | `build-mockup`, `apply-feedback` |
+| `mockup/` | The current mock-up and screenshots; `mockup/versions/v0.1/`, `v0.2/` … keep every version | `tools/mockup.py` |
+| `feedback/` | Comments from mock-up sessions | the mock-up's Feedback mode |
+| `output/` | Every generated SRS (Word and PDF) and the spec that produced it; `issued.json` lists the versions sent to the client | `generate-srs`, `tools/project.py issue` |
+| `register.json`, `register.xlsx` | The project register | the skills |
+
+Versions sent to the client are **locked**: their files are read-only and the generator refuses to
+overwrite them, so every change after issuing becomes a new version. Delivered projects move to
+`projects/_archive/` with `tools/project.py archive`, out of the status list; `restore` brings one back.
+`python -I tools/project.py check --fix` brings an older project up to this layout.
+
 ## Moving or renaming the app folder
 
 The links into the workspace use absolute paths. After moving or renaming the app folder, run

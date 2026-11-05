@@ -35,6 +35,11 @@ def project_status(p):
         items = json.loads(fb.read_text(encoding="utf-8"))
         s["feedback_unprocessed"] = sum(1 for i in items if not i.get("status"))
     s["actuals"] = (ROOT / "knowledge" / "actuals" / f"{p.name}.md").exists()
+    iss = p / "output" / "issued.json"
+    if iss.exists():
+        issues = json.loads(iss.read_text(encoding="utf-8"))
+        if issues:
+            s["last_issued"] = issues[-1]
     return s
 
 
@@ -56,7 +61,8 @@ def main():
     sys.stdout.reconfigure(encoding="utf-8")
     brief = "--brief" in sys.argv
     projects_dir = ROOT / "projects"
-    projects = sorted(p for p in projects_dir.glob("*") if p.is_dir()) if projects_dir.exists() else []
+    projects = sorted(p for p in projects_dir.glob("*") if p.is_dir() and not p.name.startswith("_")) if projects_dir.exists() else []
+    archived = sorted(p.name for p in (projects_dir / "_archive").glob("*") if p.is_dir()) if (projects_dir / "_archive").exists() else []
     inbox = [x.name for x in (ROOT / "inbox").glob("*") if x.is_file() and x.name != "README.md"] if (ROOT / "inbox").exists() else []
 
     print("Blueprint status")
@@ -67,8 +73,11 @@ def main():
         bits = []
         if s.get("spec_version"):
             bits.append(f"spec v{s['spec_version']}")
-        if s.get("latest_srs"):
-            bits.append("SRS generated")
+        if s.get("last_issued"):
+            li = s["last_issued"]
+            bits.append(f"v{li['version']} issued to {li['to']} on {li['date']}")
+        elif s.get("latest_srs"):
+            bits.append("SRS generated, not issued")
         if "client_open" in s:
             bits.append(f"{s['client_open']} client questions open ({s['high_open']} high), {s['internal_open']} internal")
         if s.get("actuals"):
@@ -80,6 +89,8 @@ def main():
             print(f"    next: {nxt}")
         elif nxt:
             print(f"    -> {nxt}")
+    if archived and not brief:
+        print(f"- Archived: {', '.join(archived)}")
     if inbox:
         print(f"- inbox/ has {len(inbox)} file(s) waiting: {', '.join(inbox[:5])}{' ...' if len(inbox) > 5 else ''}. Say 'process my inbox'.")
     if brief:
