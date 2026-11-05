@@ -11,6 +11,8 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-06
+
 ### Changed
 - Blueprint now says "requirements document" instead of "SRS", because companies name this document
   differently. **Skills and tools are renamed:** `review-srs` → `review-requirements`, `generate-srs` →
@@ -115,7 +117,8 @@ First release.
 - One-step setup (`setup.cmd`) with a machine check, `present.cmd` for sessions, shared Claude Code
   permissions and a start-up status greeting.
 
-[Unreleased]: https://github.com/Axidify/blueprint/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Axidify/blueprint/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Axidify/blueprint/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Axidify/blueprint/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Axidify/blueprint/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Axidify/blueprint/releases/tag/v0.1.0
