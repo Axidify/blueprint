@@ -11,6 +11,17 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+### Changed
+- In the requirements document, each screen's "Requirements · FR-…" line now sits right under the screen's
+  description, before its screenshots, so readers see up front what the screen covers.
+
+### Fixed
+- Role names in the access matrix header no longer break in the middle of a word. Columns are sized to the
+  longest word, and when there are too many roles to fit side by side the names are turned on their side.
+- A screen's requirements line can no longer be left alone at the top of a page.
+- A group heading inside a field table (for example "Approval Process") is no longer left at the bottom of
+  a page without the rows under it.
+
 ## [0.4.0] - 2026-11-06
 
 ### Changed

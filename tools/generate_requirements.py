@@ -298,20 +298,39 @@ class Writer:
         self.doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
 
     # ---- tables: hairline style
-    def table(self, header, rows, widths, group_rows=(), size=None):
+    def table(self, header, rows, widths, group_rows=(), size=None, pad=None, center_from=None, rotate_from=None,
+              header_height=None):
+        """Hairline table. center_from centres columns from that index (ticks); rotate_from turns those
+        header cells to read bottom-to-top, for narrow columns such as the roles in the access matrix."""
+        from docx.enum.table import WD_ROW_HEIGHT_RULE
+
         size = size or self.s["table"]
         self.glue_previous()
         t = self.doc.add_table(rows=1, cols=len(header))
         t.alignment = WD_TABLE_ALIGNMENT.LEFT
-        table_base(t)
+        table_base(t, **({"pad": pad} if pad else {}))
         for i, h in enumerate(header):
             cell = t.rows[0].cells[i]
             cell.paragraphs[0].text = ""
-            r = cell.paragraphs[0].add_run(h)
+            # Allow a line break after "/" (Build/Compiler) so words never break in the middle.
+            r = cell.paragraphs[0].add_run(str(h).replace("/", "/\u200b"))
+            if rotate_from is not None and i >= rotate_from:
+                td = OxmlElement("w:textDirection")
+                td.set(qn("w:val"), "btLr")
+                cell._tc.get_or_add_tcPr().append(td)
+            elif center_from is not None and i >= center_from:
+                cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
             r.font.size = Pt(self.s["table_header"])
             r.font.color.rgb = rgb(self.c["secondary"])
             cell_border(cell, "bottom", self.c["line"], 6)
         repeat_header(t.rows[0])
+        if rotate_from is not None:
+            from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
+            for c in t.rows[0].cells:
+                c.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.BOTTOM
+        if header_height:
+            t.rows[0].height = Cm(header_height)
+            t.rows[0].height_rule = WD_ROW_HEIGHT_RULE.AT_LEAST
         for r_i, row in enumerate(rows):
             cells = t.add_row().cells
             keep_row_together(t.rows[-1])
@@ -320,6 +339,8 @@ class Writer:
                 merged.paragraphs[0].text = ""
                 self.runs(merged.paragraphs[0], [(row[0], "medium")], size)
                 cell_border(merged, "bottom", self.c["separator"])
+                # A group heading row (e.g. "Approval Process") stays with the rows under it.
+                merged.paragraphs[0].paragraph_format.keep_with_next = True
                 continue
             for i, v in enumerate(row):
                 p = cells[i].paragraphs[0]
@@ -329,6 +350,8 @@ class Writer:
                 else:
                     self.runs(p, [("" if v is None else str(v), "")], size)
                 p.paragraph_format.space_after = Pt(0)
+                if center_from is not None and i >= center_from:
+                    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 cell_border(cells[i], "bottom", self.c["separator"])
         fixed_widths(t, widths)
         # The header row and the first two rows move together, so a table never starts with a lone header
@@ -827,9 +850,21 @@ def build(project):
                     if b.get("example") or b.get("access") is False or b.get("label") in SKIP_ACTIONS:
                         continue
                     add_row(f"{s['title']}: {b['label'].lstrip('+ ').strip()}", b.get("roles") or allowed_screen)
-            first = 5.0
-            w.table(["Menu or action"] + [r["name"] for r in roles], rows, [first] + [(tw - first) / len(roles)] * len(roles),
-                    size=w.s["table"] - 0.5)
+            # Size role columns to their longest word, so names wrap only at spaces and after "/" and never
+            # break mid-word. If the roles don't fit side by side, their names are turned on their side.
+            char_cm = w.s["table_header"] * 0.56 / 72 * 2.54
+            words = lambda name: re.split(r"[ /]", name.replace("/", "/ "))
+            need = max(len(x) for r in roles for x in words(r["name"]) if x) * char_cm + 0.35
+            first = min(5.0, max(3.6, max(len(x) for row in rows for x in str(row[0]).split()) * char_cm + 0.6))
+            per = (tw - first) / len(roles)
+            rotate = per < need
+            if rotate:
+                first = min(5.0, tw - 0.85 * len(roles))
+                per = (tw - first) / len(roles)
+            longest = max(len(r["name"]) for r in roles) * char_cm + 0.5
+            w.table(["Menu or action"] + [r["name"] for r in roles], rows, [first] + [per] * len(roles),
+                    size=w.s["table"] - 0.5, pad=(70, 60), center_from=1, rotate_from=1 if rotate else None,
+                    header_height=longest if rotate else None)
             if spec.get("statuses"):
                 sub("Process and statuses")
                 flow = project / "spec" / "process-flow.png"
@@ -927,6 +962,11 @@ def build(project):
                 if i > 1 and (fmt.get("layout") or {}).get("screens_new_page", True):
                     h.paragraph_format.page_break_before = True
                 w.para([(role_names(s.get("roles") or []), "sec")] + ([(" · " + fill(s["description"], f"screen {s['id']}"), "sec")] if s.get("description") else []), after=8, keep=True)
+                if reqs_for_screen.get(s["id"]):
+                    # Under the description, before the screenshot: says up front which requirements this screen
+                    # covers, and can never end up alone on a page after the screen's tables.
+                    w.para([("Requirements · ", "sec"), (" · ".join(reqs_for_screen[s["id"]]), "ref")],
+                           size=w.s["caption"], after=8, keep=True)
                 sshots = by_screen.get(s["id"], [])
                 paged = [x for x in sshots if x.get("page") and not x.get("dialog") and not x.get("record")]
                 for shot in sshots:
@@ -970,8 +1010,6 @@ def build(project):
                     w.para([(d["title"], "medium")], before=6, after=2, keep=True)
                     rows, group = field_rows([{"fields": d["fields"]}])
                     w.table(field_header, rows, field_widths)
-                if reqs_for_screen.get(s["id"]):
-                    w.para([("Requirements · ", "sec"), (" · ".join(reqs_for_screen[s["id"]]), "ref")], size=w.s["caption"])
 
         # ---------------------------------------------------------------- non-functional requirements
         elif key == "nfr":
