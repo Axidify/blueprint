@@ -11,7 +11,7 @@ Blueprint is split in two:
 | Workspace item | What it is |
 |---|---|
 | `company.yaml` | Your company profile (below) |
-| `branding/` | Optional logo, Word template and standard SRS wording |
+| `branding/` | Optional logo, Word template and standard document wording |
 | `knowledge/` | Your team's knowledge base, see [Knowledge base](knowledge.md) |
 | `projects/` | One folder per client project |
 | `inbox/` | Files waiting to be sorted |
@@ -25,7 +25,7 @@ setup it is created from `templates/`: a placeholder company profile and a start
 ## Company profile (`company.yaml`)
 
 ```yaml
-name: Acme Solutions Sdn. Bhd.   # on the SRS cover, footer, standard wording and sign-off
+name: Acme Solutions Sdn. Bhd.   # on the document cover, footer, standard wording and sign-off
 short_name: Acme                 # used in the standard wording, e.g. "Acme Solutions Sdn. Bhd. (Acme)"
 day_rate: 1500                   # used to cost estimates and variances
 currency: RM
@@ -38,10 +38,10 @@ Each file is optional. Without it, Blueprint uses the neutral version in `templa
 
 | File | Effect |
 |---|---|
-| `logo.png` | Your logo on the SRS cover |
-| `srs-template.docx` | Your Word template: styles and page set-up, plus its header and footer when the format says `header_footer: template` (any `{company}` in them is replaced with the company name). The document body is ignored |
-| `srs-boilerplate.yaml` | Your standard SRS wording (disclaimer, confidentiality, sign-off). Start from `templates/srs-boilerplate.yaml`. Placeholders: `{system}`, `{client}`, `{client_short}`, `{company}`, `{company_short}` |
-| `srs-format.yaml` | Your changes to the SRS design: colours, fonts, sizes, section order and numbering. Only the keys you set change. See [SRS format](srs-format.md) |
+| `logo.png` | Your logo on the document cover |
+| `document-template.docx` | Your Word template: styles and page set-up, plus its header and footer when the format says `header_footer: template` (any `{company}` in them is replaced with the company name). The document body is ignored |
+| `document-boilerplate.yaml` | Your standard document wording (disclaimer, confidentiality, sign-off). Start from `templates/document-boilerplate.yaml`. Placeholders: `{system}`, `{client}`, `{client_short}`, `{company}`, `{company_short}` |
+| `document-format.yaml` | Your changes to the document design: colours, fonts, sizes, section order and numbering. Only the keys you set change. See [Document format](document-format.md) |
 
 ## Sharing a workspace with your team
 
@@ -65,11 +65,11 @@ working on which project, especially during a session.
 | Folder or file | What it holds | Managed by |
 |---|---|---|
 | `docs/` | Documents from the client and your team. New ones are named with the date and what they are, e.g. `2026-11-12 client comments on v1.3.docx` | `process-inbox`, `new-project`, `tools/project.py file` |
-| `reviews/<document and version>/` | One folder per reviewed document version: extraction and review report | `review-srs` |
+| `reviews/<document and version>/` | One folder per reviewed document version: extraction and review report | `review-requirements` |
 | `spec/` | The project spec, client logo, process-flow image | `build-mockup`, `apply-feedback` |
 | `mockup/` | The current mock-up and screenshots; `mockup/versions/v0.1/`, `v0.2/` … keep every version | `tools/mockup.py` |
 | `feedback/` | Comments from mock-up sessions | the mock-up's Feedback mode |
-| `output/` | Every generated SRS (Word and PDF) and the spec that produced it; `issued.json` lists the versions sent to the client | `generate-srs`, `tools/project.py issue` |
+| `output/` | Every generated requirements document (Word and PDF) and the spec that produced it; `issued.json` lists the versions sent to the client | `generate-requirements`, `tools/project.py issue` |
 | `register.json`, `register.xlsx` | The project register | the skills |
 
 Versions sent to the client are **locked**: their files are read-only and the generator refuses to

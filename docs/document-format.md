@@ -1,9 +1,17 @@
-# SRS format
+# Document format
 
-Generated SRS documents follow a format: how they look (fonts, sizes, colours) and how they are built
+Generated requirements documents follow a format: how they look (fonts, sizes, colours) and how they are built
 (which sections, in what order, how they are numbered). Blueprint ships one default design; each company
 can change any part of it. The easiest way is to ask: "make our table headers navy", "learn our format
-from this document" (the `srs-format` skill).
+from this document" (the `document-format` skill).
+
+## What the document is called
+
+Blueprint calls it a **requirements document** everywhere in the app, because companies name it
+differently: System or Software Requirements Specification (SRS), Functional Specification (FS or FSD),
+Business Requirements Document (BRD), Product Requirements Document (PRD). The generated document uses
+your company's own name for it, set with `document.title` (below). The default is "Requirements
+Specification".
 
 ## The default design
 
@@ -44,8 +52,8 @@ Generated documents are laid out so nothing is cut off awkwardly between pages:
 
 ## Changing the format
 
-Write only the keys you want to change in `workspace/branding/srs-format.yaml`; everything else keeps the
-default from `templates/srs-format.yaml`.
+Write only the keys you want to change in `workspace/branding/document-format.yaml`; everything else keeps the
+default from `templates/document-format.yaml`.
 
 ```yaml
 colors:
@@ -58,38 +66,39 @@ titles:
 
 | Key | What it controls |
 |---|---|
+| `document.title`, `document.short` | What your company calls this document, e.g. "System Requirement Specifications" and "SRS", or "Functional Specification" and "FS". Used on the cover, in the sign-off wording and in file names. Default: "Requirements Specification" |
 | `fonts.body`, `fonts.heading`, `fonts.mono` | Typefaces. The defaults (Geist, Geist Medium, Geist Mono) are installed by `setup.cmd`; any other font must be installed on the machines that generate documents |
 | `sizes.*` | Point sizes: `body`, `table`, `table_header`, `caption`, `h1`, `h2`, `h3`, `cover_title` |
 | `colors.*` | Hex colours without `#`: `text`, `secondary`, `separator` (row lines), `line` (header line), `field` (tags), `ground` (cards and screenshot frames), `accent`, `ok`, `warning`, `error` |
 | `numbering` | `plain` (1, 1.1) or `decimal` (1.0, 1.1) |
 | `layout.screens_new_page` | `true` (default): every screen in the Screens chapter starts on a new page; `false`: screens run on |
-| `header_footer` | `generated` (system, version, status / company, page) or `template` (keep the header and footer of `branding/srs-template.docx`; `{company}` in it is replaced) |
+| `header_footer` | `generated` (system, version, status / company, page) or `template` (keep the header and footer of `branding/document-template.docx`; `{company}` in it is replaced) |
 | `front` | Front matter in order: `cover`, `at_a_glance`, `about`, `contents` |
 | `chapters` | Chapters in order: `users_access`, `by_role`, `requirements`, `screens`, `nfr`, `extras`, `decisions`, `signoff` |
 | `titles.*` | Chapter and page titles |
 | `labels.*` | Words used in the document: impact levels, "Decision needed", the default status, "Confidential" |
 
-Other branding files in `workspace/branding/`: `logo.png` (cover), `srs-template.docx` (styles, page
-set-up, and the header and footer when `header_footer: template`), `srs-boilerplate.yaml` (standard
+Other branding files in `workspace/branding/`: `logo.png` (cover), `document-template.docx` (styles, page
+set-up, and the header and footer when `header_footer: template`), `document-boilerplate.yaml` (standard
 wording). See [Workspace and company profile](workspace.md).
 
 ## Learning an existing format
 
 ```bash
-python -I tools/srs_format.py learn "<an existing SRS>.docx"
+python -I tools/document_format.py learn "<an existing requirements document>.docx"
 ```
 
 Reports the fonts, sizes, table fills, colours, page set-up and chapter headings of a sample document, as
-a starting point for the overrides. The `srs-format` skill does this for you and proposes the changes.
+a starting point for the overrides. The `document-format` skill does this for you and proposes the changes.
 
 ## Previewing
 
 ```bash
-python -I tools/srs_format.py preview
+python -I tools/document_format.py preview
 ```
 
 Generates the made-up sample project with the current format and writes page images to
-`examples/leave-request/output/preview/`, so you can check a change before regenerating a real SRS.
+`examples/leave-request/output/preview/`, so you can check a change before regenerating a real requirements document.
 
 ## Signing
 

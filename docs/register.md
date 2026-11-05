@@ -21,7 +21,7 @@ Internal fixes never appear on the client sheet.
 
 `open` → `asked` → `answered` → `resolved` (or `wont-fix`). When the client answers, put the answer in
 **Client response** and tell Blueprint ("the client answered R-012 and R-019"). Resolved client items
-drop out of the SRS Open Issues section at the next generation.
+drop out of the Open Issues section at the next generation.
 
 ## Severity
 
@@ -38,7 +38,7 @@ drop out of the SRS Open Issues section at the next generation.
 | `audience` | `client` (the BA asks the client) or `internal` (your team fixes it) |
 | `severity` | `high`, `medium`, `low` |
 | `category` | A gap pattern ID such as `GP-02`, or a short label such as `consistency`, `hygiene`, `scope`, `generator` |
-| `stage` | `sow`, `workshop-1`, `mockup`, `workshop-2`, `srs-draft`, `srs-final`, `development`, `uat` |
+| `stage` | `sow`, `workshop-1`, `mockup`, `workshop-2`, `requirements-draft`, `requirements-final`, `development`, `uat` |
 | `source` | Where it was found: section, requirement ID, page or figure |
 | `finding` | What is wrong or missing, stated as fact |
 | `question` | For client items: the question in plain business language |
@@ -47,4 +47,4 @@ drop out of the SRS Open Issues section at the next generation.
 | `status` | See above |
 | `answer` | Optional: the client's answer or the decision taken |
 | `raised` / `resolved_in` | Date raised; document version or meeting where it was closed |
-| `owner` / `due` | Optional: who must answer, and by when (shown in the SRS Open Issues table) |
+| `owner` / `due` | Optional: who must answer, and by when (shown in the Open Issues table) |

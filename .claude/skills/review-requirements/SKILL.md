@@ -1,5 +1,5 @@
 ---
-name: review-srs
+name: review-requirements
 description: Review a requirements document (SRS, URS, FSD, or a draft of one) for contradictions, gaps, open items, scope drift against the SOW and document hygiene, then record every finding in the project register and render the Excel register for the BA. Use when the user drops in, names or pastes a requirements document and asks for a review, gaps, issues or questions for the client.
 ---
 
@@ -13,7 +13,7 @@ found here are cheap; the same gaps found in UAT come back as CRs (see `knowledg
 1. Work out the project. Use `projects/<slug>/` if it exists; otherwise create it with the `new-project` skill
    (or `python -I tools/new_project.py <slug> "<name>" "<client>"`).
 2. If the document is outside `docs/`, move it there. Never edit it.
-3. Pick a review folder name from the document and version, e.g. `srs-v1.0`, `srs-v1.1-draft`.
+3. Pick a review folder name from the document and version, e.g. `requirements-v1.0`, `requirements-v1.1-draft`.
 4. Extract:
    `python -I tools/extract.py "<path to document>" projects/<slug>/reviews/<review>/extract`
 5. Read `meta.json`: metadata, counts, and the list of open-item markers (TBC, TBD, "if applicable").
@@ -25,7 +25,7 @@ found here are cheap; the same gaps found in UAT come back as CRs (see `knowledg
   signatures). Figures contradict the text more often than the text contradicts itself.
 - For PDFs, `pages/` holds renders of every page with images, formulas or little text. Use them when an
   embedded image is too small to read, or when formulas and tables come out as fragments in `text.md`.
-- Read `knowledge/srs-standard.md` and `knowledge/gap-patterns.md`.
+- Read `knowledge/requirements-standard.md` and `knowledge/gap-patterns.md`.
 - Read the project's `register.json`. For a new version of a document, check each open item: if this
   version resolves it, set `status` to `resolved` and `resolved_in` to the version. Do not raise duplicates.
 - If the project's SOW is in `docs/`, extract and read it too.
@@ -48,7 +48,7 @@ requirement or it is removed from the screen.
 **B2. Arithmetic.** Re-add every total (manday tables, counts, worked examples, percentages) and check
 every formula's worked example. A wrong total in the estimate appendix is a high-severity internal finding.
 
-**C. Required content.** Each section in `srs-standard.md`. Anything the SOW promises that the SRS lacks.
+**C. Required content.** Each section in `requirements-standard.md`. Anything the SOW promises that the requirements document lacks.
 
 **D. Gap patterns.** Go through every pattern in `gap-patterns.md` and check it explicitly. Patterns with
 *Cost* evidence matter most. Note in the report which patterns are covered well, so the BA knows they were
@@ -67,8 +67,8 @@ failure handling. Any "if applicable" or "TBC" on scope is high severity.
 **H. Open items.** Every TBC, TBD and "if applicable" from `meta.json` becomes a register item with a
 question and, where possible, a recommendation.
 
-**I. Commercial.** Features in the SRS that are not in the SOW (possible CRs; raise before sign-off).
-SOW items missing from the SRS. Effort drivers that grew since the estimate (more endpoints, custom
+**I. Commercial.** Features in the requirements document that are not in the SOW (possible CRs; raise before sign-off).
+SOW items missing from the requirements document. Effort drivers that grew since the estimate (more endpoints, custom
 calculations, extra roles) get `effort_impact` and a note that the estimate should be revisited.
 
 **J. Hygiene (internal only).** Metadata title, author and template leftovers naming other projects;
@@ -107,7 +107,7 @@ is this needed?", "for each list: which columns?"), so the BA can cover them in 
      sections). These must never go on the client sheet.
    - `category`: the GP id where one fits, otherwise a short slug (`consistency`, `hygiene`, `nfr`,
      `scope`).
-   - `stage`: `srs-draft` or `srs-final`.
+   - `stage`: `requirements-draft` or `requirements-final`.
 2. Run `python -I tools/register.py render projects/<slug>`. Fix any validation errors it reports.
 3. Write `projects/<slug>/reviews/<review>/review.md`:
    - Verdict in two or three sentences (ready for sign-off or not, and why).

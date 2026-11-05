@@ -63,13 +63,13 @@ with feedback capture, captures screenshots with Edge, or lists saved feedback b
 Called by `mockup.py screenshots`; you don't run it directly. Drives the installed Microsoft Edge through
 `playwright-core` and crops each screenshot to its content.
 
-### generate_srs.py
+### generate_requirements.py
 
 ```bash
-python -I tools/generate_srs.py projects/<slug>
+python -I tools/generate_requirements.py projects/<slug>
 ```
-Generates the SRS from the spec, screenshots (run `mockup.py screenshots` first) and register, using the
-company profile, branding and [SRS format](srs-format.md). Prints warnings for anything to fix in the
+Generates the requirements document from the spec, screenshots (run `mockup.py screenshots` first) and register, using the
+company profile, branding and [Document format](document-format.md). Prints warnings for anything to fix in the
 spec. With Word installed it also updates the table of contents and page numbers, embeds the fonts and
 writes a PDF.
 
@@ -83,22 +83,22 @@ python -I tools/project.py archive <slug>
 python -I tools/project.py restore <slug>
 python -I tools/project.py check   [<slug>] [--fix]
 ```
-Project housekeeping. `issue` records that the current SRS version went to the client and locks it (its
+Project housekeeping. `issue` records that the current document version went to the client and locks it (its
 files become read-only and the generator refuses to overwrite it, so the next change needs a new version).
 `file` moves a document into `docs/` with a dated, descriptive name such as
 `2026-11-12 client comments on v1.3.docx`. `archive` moves a delivered project to `projects/_archive/`,
 out of the status list; `restore` brings it back. `check` reports projects missing parts of the standard
 layout, and `--fix` creates them.
 
-### srs_format.py
+### document_format.py
 
 ```bash
-python -I tools/srs_format.py show
-python -I tools/srs_format.py learn "<sample.docx>"
-python -I tools/srs_format.py preview
+python -I tools/document_format.py show
+python -I tools/document_format.py learn "<sample.docx>"
+python -I tools/document_format.py preview
 ```
-Shows the SRS format in effect, reports the fonts, sizes, colours, page set-up and chapters of a sample
-document, or generates the sample project and renders its pages for review. See [SRS format](srs-format.md).
+Shows the document format in effect, reports the fonts, sizes, colours, page set-up and chapters of a sample
+document, or generates the sample project and renders its pages for review. See [Document format](document-format.md).
 
 ### workspace.py
 

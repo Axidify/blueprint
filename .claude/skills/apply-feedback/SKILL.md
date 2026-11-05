@@ -33,7 +33,7 @@ Record the outcome on each comment in `feedback.json`: add `"status"` (`applied`
 
 ## 3. Release a new version
 
-1. Bump `project.version` in the spec (0.1 → 0.2 for a mock-up round; 1.0 for the first SRS issued for
+1. Bump `project.version` in the spec (0.1 → 0.2 for a mock-up round; 1.0 for the first requirements document issued for
    sign-off).
 2. `python -I tools/mockup.py screenshots projects/<slug>` and check the changed screens.
 3. `python -I tools/register.py render projects/<slug>`.

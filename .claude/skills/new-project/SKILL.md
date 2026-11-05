@@ -21,7 +21,7 @@ Check it is not already in `projects/`.
 
 ## 3. File what they already have
 
-If the user mentioned or attached documents (brief, SOW, notes, an SRS draft, a Figma export), or there
+If the user mentioned or attached documents (brief, SOW, notes, a requirements document draft, a Figma export), or there
 are files in `inbox/` for this client, file them with
 `python -I tools/project.py file <slug> "<file>" --kind "<what it is>"` (dated, descriptive names). Never
 edit the originals.
@@ -31,7 +31,7 @@ edit the originals.
 Based on what exists:
 - Only a brief or SOW: build a first mock-up (`build-mockup`) to take into workshop 1, and list the gap
   patterns from `knowledge/gap-patterns.md` worth asking about.
-- An SRS or URS draft: review it (`review-srs`).
+- A requirements document or URS draft: review it (`review-requirements`).
 - Nothing yet: ask them to drop the brief into `inbox/` or paste it.
 
 Offer to do the next step now.

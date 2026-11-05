@@ -11,6 +11,26 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+### Changed
+- Blueprint now says "requirements document" instead of "SRS", because companies name this document
+  differently. **Skills and tools are renamed:** `review-srs` → `review-requirements`, `generate-srs` →
+  `generate-requirements`, `srs-format` → `document-format`, `tools/generate_srs.py` →
+  `tools/generate_requirements.py`, `tools/srs_format.py` → `tools/document_format.py`. Asking in plain
+  words works as before.
+- The generated document's title is a company setting: `document.title` and `document.short` in the
+  document format, e.g. "System Requirement Specifications" and "SRS". It appears on the cover, in the
+  sign-off wording and in file names. The default is "Requirements Specification".
+- Workspace files are renamed: `branding/srs-template.docx`, `srs-boilerplate.yaml` and `srs-format.yaml`
+  become `document-template.docx`, `document-boilerplate.yaml` and `document-format.yaml`, and
+  `knowledge/srs-standard.md` becomes `requirements-standard.md`. **Run `setup.cmd` once** to rename them;
+  until then the old branding names still work. Standard wording can name the document with `{document}`.
+- Register stages `srs-draft` and `srs-final` are now `requirements-draft` and `requirements-final`; the
+  old values remain valid. The spec key `srs_table` is now `doc_table`; the old key still works.
+
+### Fixed
+- Claude Code's start-up greeting and commit check failed when a session's current folder was not the
+  app folder; they now find the app wherever the session is.
+
 ## [0.3.0] - 2026-11-06
 
 ### Added

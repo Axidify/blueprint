@@ -8,9 +8,9 @@ version from `templates/knowledge/`.
 |---|---|---|
 | `gap-patterns.md` | Recurring requirement gaps, each with what goes wrong, the workshop questions that prevent it and what a review checks | Every CR from a delivered project is mapped to a pattern and added as evidence; new patterns are added when a CR fits none |
 | `building-blocks.md` | Estimating units (multi-page form, approval step, signature capture, API endpoint, KPI dashboard …) with mandays per platform and a confidence level | Rates are calibrated from logged actuals; until three projects are logged, estimates are low-confidence |
-| `srs-standard.md` | The sections every SRS needs and the quality rules a review checks | Updated when reviews keep finding the same kind of gap |
+| `requirements-standard.md` | The sections every requirements document needs and the quality rules a review checks | Updated when reviews keep finding the same kind of gap |
 | `projects-log.md` | Estimate vs actual for every delivered project | One row per project phase, from `close-project` |
-| `actuals/<project>.md` | Effort, CRs, what the SRS already showed, lessons | Written by `close-project` |
+| `actuals/<project>.md` | Effort, CRs, what the requirements document already showed, lessons | Written by `close-project` |
 
 ## Evidence levels
 

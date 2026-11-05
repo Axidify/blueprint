@@ -1,9 +1,13 @@
-# How generated SRS documents look and are structured. This is Blueprint's default design: calm greys,
+# How generated requirements documents look and are structured. This is Blueprint's default design: calm greys,
 # one accent colour, Geist type, hairline tables, status shown as a dot and a word.
 #
-# To change it for your company, copy this file to workspace/branding/srs-format.yaml and edit it there
-# (or ask Blueprint: "make our SRS headings navy", "number sections 1.0, 2.0"). Only the keys you set
+# To change it for your company, copy this file to workspace/branding/document-format.yaml and edit it there
+# (or ask Blueprint: "make our document headings navy", "number sections 1.0, 2.0"). Only the keys you set
 # are changed; everything else keeps the values below.
+
+document:
+  title: Requirements Specification   # on the cover and in file names, e.g. "System Requirement Specifications"
+  short: ""                           # optional abbreviation shown on the cover and in file properties, e.g. SRS
 
 fonts:
   body: Geist                 # installed by setup.cmd; Word falls back to a similar font if missing
@@ -37,7 +41,7 @@ numbering: plain              # plain: 1, 1.1, 1.2   decimal: 1.0, 1.1, 1.2
 layout:
   screens_new_page: true      # every screen in the Screens chapter starts on a new page (false: run them on)
 header_footer: generated      # generated: system, version and status on top, company and page number below
-                              # template: keep the header and footer of branding/srs-template.docx
+                              # template: keep the header and footer of branding/document-template.docx
 
 # Front matter, in order. Remove an entry to leave it out.
 front: [cover, at_a_glance, about, contents]

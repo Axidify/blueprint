@@ -4,7 +4,7 @@
 
 Blueprint helps a delivery team get requirements right before anything is built. It reviews requirement
 documents for gaps, builds clickable mock-ups to present to clients, collects their feedback, generates
-the SRS with screenshots, and learns from every project's change requests.
+the requirements document with screenshots, and learns from every project's change requests.
 
 You use it by talking to Claude Code. There are no commands to learn.
 
@@ -22,10 +22,10 @@ You use it by talking to Claude Code. There are no commands to learn.
 Type it in your own words, for example:
 
 - "Start a new project for the courier booking system"
-- "Review this SRS" (drop the file in `inbox/` first, or attach it)
+- "Review this requirements document" (drop the file in `inbox/` first, or attach it)
 - "Build a mock-up from the brief"
 - "Apply the feedback from today's session"
-- "Generate the SRS"
+- "Generate the requirements document"
 - "Process my inbox"
 
 To present a mock-up in a meeting, double-click **`present.cmd`** and pick the project. Press **Feedback**
@@ -36,14 +36,14 @@ automatically.
 
 | Folder | What is in it |
 |---|---|
-| `inbox/` | Drop files here: briefs, SRS drafts, notes, feedback exports. Then say "process my inbox". |
-| `projects/<name>/` | One folder per client project: documents, register, mock-up, generated SRS. |
+| `inbox/` | Drop files here: briefs, requirements drafts, notes, feedback exports. Then say "process my inbox". |
+| `projects/<name>/` | One folder per client project: documents, register, mock-up, generated requirements document. |
 | `projects/<name>/register.xlsx` | The questions and gaps to take back to the client. |
-| `projects/<name>/output/` | Generated SRS (Word and PDF). |
-| `knowledge/` | What the team has learnt: gap patterns, estimating building blocks, SRS standard. |
+| `projects/<name>/output/` | Generated requirements document (Word and PDF). |
+| `knowledge/` | What the team has learnt: gap patterns, estimating building blocks, requirements standard. |
 
 `inbox/`, `projects/` and `knowledge/` live in your **workspace**, together with your company profile
-(`company.yaml`) and branding (`branding/`: logo, Word template, standard SRS wording). By default the
+(`company.yaml`) and branding (`branding/`: logo, Word template, standard document wording). By default the
 workspace is the `workspace/` folder here. To share one workspace across a team, put it in a shared
 folder (OneDrive or SharePoint) and set its path in `.blueprint-local.json`:
 
@@ -71,6 +71,6 @@ made through Claude Code and on GitHub for every push.
 
 - `tools/` – scripts (Python, plus Node for screenshots).
 - `.claude/skills/` – one skill per task; `CLAUDE.md` – instructions Claude follows in this repo.
-- `templates/` – neutral defaults for new workspaces (company profile, Word template, SRS wording,
+- `templates/` – neutral defaults for new workspaces (company profile, Word template, document wording,
   starter knowledge, project template).
 - `examples/leave-request/` – a made-up sample project for testing the pipeline.

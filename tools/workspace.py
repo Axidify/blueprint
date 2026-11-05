@@ -31,10 +31,15 @@ def company():
     return {**DEFAULT_COMPANY, **(data or {})}
 
 
+LEGACY = {"document-template.docx": "srs-template.docx", "document-boilerplate.yaml": "srs-boilerplate.yaml",
+          "document-format.yaml": "srs-format.yaml"}  # branding file names used before 0.4.0
+
+
 def asset(name):
     """A branding file from the workspace if present, otherwise the app's neutral template (or None)."""
-    own = workspace_dir() / "branding" / name
-    if own.exists():
-        return own
+    for candidate in (name, LEGACY.get(name)):
+        own = workspace_dir() / "branding" / candidate if candidate else None
+        if own and own.exists():
+            return own
     neutral = TEMPLATES / name
     return neutral if neutral.exists() else None

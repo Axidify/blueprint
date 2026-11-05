@@ -1,12 +1,12 @@
-"""Inspect, learn and preview the SRS format.
+"""Inspect, learn and preview the document format.
 
 Usage:
-    python -I tools/srs_format.py show                 the format in effect (defaults + workspace overrides)
-    python -I tools/srs_format.py learn <sample.docx>  read a company's existing SRS and print what it uses
-    python -I tools/srs_format.py preview              generate the sample project and render page images
+    python -I tools/document_format.py show                 the format in effect (defaults + workspace overrides)
+    python -I tools/document_format.py learn <sample.docx>  read a company's existing requirements document and print what it uses
+    python -I tools/document_format.py preview              generate the sample project and render page images
 
-The format lives in templates/srs-format.yaml (defaults) and workspace/branding/srs-format.yaml (your
-overrides, key by key). See docs/srs-format.md.
+The format lives in templates/document-format.yaml (defaults) and workspace/branding/document-format.yaml (your
+overrides, key by key). See docs/document-format.md.
 """
 import collections
 import re
@@ -22,11 +22,11 @@ import workspace  # noqa: E402
 
 
 def show():
-    import generate_srs
+    import generate_requirements
 
-    fmt = generate_srs.load_format()
-    own = workspace.workspace_dir() / "branding" / "srs-format.yaml"
-    print(f"# Defaults: templates/srs-format.yaml\n# Overrides: {own if own.exists() else 'none (workspace/branding/srs-format.yaml)'}\n")
+    fmt = generate_requirements.load_format()
+    own = workspace.workspace_dir() / "branding" / "document-format.yaml"
+    print(f"# Defaults: templates/document-format.yaml\n# Overrides: {own if own.exists() else 'none (workspace/branding/document-format.yaml)'}\n")
     print(yaml.safe_dump(fmt, sort_keys=False, allow_unicode=True))
 
 
@@ -69,16 +69,16 @@ def learn(sample):
     for t in h1_texts:
         if t:
             print(f"  - {t}")
-    print("\nUse these to write workspace/branding/srs-format.yaml (only the keys that differ from the defaults),"
-          "\nand copy the sample to workspace/branding/srs-template.docx if its header, footer or styles should be kept.")
+    print("\nUse these to write workspace/branding/document-format.yaml (only the keys that differ from the defaults),"
+          "\nand copy the sample to workspace/branding/document-template.docx if its header, footer or styles should be kept.")
 
 
 def preview():
-    import generate_srs
+    import generate_requirements
     import pymupdf
 
     project = ROOT / "examples" / "leave-request"
-    out = generate_srs.build(str(project))
+    out = generate_requirements.build(str(project))
     pdf = out.with_suffix(".pdf")
     if not pdf.exists():
         print("No PDF (Word not available): open the .docx to look at it.")

@@ -33,7 +33,7 @@ def main():
         {"project": a.name, "client": a.client, "platform": a.platform, "items": []}, indent=2), encoding="utf-8")
     print(f"Created {project}")
     print("  docs/      put the client's documents here (brief, SOW, notes, drafts)")
-    print("  spec/      the mock-up and SRS spec (created by build-mockup)")
+    print("  spec/      the project spec for the mock-up and the requirements document")
     print("  register.json  questions, gaps and decisions for this project")
 
 

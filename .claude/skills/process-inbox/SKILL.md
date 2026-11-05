@@ -18,7 +18,7 @@ For each file, work out two things. Read just enough of it to decide (`python -I
 
 | Kind | How to recognise it | Next step |
 |---|---|---|
-| Requirements document (SRS, URS, FSD, draft) | Requirement IDs, roles, screens | `review-srs` |
+| Requirements document (SRS, URS, FSD, draft) | Requirement IDs, roles, screens | `review-requirements` |
 | Mock-up feedback export | `feedback-*.json` with `screen`, `element`, `text` | merge into `projects/<slug>/feedback/feedback.json`, then `apply-feedback` |
 | Workshop notes or transcript | Meeting notes, Teams transcript, attendee names | `apply-feedback` (it handles notes and transcripts) |
 | Brief or SOW | Scope, modules, mandays | file it; suggest `build-mockup` |

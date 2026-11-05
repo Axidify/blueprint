@@ -4,7 +4,7 @@
       "Bash(python -I tools/extract.py *)",
       "Bash(python -I tools/register.py *)",
       "Bash(python -I tools/mockup.py *)",
-      "Bash(python -I tools/generate_srs.py *)",
+      "Bash(python -I tools/generate_requirements.py *)",
       "Bash(python -I tools/status.py *)",
       "Bash(python -I tools/status.py)",
       "Bash(python -I tools/doctor.py)",
@@ -15,7 +15,7 @@
       "PowerShell(python -I tools/extract.py *)",
       "PowerShell(python -I tools/register.py *)",
       "PowerShell(python -I tools/mockup.py *)",
-      "PowerShell(python -I tools/generate_srs.py *)",
+      "PowerShell(python -I tools/generate_requirements.py *)",
       "PowerShell(python -I tools/status.py *)",
       "PowerShell(python -I tools/status.py)",
       "PowerShell(python -I tools/doctor.py)",
@@ -28,8 +28,8 @@
       "Edit(knowledge/**)",
       "Bash(python -I tools/project.py *)",
       "PowerShell(python -I tools/project.py *)",
-      "Bash(python -I tools/srs_format.py *)",
-      "PowerShell(python -I tools/srs_format.py *)",
+      "Bash(python -I tools/document_format.py *)",
+      "PowerShell(python -I tools/document_format.py *)",
       "Bash(python -I tools/check_docs.py *)",
       "Bash(python -I tools/check_docs.py)",
       "PowerShell(python -I tools/check_docs.py *)",
@@ -42,7 +42,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python -I tools/status.py --brief",
+            "command": "python -I -c \"import os,sys,runpy;f=os.path.join(os.environ.get('CLAUDE_PROJECT_DIR') or os.getcwd(),'tools','status.py');sys.argv=[f,'--brief'];runpy.run_path(f,run_name='__main__') if os.path.exists(f) else sys.exit(0)\"",
             "timeout": 30,
             "statusMessage": "Loading Blueprint status"
           }
@@ -56,7 +56,7 @@
           {
             "type": "command",
             "if": "Bash(git commit*)",
-            "command": "python -I tools/check_docs.py --hook",
+            "command": "python -I -c \"import os,sys,runpy;f=os.path.join(os.environ.get('CLAUDE_PROJECT_DIR') or os.getcwd(),'tools','check_docs.py');sys.argv=[f,'--hook'];runpy.run_path(f,run_name='__main__') if os.path.exists(f) else sys.exit(0)\"",
             "timeout": 60,
             "statusMessage": "Checking docs and changelog"
           }
@@ -68,7 +68,7 @@
           {
             "type": "command",
             "if": "PowerShell(git commit*)",
-            "command": "python -I tools/check_docs.py --hook",
+            "command": "python -I -c \"import os,sys,runpy;f=os.path.join(os.environ.get('CLAUDE_PROJECT_DIR') or os.getcwd(),'tools','check_docs.py');sys.argv=[f,'--hook'];runpy.run_path(f,run_name='__main__') if os.path.exists(f) else sys.exit(0)\"",
             "timeout": 60,
             "statusMessage": "Checking docs and changelog"
           }

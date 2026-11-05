@@ -25,7 +25,7 @@ Ask the user for anything missing. Do not guess numbers.
 it to effort, CRs and lessons, never client document content.)
 
 Sections: effort table (sold, CRs billed, actual, variance and its value at the day rate), timeline, CRs
-(each with its gap pattern), what the SRS already showed (if the SRS is in `docs/`, check whether the
+(each with its gap pattern), what the requirements document already showed (if the requirements document is in `docs/`, check whether the
 overruns were visible in it), lessons. Keep it factual; no blame.
 
 ## 3. Update the knowledge base

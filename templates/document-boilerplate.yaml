@@ -1,5 +1,5 @@
-# Standard SRS wording. Placeholders: {system} {client} {client_short} {company} {company_short}
-# Copy to workspace/branding/srs-boilerplate.yaml to change it for your company.
+# Standard document wording. Placeholders: {system} {client} {client_short} {company} {company_short}
+# Copy to workspace/branding/document-boilerplate.yaml to change it for your company.
 
 disclaimer:
   - "This document has been developed based on the requirements gathered during the User Requirement Study (URS) sessions conducted between {client} and {company} ({company_short}) for the proposed {system}."
@@ -19,7 +19,7 @@ mockup_intro: "The screens below are taken from the conceptual mock-up with samp
 open_issues_intro: "The following items remain open at the time of this version. They shall be resolved before sign-off or carried forward as agreed by both parties; resolutions may affect the scope, timeline and effort."
 
 signoff:
-  - "By signing this document, the client acknowledges that the {system} – System Requirement Specifications has been reviewed for discussion, alignment, and confirmation purposes."
+  - "By signing this document, the client acknowledges that the {system} – {document} has been reviewed for discussion, alignment, and confirmation purposes."
   - "The client acknowledges that the document outlines the proposed system concept, high-level process flow, user roles, access matrix, functional requirements, and conceptual screen pages based on discussions between the relevant parties."
   - "The client further acknowledges that the conceptual screen pages, user interface design, colours, labels, layout, and user experience flow are subject to refinement based on feedback, validation, and final agreement during the project implementation stage."
   - "Any changes, additions, or refinements requested after sign-off may be subject to further review, impact assessment, timeline adjustment, and mutual agreement between the parties."

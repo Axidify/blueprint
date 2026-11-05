@@ -1,18 +1,18 @@
 ---
 name: build-mockup
-description: Create or extend the clickable mock-up for a project from a brief, workshop notes, an existing SRS or the project register, ready to present to the client in a requirement session. Use when the user asks for a mock-up, screens, a prototype or a demo for a project, or to prepare for workshop 2.
+description: Create or extend the clickable mock-up for a project from a brief, workshop notes, an existing requirements document or the project register, ready to present to the client in a requirement session. Use when the user asks for a mock-up, screens, a prototype or a demo for a project, or to prepare for workshop 2.
 ---
 
 # Build a mock-up
 
-The mock-up is generated from `projects/<slug>/spec/app.yaml`. The same spec later generates the SRS,
+The mock-up is generated from `projects/<slug>/spec/app.yaml`. The same spec later generates the requirements document,
 so every decision put into the spec shows up in both. Format: `docs/spec-format.md`. Working example:
 `examples/leave-request/spec/app.yaml`.
 
 ## 1. Gather inputs
 
 - The project folder (create it with the `new-project` skill if it does not exist).
-- Whatever exists: the brief, the SOW, workshop notes or transcripts, an SRS draft, `register.json`.
+- Whatever exists: the brief, the SOW, workshop notes or transcripts, a requirements document draft, `register.json`.
 - Ask the user, if not already known:
   - **Theme:** `joget` (default for Joget projects: shows what Joget delivers without custom UI) or
     `modern` (custom builds, or clients who expect a branded UI).

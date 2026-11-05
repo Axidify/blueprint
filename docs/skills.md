@@ -1,7 +1,7 @@
 # Skills
 
 A skill is a task Blueprint knows how to do. You don't need the names: say what you want and Claude Code
-picks the skill. You can also type `/` followed by the name, for example `/review-srs`.
+picks the skill. You can also type `/` followed by the name, for example `/review-requirements`.
 
 Each skill's full instructions are in `.claude/skills/<name>/SKILL.md`.
 
@@ -24,9 +24,9 @@ Works out which project each file in `inbox/` belongs to and what it is (require
 feedback, workshop notes, brief, project actuals), shows you a plan, then files each one and runs the
 right next step.
 
-### review-srs
+### review-requirements
 
-**Ask:** "review this SRS", "find the gaps in this document", "what should we ask the client?"
+**Ask:** "review this requirements document", "find the gaps in this document", "what should we ask the client?"
 Reads the whole document including its diagrams and mock-ups, checks consistency, completeness, workflow
 edge cases, data and KPI definitions, integrations, open items, scope against the SOW and document hygiene,
 and every gap pattern in the knowledge base. Every finding cites its location.
@@ -49,27 +49,27 @@ questions and possible change requests (flagged, not built, until you agree), th
 mock-up version.
 **Output:** updated spec and mock-up, register items, `reviews/mockup-v<version>-changes.md`.
 
-### generate-srs
+### generate-requirements
 
-**Ask:** "generate the SRS", "issue version 1.0"
-Builds the SRS from the spec and fresh screenshots in your company's format: cover, document at a
+**Ask:** "generate the requirements document", "issue version 1.0"
+Builds the requirements document from the spec and fresh screenshots in your company's format: cover, document at a
 glance (counts, how to review it, sign-off status, version history), users and access, requirements by
 role, functional requirements linked to screens, every screen with its fields, NFRs, decisions needed
 before sign-off, a sign-off block per signatory, and appendices. It warns about stale cross-references
-and mock-up remarks in requirements, then reviews the document with `review-srs`.
-See [SRS format](srs-format.md).
+and mock-up remarks in requirements, then reviews the document with `review-requirements`.
+See [Document format](document-format.md).
 **Output:** `projects/<name>/output/<System> – System Requirement Specifications v<version>.docx`, a PDF
 when Word is installed, and a snapshot of the spec used.
 When the document goes to the client, say "issue v1.3 to the client": the version is recorded and
 locked, so later changes become a new version.
 
-### srs-format
+### document-format
 
 **Ask:** "make our table headers navy", "number sections 1.0, 2.0", "learn our format from this document"
-Changes how generated SRS documents look and are structured, from a plain request or by reading a
-company's existing SRS, and shows a preview before any real SRS is regenerated.
-**Output:** `workspace/branding/srs-format.yaml` (and optionally the Word template and logo), preview
-pages in `examples/leave-request/output/preview/`. See [SRS format](srs-format.md).
+Changes how generated requirements documents look and are structured, from a plain request or by reading a
+company's existing requirements document, and shows a preview before any real requirements document is regenerated.
+**Output:** `workspace/branding/document-format.yaml` (and optionally the Word template and logo), preview
+pages in `examples/leave-request/output/preview/`. See [Document format](document-format.md).
 
 ### close-project
 

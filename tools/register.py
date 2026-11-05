@@ -18,8 +18,8 @@ Item fields (required unless marked optional):
   audience        client (BA takes it to the client) | internal (your team fixes it)
   severity        high | medium | low
   category        a gap pattern id from knowledge/gap-patterns.md (e.g. "GP-02") or a short slug
-  stage           sow | workshop-1 | mockup | workshop-2 | srs-draft | srs-final | development | uat
-  source          where it was found, e.g. "SRS v1.0 §3.2 FR-REQ-003.1" or "Figure 2"
+  stage           sow | workshop-1 | mockup | workshop-2 | requirements-draft | requirements-final | development | uat
+  source          where it was found, e.g. "v1.0 §3.2 FR-REQ-003.1" or "Figure 2"
   finding         what is wrong or missing, stated as fact, with the quote if useful
   question        for client items: the question to ask, in plain business language
   recommendation  optional: your suggested answer or fix
@@ -28,7 +28,7 @@ Item fields (required unless marked optional):
   answer          optional: the client's answer or the decision taken
   raised          date raised, YYYY-MM-DD
   resolved_in     optional: document version or meeting where it was closed
-  owner           optional: who must answer or fix it (default in the SRS Open Issues table: the client)
+  owner           optional: who must answer or fix it (default in the Open Issues table: the client)
   due             optional: date by which it is needed, YYYY-MM-DD
 """
 import json
@@ -40,7 +40,8 @@ TYPES = {"question", "gap", "contradiction", "assumption", "decision", "fix"}
 AUDIENCES = {"client", "internal"}
 SEVERITIES = {"high", "medium", "low"}
 STATUSES = {"open", "asked", "answered", "resolved", "wont-fix"}
-STAGES = {"sow", "workshop-1", "mockup", "workshop-2", "srs-draft", "srs-final", "development", "uat"}
+STAGES = {"sow", "workshop-1", "mockup", "workshop-2", "requirements-draft", "requirements-final", "development", "uat",
+          "srs-draft", "srs-final"}  # the last two are the names used before 0.4.0
 REQUIRED = ["id", "type", "audience", "severity", "category", "stage", "source", "finding", "status", "raised"]
 SEV_ORDER = {"high": 0, "medium": 1, "low": 2}
 

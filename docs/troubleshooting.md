@@ -13,8 +13,8 @@ python -I tools/doctor.py
 | Screenshots fail, or "playwright-core" is missing | Install Node.js LTS, then run `setup.cmd` again. Screenshots also need Microsoft Edge |
 | `projects/`, `knowledge/` or `inbox/` is missing or not linked | Run `setup.cmd` again. This happens after moving or renaming the app folder, or changing `workspace_dir` |
 | "projects is a real folder with files in it" | Move the files into the workspace's `projects/` folder, delete the empty folder, run `setup.cmd` |
-| The SRS shows a different font from the design | Run `setup.cmd` to install Geist and Geist Mono, restart Word, and generate again |
-| The SRS has an old table of contents | Word was not available. Open the document, right-click the table of contents and choose Update Field |
+| The requirements document shows a different font from the design | Run `setup.cmd` to install Geist and Geist Mono, restart Word, and generate again |
+| The requirements document has an old table of contents | Word was not available. Open the document, right-click the table of contents and choose Update Field |
 | The generator prints warnings | Fix them in the spec, not in the Word file (literal "section 3.2" references, requirements that mention the mock-up, missing images), then generate again |
 | The generator says a version is issued and locked | That version went to the client. Bump `project.version` in the spec (and add a history entry), then generate again |
 | I need to show the client an earlier mock-up | `present.cmd <project> --version 0.2` (every mock-up version is kept in `mockup/versions/`) |

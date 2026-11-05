@@ -1,18 +1,18 @@
-"""Generate the SRS Word document (and PDF) from a project's spec, mock-up screenshots and register.
+"""Generate the requirements document (Word and PDF) from a project's spec, mock-up screenshots and register.
 
 Usage:
-    python -I tools/generate_srs.py <project_dir>
+    python -I tools/generate_requirements.py <project_dir>
 
 Reads  <project_dir>/spec/app.yaml, <project_dir>/mockup/screenshots/ + shots.json (run
        `python -I tools/mockup.py screenshots <project_dir>` first), <project_dir>/register.json (open
        client items become "Decisions needed"), optional spec/client-logo.png and spec/process-flow.png.
-Uses   the company profile and branding from the workspace (see tools/workspace.py), and the SRS format:
-       templates/srs-format.yaml, overridden key by key by workspace/branding/srs-format.yaml.
-Writes <project_dir>/output/<System> – System Requirement Specifications v<version>.docx, a PDF when
+Uses   the company profile and branding from the workspace (see tools/workspace.py), and the document format:
+       templates/document-format.yaml, overridden key by key by workspace/branding/document-format.yaml.
+Writes <project_dir>/output/<System> – <document title> v<version>.docx, a PDF when
        Microsoft Word is installed, and a snapshot of the spec used.
 
 Everything (access matrix, roles, statuses, screens, field tables) comes from the same spec as the
-mock-up, so the document cannot contradict the screens. Format reference: docs/srs-format.md.
+mock-up, so the document cannot contradict the screens. Format reference: docs/document-format.md.
 """
 import copy
 import json
@@ -55,8 +55,8 @@ def deep_merge(base, over):
 
 
 def load_format():
-    fmt = yaml.safe_load((ROOT / "templates" / "srs-format.yaml").read_text(encoding="utf-8"))
-    own = workspace.workspace_dir() / "branding" / "srs-format.yaml"
+    fmt = yaml.safe_load((ROOT / "templates" / "document-format.yaml").read_text(encoding="utf-8"))
+    own = workspace.workspace_dir() / "branding" / "document-format.yaml"
     if own.exists():
         fmt = deep_merge(fmt, yaml.safe_load(own.read_text(encoding="utf-8")) or {})
     return fmt
@@ -599,10 +599,12 @@ def build(project):
     shot_dir = project / "mockup" / "screenshots"
     fmt = load_format()
     co = workspace.company()
-    bp = yaml.safe_load(workspace.asset("srs-boilerplate.yaml").read_text(encoding="utf-8"))
+    bp = yaml.safe_load(workspace.asset("document-boilerplate.yaml").read_text(encoding="utf-8"))
     P = spec["project"]
+    doc_title = (fmt.get("document") or {}).get("title") or "Requirements Specification"
+    doc_short = (fmt.get("document") or {}).get("short") or ""
     names = {"system": P["name"], "client": P.get("client", ""), "client_short": P.get("client_short", P.get("client", "")),
-             "company": co["name"], "company_short": co.get("short_name") or co["name"]}
+             "company": co["name"], "company_short": co.get("short_name") or co["name"], "document": doc_title}
     reg_file = project / "register.json"
     items = json.loads(reg_file.read_text(encoding="utf-8"))["items"] if reg_file.exists() else []
     open_items = [it for it in items if it["audience"] == "client" and it["status"] not in ("resolved", "wont-fix")]
@@ -635,13 +637,13 @@ def build(project):
             warnings.append(f"{where}: literal cross-reference '{LITERAL_REF.search(text).group(0)}' (use {{ref:...}})")
         return out
 
-    doc = Document(str(workspace.asset("srs-template.docx")))
+    doc = Document(str(workspace.asset("document-template.docx")))
     w = Writer(doc, fmt)
     w.setup_styles()
     cp = doc.core_properties
-    cp.title = f"{P['name']} – System Requirement Specifications v{version}"
+    cp.title = f"{P['name']} – {doc_title} v{version}"
     cp.author = co["name"]
-    cp.keywords = "SRS"
+    cp.keywords = doc_short
     if fmt.get("header_footer") == "generated":
         w.header_footer(f"{P['name']} · v{version}", status_text, f"{co['name']} · {labels['confidential']}")
     else:
@@ -687,7 +689,8 @@ def build(project):
                 cell.add_run().add_picture(str(client_logo), height=Cm(1.3))
             fixed_widths(logos, [w.text_width / 2] * 2)
             w.para("", before=110, after=0)
-            w.para([("System requirement specification", "sec")], size=w.s["body"] + 1, after=2)
+            w.para([(doc_title[:1].upper() + doc_title[1:].lower() + (f" ({doc_short})" if doc_short else ""), "sec")],
+                   size=w.s["body"] + 1, after=2)
             title = w.para([(P["name"], "medium")], size=w.s["cover_title"], after=4)
             title.paragraph_format.keep_with_next = True
             w.para([(f"Prepared for {names['client']}", "sec")], size=w.s["body"] + 1, after=8)
@@ -961,7 +964,7 @@ def build(project):
                 shown = set()
                 for b in s.get("buttons", []) or []:
                     d = dialogs.get(b.get("dialog"))
-                    if not d or d["id"] in shown or not d.get("fields") or d.get("srs_table") is False:
+                    if not d or d["id"] in shown or not d.get("fields") or d.get("doc_table", d.get("srs_table")) is False:
                         continue
                     shown.add(d["id"])
                     w.para([(d["title"], "medium")], before=6, after=2, keep=True)
@@ -1030,7 +1033,7 @@ def build(project):
 
     out_dir = project / "output"
     out_dir.mkdir(exist_ok=True)
-    out = out_dir / f"{P['name']} – System Requirement Specifications v{version}.docx"
+    out = out_dir / f"{P['name']} – {doc_title} v{version}.docx"
     doc.save(str(out))
     shutil.copy(project / "spec" / "app.yaml", out_dir / f"spec-v{version}.yaml")
     print(f"Wrote {out}")

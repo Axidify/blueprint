@@ -24,7 +24,7 @@ The workspace is never part of a change.
 Add entries under **Unreleased** in `CHANGELOG.md`, in one of: Added, Changed, Deprecated, Removed, Fixed,
 Security. Write for the people using Blueprint, not for developers:
 
-- Good: "Generated SRS documents now include the copyright and page-number footer."
+- Good: "Generated requirements documents now include the copyright and page-number footer."
 - Not useful: "Fix footerReference in sectPr."
 
 Mention anything people must do (run `setup.cmd` again, move a file in their workspace) at the start of

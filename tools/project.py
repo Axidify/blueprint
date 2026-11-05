@@ -8,7 +8,7 @@ Usage:
     python -I tools/project.py restore  <slug>
     python -I tools/project.py check    [<slug>] [--fix]
 
-issue    records that the current SRS version (the spec's project.version) went to the client, and makes
+issue    records that the current document version (the spec's project.version) went to the client, and makes
          its files read-only. The generator then refuses to overwrite that version: bump the version first.
 issued   lists the versions issued so far.
 file     moves a document into the project's docs/ with a dated, descriptive name, e.g.
@@ -64,7 +64,7 @@ def load_issues(p):
 
 
 def is_issued(p, version):
-    """The issue record for this version, or None. Used by the SRS generator to refuse overwriting."""
+    """The issue record for this version, or None. Used by the requirements document generator to refuse overwriting."""
     return next((i for i in load_issues(p) if str(i["version"]) == str(version)), None)
 
 
@@ -84,7 +84,7 @@ def cmd_issue(a):
         sys.exit(f"v{version} was already issued. Bump project.version in the spec for the next version.")
     files = sorted(f for f in (p / "output").glob(f"* v{version}.*") if f.suffix in (".docx", ".pdf"))
     if not files:
-        sys.exit(f"No generated SRS for v{version} in output/. Generate it first.")
+        sys.exit(f"No generated requirements document for v{version} in output/. Generate it first.")
     issues = load_issues(p)
     record = {"version": version, "date": a.date or dt.date.today().isoformat(),
               "to": a.to or P.get("client_short") or P.get("client", ""), "files": [f.name for f in files], "note": a.note or ""}
@@ -179,7 +179,7 @@ def check_one(slug, fix):
     if loose:
         notes.append(f"{len(loose)} document(s) in docs/ without a date in the name (fine for originals; new files are filed with dates)")
     if generated and not issued:
-        notes.append(f"SRS versions generated ({', '.join('v' + g for g in generated)}) but none recorded as issued")
+        notes.append(f"document versions generated ({', '.join('v' + g for g in generated)}) but none recorded as issued")
     return problems, fixed, notes
 
 

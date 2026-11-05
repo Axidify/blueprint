@@ -31,7 +31,7 @@ if (Get-Command node -ErrorAction SilentlyContinue) {
     Write-Host "Node.js not found: install the LTS version from https://nodejs.org/ and run setup again (needed for screenshots and fonts)." -ForegroundColor Yellow
 }
 
-# 2b. Fonts used by the SRS design (Geist and Geist Mono, SIL Open Font License), installed for this
+# 2b. Fonts used by the document design (Geist and Geist Mono, SIL Open Font License), installed for this
 #     Windows user only, so no administrator rights are needed. Restart Word after the first install.
 $fontSrc = Join-Path $PSScriptRoot "node_modules\geist\dist\fonts"
 if (Test-Path $fontSrc) {
@@ -87,6 +87,17 @@ foreach ($d in @("", "branding", "projects", "inbox", "knowledge")) {
 if (-not (Test-Path (Join-Path $ws "company.yaml"))) {
     Copy-Item (Join-Path $templates "company.yaml") (Join-Path $ws "company.yaml")
     Write-Host "Created $ws\company.yaml - put your company name in it." -ForegroundColor Yellow
+}
+# Files renamed in 0.4.0 (SRS -> requirements document). Rename them in place so nothing is lost.
+foreach ($pair in @(@("knowledge\srs-standard.md", "knowledge\requirements-standard.md"),
+                    @("branding\srs-template.docx", "branding\document-template.docx"),
+                    @("branding\srs-boilerplate.yaml", "branding\document-boilerplate.yaml"),
+                    @("branding\srs-format.yaml", "branding\document-format.yaml"))) {
+    $old = Join-Path $ws $pair[0]; $new = Join-Path $ws $pair[1]
+    if ((Test-Path $old) -and -not (Test-Path $new)) {
+        Move-Item $old $new
+        Write-Host "Renamed $($pair[0]) to $($pair[1])"
+    }
 }
 # Seed the knowledge base with the starter files the workspace does not have yet (never overwrite).
 Get-ChildItem (Join-Path $templates "knowledge") -Recurse -File | ForEach-Object {

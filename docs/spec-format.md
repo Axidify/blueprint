@@ -1,36 +1,36 @@
 # Project spec format (`spec/app.yaml`)
 
-One YAML file per project drives both the clickable mock-up (`tools/mockup.py`) and the generated SRS
-(`tools/generate_srs.py`). Change the spec, rebuild both, and they stay consistent.
+One YAML file per project drives both the clickable mock-up (`tools/mockup.py`) and the generated requirements document
+(`tools/generate_requirements.py`). Change the spec, rebuild both, and they stay consistent.
 `examples/leave-request/spec/app.yaml` is a complete working example.
 
 ## Top level
 
 | Key | Purpose |
 |---|---|
-| `project` | `name`, `short_name` (shown in the logo box), `client`, `client_short`, `version`, `platform`, `theme` (`joget` or `modern`), `primary_color`, `prepared_by`, `reviewed_by`, `approved_by`, `date`, `status` (shown on the cover and in the page header, e.g. "Draft for client review", "Signed off"), `history: [{version, date, author, changes}]` (SRS version history table) |
-| `overview` | List of paragraphs for the start of SRS section 1.0 |
+| `project` | `name`, `short_name` (shown in the logo box), `client`, `client_short`, `version`, `platform`, `theme` (`joget` or `modern`), `primary_color`, `prepared_by`, `reviewed_by`, `approved_by`, `date`, `status` (shown on the cover and in the page header, e.g. "Draft for client review", "Signed off"), `history: [{version, date, author, changes}]` (document version history table) |
+| `overview` | List of paragraphs for the start of document section 1.0 |
 | `roles` | `id`, `name`, `description`, `scope` (data scope, e.g. "Own branch only"), `user` (sample person shown in the mock-up header) |
-| `statuses` | `id`, `name`, `meaning`. Becomes the SRS status table |
+| `statuses` | `id`, `name`, `meaning`. Becomes the requirements document status table |
 | `data` | Sample records, by list name. The first key of each record is its identifier |
 | `screens` | The screens (below) |
 | `dialogs` | Pop-ups opened by buttons (below) |
 | `screenshots` | Extra screenshots beyond one per screen: `{screen, role, record, page, dialog, name}` |
-| `requirements` | Functional requirement groups: `{id: FR-XXX-001, title, screens, priority, items: [...]}`. `screens` lists the screen ids the group applies to, so requirements and screens link to each other. `priority` (Must, Should, Could) is the group default; set it only when the client has agreed it. Items are numbered `.1`, `.2` … in the SRS. An item is text, or `{text, priority, screens, tbc: R-019, note}`: `tbc` links an open register item (shown as "Decision needed R-019"), `note` is internal and not printed |
-| `signoff` | Everyone who signs: `{name, designation, department, organisation, signing_for, status}`. Client signatories are listed first; `status` is `Pending` (default) or `Signed`. Without it the SRS has one client and one supplier block to fill in |
-| `notifications` | `{event, recipient, template}`. SRS section 1.6 |
+| `requirements` | Functional requirement groups: `{id: FR-XXX-001, title, screens, priority, items: [...]}`. `screens` lists the screen ids the group applies to, so requirements and screens link to each other. `priority` (Must, Should, Could) is the group default; set it only when the client has agreed it. Items are numbered `.1`, `.2` … in the requirements document. An item is text, or `{text, priority, screens, tbc: R-019, note}`: `tbc` links an open register item (shown as "Decision needed R-019"), `note` is internal and not printed |
+| `signoff` | Everyone who signs: `{name, designation, department, organisation, signing_for, status}`. Client signatories are listed first; `status` is `Pending` (default) or `Signed`. Without it the requirements document has one client and one supplier block to fill in |
+| `notifications` | `{event, recipient, template}`. document section 1.6 |
 | `integrations` | `{system, purpose, direction, notes}` |
 | `nfr` | `{area, requirement}` |
-| `glossary` | `{term, meaning}`. SRS section 1.5 |
-| `process_flow` | `{title, steps: [{name, role, optional, status}], reject, notes}`. Drawn as a diagram (mock-up URL `#/__flow`), screenshotted and placed in SRS section 1.3, so it always matches the statuses |
-| `extra_sections` | Free-form SRS sections after the NFRs: `{title, appendix, content: [{heading} \| {text} \| {bullets} \| {table: {header, rows}} \| {image, caption}]}`. `appendix: true` puts it after sign-off as Appendix A, B… Text may use `{client}` and `{system}` |
+| `glossary` | `{term, meaning}`. document section 1.5 |
+| `process_flow` | `{title, steps: [{name, role, optional, status}], reject, notes}`. Drawn as a diagram (mock-up URL `#/__flow`), screenshotted and placed in document section 1.3, so it always matches the statuses |
+| `extra_sections` | Free-form document sections after the NFRs: `{title, appendix, content: [{heading} \| {text} \| {bullets} \| {table: {header, rows}} \| {image, caption}]}`. `appendix: true` puts it after sign-off as Appendix A, B… Text may use `{client}` and `{system}` |
 
-Optional files next to `app.yaml`: `client-logo.png` (SRS cover) and `process-flow.png` (SRS section 1.3).
+Optional files next to `app.yaml`: `client-logo.png` (document cover) and `process-flow.png` (document section 1.3).
 
 ## Screens
 
 Every screen has `id`, `type`, `title`, and optionally `screenshot_role` (role used for its screenshot; default the first in `roles`), `menu` (label in the side menu; omit for screens
-reached by links), `roles` (who can open it; omit for everyone), `description` (SRS text under the
+reached by links), `roles` (who can open it; omit for everyone), `description` (document text under the
 screenshot) and `caption`.
 
 | `type` | Keys |
@@ -47,7 +47,7 @@ allowed values `{status: [Submitted, Approved]}`), `columns: [{field, label, chi
 the value as a coloured status), `filters: [field, ...]`,
 `actions: [{label, to | toast, when}]` (per row; `to` opens a screen with that row's record; `when:
 {status: Draft}` shows the action only on matching rows),
-`toolbar: [{label, to | toast, style}]`, `search: [field]` (text search boxes, partial match), `sort` (text for the SRS), `empty` (empty-state text). Actions and toolbar buttons appear in the SRS access matrix unless `access: false`.
+`toolbar: [{label, to | toast, style}]`, `search: [field]` (text search boxes, partial match), `sort` (text for the requirements document), `empty` (empty-state text). Actions and toolbar buttons appear in the requirements document access matrix unless `access: false`.
 
 **`sections`:** `[{title, page, page_title, note, fields}]`. Give sections a `page` number to split a
 form into steps (tabs); each page gets its own screenshot.
@@ -55,18 +55,18 @@ form into steps (tabs); each page gets its own screenshot.
 **Fields:** `id`, `label`, `type` (`text`, `textarea`, `select`, `radio`, `checkbox`, `date`,
 `datetime`, `number`, `file`, `signature`, `user`), `required`, `readonly`, `default`, `length`,
 `options` or `options_from: list.field`, `placeholder`, `help`, `source` and `validation` (both go into
-the SRS data requirement table).
+the requirements document data requirement table).
 
 **Buttons:** `{label, style (primary | danger), to, toast, dialog, roles, when, example}`. `toast` shows a
 message (e.g. "Draft saved"); `roles` limits who sees the button; `when` shows it only for matching
-records on detail screens. Primary, danger and dialog buttons appear as actions in the SRS access matrix,
+records on detail screens. Primary, danger and dialog buttons appear as actions in the requirements document access matrix,
 except `example: true` buttons (demo-only buttons that open a dialog for screenshots).
 
 ## Dialogs
 
-`{id, title, message, fields, list, srs_table, confirm: {label, style, toast, to}}`. `srs_table: false` leaves its field table out of the SRS. A button opens it with
+`{id, title, message, fields, list, doc_table, confirm: {label, style, toast, to}}`. `doc_table: false` (formerly `srs_table`) leaves its field table out of the requirements document. A button opens it with
 `dialog: <id>`. `list` shows a table inside the dialog (same format as a screen list). Dialog fields
-appear in the SRS under the screen that opens it.
+appear in the requirements document under the screen that opens it.
 
 ## Mock-up URLs
 

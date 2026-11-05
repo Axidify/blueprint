@@ -45,14 +45,14 @@ def check():
         word = r.stdout.strip().lower() == "true"
     except Exception:
         pass
-    results.append((word, False, "Microsoft Word (optional: table of contents and PDF)", "Without Word the SRS is still generated; open it and update the table of contents yourself."))
+    results.append((word, False, "Microsoft Word (optional: table of contents and PDF)", "Without Word the requirements document is still generated; open it and update the table of contents yourself."))
 
     import os
 
     font_dir = Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "Windows" / "Fonts"
     system_fonts = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts"
     fonts_ok = all((font_dir / f).exists() or (system_fonts / f).exists() for f in ("Geist-Regular.ttf", "GeistMono-Regular.ttf"))
-    results.append((fonts_ok, False, "Geist fonts (SRS design)", "Run setup.cmd again; without them Word shows the SRS in a fallback font."))
+    results.append((fonts_ok, False, "Geist fonts (document design)", "Run setup.cmd again; without them Word shows the requirements document in a fallback font."))
 
     claude = shutil.which("claude")
     results.append((bool(claude), False, "Claude Code command line (optional if you use the desktop app)", "Install Claude Code: https://claude.com/claude-code"))

@@ -15,7 +15,7 @@ sentences (usually "double-click setup.cmd") and stop there.
 
 If the company profile is still the placeholder ("Your Company"), ask for the company name and short name
 and write them into `workspace/company.yaml`. Mention that a logo (`workspace/branding/logo.png`), a Word
-template (`srs-template.docx`) and standard wording (`srs-boilerplate.yaml`) can go in the same folder.
+template (`document-template.docx`) and standard wording (`document-boilerplate.yaml`) can go in the same folder.
 
 ## 2. Show where things stand
 
@@ -29,12 +29,12 @@ Use AskUserQuestion with these options (the tool adds "Other" automatically):
 | Option | Then |
 |---|---|
 | Start a new project | the `new-project` skill |
-| Review a document (SRS, URS, draft) | the `review-srs` skill |
+| Review a document (SRS, URS, draft) | the `review-requirements` skill |
 | Build or update a mock-up | the `build-mockup` skill |
 | Process the inbox / apply feedback | the `process-inbox` skill (it routes mock-up feedback to `apply-feedback`) |
 
-If they pick "Other", or mention generating the SRS, presenting a mock-up or closing a project, use the
-matching skill: `generate-srs`, presenting (`present.cmd <project>` or
+If they pick "Other", or mention generating the requirements document, presenting a mock-up or closing a project, use the
+matching skill: `generate-requirements`, presenting (`present.cmd <project>` or
 `python -I tools/mockup.py serve projects/<slug>`; add `--version 0.2` for an earlier mock-up),
 `close-project`. Recording that a document went to the client: `python -I tools/project.py issue <slug>`.
 If `python -I tools/project.py check` reports problems, offer to fix them with `--fix`.
@@ -44,4 +44,4 @@ If a project is involved and it is not obvious which, ask which one, listing the
 ## 4. Hand over
 
 Invoke the chosen skill and follow it. At the end, tell the person where their output is (Excel register,
-Word SRS, mock-up link) in plain words, and what the sensible next step is.
+Word document, mock-up link) in plain words, and what the sensible next step is.

@@ -29,7 +29,7 @@ def project_status(p):
         s["spec_version"] = (yaml.safe_load(spec.read_text(encoding="utf-8")).get("project") or {}).get("version")
     outs = sorted((p / "output").glob("*.docx"), key=lambda x: x.stat().st_mtime) if (p / "output").exists() else []
     if outs:
-        s["latest_srs"] = outs[-1].name
+        s["latest_doc"] = outs[-1].name
     fb = p / "feedback" / "feedback.json"
     if fb.exists():
         items = json.loads(fb.read_text(encoding="utf-8"))
@@ -48,10 +48,10 @@ def next_step(s):
         return ""
     if s.get("feedback_unprocessed"):
         return f"{s['feedback_unprocessed']} mock-up comments not processed yet: say 'apply the feedback'"
-    if s.get("spec_version") and not s.get("latest_srs"):
-        return "mock-up exists: present it (present.cmd) or say 'generate the SRS'"
+    if s.get("spec_version") and not s.get("latest_doc"):
+        return "mock-up exists: present it (present.cmd) or say 'generate the requirements document'"
     if not s.get("spec_version") and s.get("docs"):
-        return "documents in docs/: say 'review the SRS' or 'build a mock-up'"
+        return "documents in docs/: say 'review the requirements document' or 'build a mock-up'"
     if s.get("client_open"):
         return f"{s['client_open']} client questions open: give the register to the BA"
     return ""
@@ -76,8 +76,8 @@ def main():
         if s.get("last_issued"):
             li = s["last_issued"]
             bits.append(f"v{li['version']} issued to {li['to']} on {li['date']}")
-        elif s.get("latest_srs"):
-            bits.append("SRS generated, not issued")
+        elif s.get("latest_doc"):
+            bits.append("document generated, not issued")
         if "client_open" in s:
             bits.append(f"{s['client_open']} client questions open ({s['high_open']} high), {s['internal_open']} internal")
         if s.get("actuals"):

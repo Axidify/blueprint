@@ -1,6 +1,6 @@
-# SRS standard
+# requirements standard
 
-What every SRS must contain, and the rules it must meet before it goes to the client. `review-srs`
+What every requirements document must contain, and the rules it must meet before it goes to the client. `review-requirements`
 checks each line.
 
 ## Required sections
@@ -45,7 +45,7 @@ high-severity internal finding.
 6. **Every TBC is tracked.** Each TBC, TBD or "if applicable" appears in the open issues table with an
    owner. "If applicable" on scope is never acceptable at sign-off.
 7. **Data fits.** Formats fit field lengths; calculated fields state their formula.
-8. **Scope matches the SOW.** Every SOW module appears in the SRS; anything in the SRS that is not in the
+8. **Scope matches the SOW.** Every SOW module appears in the requirements document; anything in the requirements document that is not in the
    SOW is flagged as a possible CR before sign-off.
 9. **Clean document.** No other project's names (including metadata), no tracked changes, no comments, no
    credentials or IP addresses unless the client approved them.
