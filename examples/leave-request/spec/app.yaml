@@ -1,5 +1,5 @@
 # Sample project spec. Not a client project: it exists to test the mock-up, screenshot and SRS pipeline
-# and to show the spec format. The format is documented in tools/mockup/SPEC.md.
+# and to show the spec format. The format is documented in docs/spec-format.md.
 
 project:
   name: Leave Request System

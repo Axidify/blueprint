@@ -38,7 +38,7 @@ Never write a company or client name into the app's files. Company details come 
 - `register.json` – every question, gap, assumption, decision and fix, with status. The source of truth;
   render it with `tools/register.py`. `register.xlsx` is the rendered copy for the BA.
 - `spec/app.yaml` – the project spec (roles, statuses, screens, fields, sample data, requirements). It
-  drives both the mock-up and the generated SRS. Format: `tools/mockup/SPEC.md`.
+  drives both the mock-up and the generated SRS. Format: `docs/spec-format.md`.
 - `mockup/` – the built mock-up and screenshots. `feedback/feedback.json` – comments from sessions.
 - `output/` – generated SRS `.docx`/`.pdf` and a spec snapshot per version.
 
@@ -60,8 +60,10 @@ after the user agrees; describe gaps in general terms, without client content.
 - `review-srs` – review a requirements document; findings go into the register.
 - `build-mockup` – brief, notes or SRS → spec → clickable mock-up.
 - `apply-feedback` – mock-up comments, BA notes or transcripts → spec changes, register items, new version.
-- `generate-srs` – spec + screenshots → SRS in the company's layout, then reviewed with `review-srs`.
+- `generate-srs` – spec + screenshots → SRS in the company's format, then reviewed with `review-srs`.
+- `srs-format` – change the SRS look and structure, or learn it from a sample; preview before regenerating.
 - `close-project` – log actuals and CRs after delivery; feeds gap patterns and building-block rates.
+- `release` – for maintainers: publish a new version of the app (changelog, `VERSION`, tag).
 
 Planned: `estimate`, `prep-workshop`, `price-cr`, a Figma connection.
 
@@ -69,7 +71,22 @@ Planned: `estimate`, `prep-workshop`, `price-cr`, a Figma connection.
 
 Run Python scripts with `python -I tools/<script>.py`: `doctor.py` (machine check), `status.py`
 (projects and next steps), `new_project.py`, `extract.py` (documents to text and images), `register.py`
-(register validation and Excel), `mockup.py` (build, serve, screenshot, feedback), `generate_srs.py`.
+(register validation and Excel), `mockup.py` (build, serve, screenshot, feedback), `generate_srs.py`,
+`srs_format.py` (show, learn, preview the SRS format), `check_docs.py`.
+
+## Documentation and changelog
+
+Every change to the app ships with its documentation and a changelog entry, in the same commit. When you
+change anything in `tools/`, `.claude/`, `templates/`, `examples/`, setup or launch scripts:
+
+- add an entry under `## [Unreleased]` in `CHANGELOG.md` (Added / Changed / Deprecated / Removed / Fixed /
+  Security), written for the people using Blueprint;
+- update the docs it affects (`docs/skills.md` for skills, `docs/tools.md` for tools,
+  `docs/spec-format.md` for the spec, and so on; the full table is in `docs/maintaining.md`);
+- run `python -I tools/check_docs.py` before committing. A hook runs it with `--pre-commit` on every
+  `git commit` and blocks the commit if it fails; fix the reason it gives rather than working around it.
+
+Use the `release` skill to publish a version.
 
 ## Rules
 

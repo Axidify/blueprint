@@ -6,7 +6,7 @@ description: Create or extend the clickable mock-up for a project from a brief, 
 # Build a mock-up
 
 The mock-up is generated from `projects/<slug>/spec/app.yaml`. The same spec later generates the SRS,
-so every decision put into the spec shows up in both. Format: `tools/mockup/SPEC.md`. Working example:
+so every decision put into the spec shows up in both. Format: `docs/spec-format.md`. Working example:
 `examples/leave-request/spec/app.yaml`.
 
 ## 1. Gather inputs

@@ -23,12 +23,52 @@ Write-Host "Installing Python packages..."
 & $python -m pip install --user --quiet --disable-pip-version-check -r requirements.txt
 if ($LASTEXITCODE -ne 0) { Write-Host "pip install failed; see the messages above." -ForegroundColor Red; exit 1 }
 
-# 2. Node (screenshots only)
+# 2. Node: screenshot tooling and the document fonts
 if (Get-Command node -ErrorAction SilentlyContinue) {
-    Write-Host "Installing screenshot tooling..."
+    Write-Host "Installing screenshot tooling and fonts..."
     npm install --no-audit --no-fund --silent
 } else {
-    Write-Host "Node.js not found: install the LTS version from https://nodejs.org/ and run setup again (needed for screenshots)." -ForegroundColor Yellow
+    Write-Host "Node.js not found: install the LTS version from https://nodejs.org/ and run setup again (needed for screenshots and fonts)." -ForegroundColor Yellow
+}
+
+# 2b. Fonts used by the SRS design (Geist and Geist Mono, SIL Open Font License), installed for this
+#     Windows user only, so no administrator rights are needed. Restart Word after the first install.
+$fontSrc = Join-Path $PSScriptRoot "node_modules\geist\dist\fonts"
+if (Test-Path $fontSrc) {
+    $fontDir = Join-Path $env:LOCALAPPDATA "Microsoft\Windows\Fonts"
+    $regKey = "HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Fonts"
+    New-Item -ItemType Directory -Force -Path $fontDir | Out-Null
+    if (-not (Test-Path $regKey)) { New-Item -Path $regKey -Force | Out-Null }
+    $fonts = @(
+        @("geist-sans\Geist-Regular.ttf", "Geist Regular (TrueType)"),
+        @("geist-sans\Geist-Italic.ttf", "Geist Italic (TrueType)"),
+        @("geist-sans\Geist-Medium.ttf", "Geist Medium (TrueType)"),
+        @("geist-sans\Geist-SemiBold.ttf", "Geist SemiBold (TrueType)"),
+        @("geist-sans\Geist-Bold.ttf", "Geist Bold (TrueType)"),
+        @("geist-sans\Geist-BoldItalic.ttf", "Geist Bold Italic (TrueType)"),
+        @("geist-mono\GeistMono-Regular.ttf", "Geist Mono Regular (TrueType)"),
+        @("geist-mono\GeistMono-Medium.ttf", "Geist Mono Medium (TrueType)")
+    )
+    $added = 0
+    foreach ($f in $fonts) {
+        $src = Join-Path $fontSrc $f[0]
+        $dest = Join-Path $fontDir (Split-Path $f[0] -Leaf)
+        if (-not (Test-Path $src)) { continue }
+        if (-not (Test-Path $dest)) { Copy-Item $src $dest; $added++ }
+        New-ItemProperty -Path $regKey -Name $f[1] -Value $dest -PropertyType String -Force | Out-Null
+    }
+    # Make the fonts available in this Windows session straight away (otherwise only after signing in again).
+    Add-Type -Namespace Blueprint -Name Fonts -MemberDefinition @'
+[DllImport("gdi32.dll", CharSet = CharSet.Unicode)] public static extern int AddFontResourceW(string file);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern System.IntPtr SendMessageTimeoutW(System.IntPtr hWnd, uint msg, System.UIntPtr w, System.IntPtr l, uint flags, uint timeout, out System.UIntPtr result);
+'@ -ErrorAction SilentlyContinue
+    foreach ($f in $fonts) {
+        $dest = Join-Path $fontDir (Split-Path $f[0] -Leaf)
+        if (Test-Path $dest) { [Blueprint.Fonts]::AddFontResourceW($dest) | Out-Null }
+    }
+    $r = [System.UIntPtr]::Zero
+    [Blueprint.Fonts]::SendMessageTimeoutW([System.IntPtr]0xffff, 0x001D, [System.UIntPtr]::Zero, [System.IntPtr]::Zero, 2, 1000, [ref]$r) | Out-Null
+    if ($added) { Write-Host "Installed $added font files (Geist, Geist Mono). Restart Word if it is open." }
 }
 
 # 3. Workspace: company profile, branding, knowledge, projects and inbox.

@@ -1,5 +1,7 @@
 # Blueprint
 
+![Docs and changelog](https://github.com/Axidify/blueprint/actions/workflows/docs.yml/badge.svg)
+
 Blueprint helps a delivery team get requirements right before anything is built. It reviews requirement
 documents for gaps, builds clickable mock-ups to present to clients, collects their feedback, generates
 the SRS with screenshots, and learns from every project's change requests.
@@ -53,9 +55,21 @@ then run `setup.cmd` again.
 
 The workspace is never committed to git: it holds client documents.
 
+## Documentation
+
+Full documentation is in **[docs/](docs/README.md)**: [getting started](docs/getting-started.md),
+[workflow](docs/workflow.md), [skills](docs/skills.md), [the register](docs/register.md),
+[workspace and company profile](docs/workspace.md), [spec format](docs/spec-format.md),
+[tools](docs/tools.md), [troubleshooting](docs/troubleshooting.md). What changed in each version is in the
+**[changelog](CHANGELOG.md)**.
+
 ## For maintainers
 
-- `tools/` – scripts (Python, plus Node for screenshots). `tools/mockup/SPEC.md` documents the mock-up spec.
+Every change to the app ships with its documentation and a changelog entry: see
+[docs/maintaining.md](docs/maintaining.md). `python -I tools/check_docs.py` checks it, before every commit
+made through Claude Code and on GitHub for every push.
+
+- `tools/` – scripts (Python, plus Node for screenshots).
 - `.claude/skills/` – one skill per task; `CLAUDE.md` – instructions Claude follows in this repo.
 - `templates/` – neutral defaults for new workspaces (company profile, Word template, SRS wording,
   starter knowledge, project template).

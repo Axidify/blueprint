@@ -5,8 +5,9 @@ description: Generate the SRS Word document (and PDF) for a project from its spe
 
 # Generate the SRS
 
-The SRS is built from `projects/<slug>/spec/app.yaml` plus the mock-up screenshots, using
-the company's Word template and standard wording (`workspace/branding/`, falling back to the neutral
+The SRS is built from `projects/<slug>/spec/app.yaml` plus the mock-up screenshots, in the SRS format
+(`docs/srs-format.md`; change it with the `srs-format` skill), using the company's Word template and
+standard wording (`workspace/branding/`, falling back to the neutral
 ones in `templates/`), with the company name from `workspace/company.yaml`. The access matrix, status table, data
 requirement tables and screenshots all come from the spec, so they cannot contradict each other.
 
@@ -17,8 +18,11 @@ requirement tables and screenshots all come from the spec, so they cannot contra
 - `nfr` and `integrations` are filled in. Missing NFRs are a known gap (GP-12).
 - Open questions are in `register.json` as client items; they become the **Open Issues** section.
   Resolved items drop out automatically.
-- Version, dates and `history` in `project` are right for this issue.
-- Cross-references use `{ref:...}` (see `tools/mockup/SPEC.md`), never literal section numbers. When a spec is
+- Version, dates, `status` and `history` in `project` are right for this issue.
+- `signoff` lists everyone who must sign (client signatories first). Ask the user if it is missing.
+- Requirement groups list the `screens` they apply to, so requirements and screens link to each other.
+  Only set `priority` (Must, Should, Could) when the client has agreed it; never invent priorities.
+- Cross-references use `{ref:...}` (see `docs/spec-format.md`), never literal section numbers. When a spec is
   rebuilt from an earlier SRS, copied requirement text is full of stale "section N.N" and "Appendix X"
   references and remarks about the mock-up: fix them all.
 - Each TBC inside a requirement is linked to its register item with `tbc: R-xxx`.

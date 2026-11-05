@@ -8,7 +8,7 @@ One YAML file per project drives both the clickable mock-up (`tools/mockup.py`) 
 
 | Key | Purpose |
 |---|---|
-| `project` | `name`, `short_name` (shown in the logo box), `client`, `client_short`, `version`, `platform`, `theme` (`joget` or `modern`), `primary_color`, `prepared_by`, `reviewed_by`, `approved_by`, `date`, `history: [{version, date, author, changes}]` (SRS version history table) |
+| `project` | `name`, `short_name` (shown in the logo box), `client`, `client_short`, `version`, `platform`, `theme` (`joget` or `modern`), `primary_color`, `prepared_by`, `reviewed_by`, `approved_by`, `date`, `status` (shown on the cover and in the page header, e.g. "Draft for client review", "Signed off"), `history: [{version, date, author, changes}]` (SRS version history table) |
 | `overview` | List of paragraphs for the start of SRS section 1.0 |
 | `roles` | `id`, `name`, `description`, `scope` (data scope, e.g. "Own branch only"), `user` (sample person shown in the mock-up header) |
 | `statuses` | `id`, `name`, `meaning`. Becomes the SRS status table |
@@ -16,7 +16,8 @@ One YAML file per project drives both the clickable mock-up (`tools/mockup.py`) 
 | `screens` | The screens (below) |
 | `dialogs` | Pop-ups opened by buttons (below) |
 | `screenshots` | Extra screenshots beyond one per screen: `{screen, role, record, page, dialog, name}` |
-| `requirements` | Functional requirement groups: `{id: FR-XXX-001, title, items: [...]}`. Items are numbered `.1`, `.2` … in the SRS. An item is text, or `{text, tbc: R-019, note}`: `tbc` links an open register item (printed as "(Open issue R-019)"), `note` is internal and not printed |
+| `requirements` | Functional requirement groups: `{id: FR-XXX-001, title, screens, priority, items: [...]}`. `screens` lists the screen ids the group applies to, so requirements and screens link to each other. `priority` (Must, Should, Could) is the group default; set it only when the client has agreed it. Items are numbered `.1`, `.2` … in the SRS. An item is text, or `{text, priority, screens, tbc: R-019, note}`: `tbc` links an open register item (shown as "Decision needed R-019"), `note` is internal and not printed |
+| `signoff` | Everyone who signs: `{name, designation, department, organisation, signing_for, status}`. Client signatories are listed first; `status` is `Pending` (default) or `Signed`. Without it the SRS has one client and one supplier block to fill in |
 | `notifications` | `{event, recipient, template}`. SRS section 1.6 |
 | `integrations` | `{system, purpose, direction, notes}` |
 | `nfr` | `{area, requirement}` |
@@ -79,8 +80,9 @@ sections are added. Use a reference the generator resolves, and it warns about a
 
 | Reference | Becomes |
 |---|---|
-| `{ref:screen:<screen id>}` | "section 3.n" for that screen |
-| `{ref:section:roles\|access\|flow\|integrations\|glossary\|notifications\|requirements\|screens\|nfr\|open-issues}` | the fixed section's number |
+| `{ref:screen:<screen id>}` | the screen's section, e.g. "section 4.3" |
+| `{ref:role:<role id>}` | the role's section in Requirements by role |
+| `{ref:section:roles\|access\|flow\|integrations\|notifications\|glossary\|users\|by-role\|requirements\|screens\|nfr\|decisions}` | that section's number (`open-issues` still works for `decisions`) |
 | `{ref:extra:<extra section title>}` | "section n.0" or "Appendix X" |
 | `{ref:req:<FR id>}` | the requirement group id |
 

@@ -7,7 +7,7 @@ Usage:
     python -I tools/mockup.py feedback     <project_dir>
 
 <project_dir> is projects/<slug> (or examples/<name>). It must contain spec/app.yaml; the format is in
-tools/mockup/SPEC.md.
+docs/spec-format.md.
 
 build        validates the spec and writes <project_dir>/mockup/ (self-contained: open index.html).
 serve        serves the mock-up on http://localhost:<port>; feedback comments are saved to

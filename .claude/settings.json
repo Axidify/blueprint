@@ -40,6 +40,32 @@
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git commit*)",
+            "command": "python -I tools/check_docs.py --pre-commit",
+            "timeout": 60,
+            "statusMessage": "Checking docs and changelog"
+          }
+        ]
+      },
+      {
+        "matcher": "PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "PowerShell(git commit*)",
+            "command": "python -I tools/check_docs.py --pre-commit",
+            "timeout": 60,
+            "statusMessage": "Checking docs and changelog"
+          }
+        ]
+      }
     ]
   }
 }
