@@ -201,6 +201,7 @@ class Writer:
         normal.font.color.rgb = rgb(self.c["text"])
         set_fonts(normal.element, self.fn["body"])
         normal.paragraph_format.space_after = Pt(5)
+        normal.paragraph_format.widow_control = True  # no single lines stranded at a page edge
         normal.paragraph_format.line_spacing = 1.15
         for name, size, before, after in (("Heading 1", self.s["h1"], 0, 8), ("Heading 2", self.s["h2"], 16, 5),
                                           ("Heading 3", self.s["h3"], 12, 4)):
@@ -253,9 +254,11 @@ class Writer:
                 r.font.size = Pt((size or self.s["body"]) * 0.95)
         return paragraph
 
-    def para(self, segments, size=None, after=None, before=None, align=None, style=None):
+    def para(self, segments, size=None, after=None, before=None, align=None, style=None, keep=False):
         p = self.doc.add_paragraph(style=style) if style else self.doc.add_paragraph()
         self.runs(p, segments, size)
+        if keep:
+            p.paragraph_format.keep_with_next = True
         if after is not None:
             p.paragraph_format.space_after = Pt(after)
         if before is not None:
@@ -271,7 +274,25 @@ class Writer:
         return h
 
     def lead(self, text):
-        return self.para([(text, "sec")], after=10)
+        return self.para([(text, "sec")], after=10, keep=True)
+
+    def glue_previous(self):
+        """Keep the paragraph just written (a heading, label or intro) on the same page as what comes next."""
+        body = self.doc.element.body
+        last = body[-2] if body[-1].tag == qn("w:sectPr") and len(body) > 1 else body[-1]
+        if last.tag == qn("w:p"):
+            style = last.find(f"{qn('w:pPr')}/{qn('w:pStyle')}")
+            if style is not None and style.get(qn("w:val")) == "Caption":
+                return  # a figure's caption: don't chain figures together into blocks taller than a page
+            p_pr = last.get_or_add_pPr()
+            if p_pr.find(qn("w:keepNext")) is None:
+                p_pr.append(OxmlElement("w:keepNext"))
+
+    @staticmethod
+    def keep_row_with_next(row):
+        for c in row.cells:
+            for para_ in c.paragraphs:
+                para_.paragraph_format.keep_with_next = True
 
     def page_break(self):
         self.doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
@@ -279,6 +300,7 @@ class Writer:
     # ---- tables: hairline style
     def table(self, header, rows, widths, group_rows=(), size=None):
         size = size or self.s["table"]
+        self.glue_previous()
         t = self.doc.add_table(rows=1, cols=len(header))
         t.alignment = WD_TABLE_ALIGNMENT.LEFT
         table_base(t)
@@ -309,6 +331,11 @@ class Writer:
                 p.paragraph_format.space_after = Pt(0)
                 cell_border(cells[i], "bottom", self.c["separator"])
         fixed_widths(t, widths)
+        # The header row and the first two rows move together, so a table never starts with a lone header
+        # at the foot of a page. Short tables (up to 6 rows) are kept whole.
+        keep = len(t.rows) - 1 if len(t.rows) <= 7 else min(3, len(t.rows) - 1)
+        for row in t.rows[:keep]:
+            self.keep_row_with_next(row)
         gap = self.doc.add_paragraph()
         gap.paragraph_format.space_after = Pt(4)
         return t
@@ -418,18 +445,36 @@ class Writer:
     def figure(self, image, caption, width_cm=None):
         """A screenshot on the grey ground, like a product shot, with a quiet caption."""
         width_cm = width_cm or (self.text_width - 0.8)
-        t = self.doc.add_table(rows=1, cols=1)
+        self.glue_previous()
+        # Picture and caption are two rows of one table, kept together: Word does not reliably keep a table
+        # with the paragraph after it, but it does keep rows of the same table together.
+        t = self.doc.add_table(rows=2, cols=1)
         table_base(t, pad=(140, 200))
         cell = t.rows[0].cells[0]
         shade(cell._tc.get_or_add_tcPr(), self.c["ground"])
         cell.paragraphs[0].add_run().add_picture(str(image), width=Cm(width_cm - 0.7))
         cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
         cell.paragraphs[0].paragraph_format.space_after = Pt(0)
-        fixed_widths(t, [width_cm])
+        cell.paragraphs[0].paragraph_format.keep_with_next = True
         self.figures += 1
-        cap = self.doc.add_paragraph(f"Figure {self.figures} · {caption}", style="Caption")
-        cap.paragraph_format.space_before = Pt(4)
-        cap.paragraph_format.space_after = Pt(10)
+        cap_cell = t.rows[1].cells[0]
+        mar = OxmlElement("w:tcMar")
+        for side, wv in (("top", 70), ("left", 0), ("bottom", 0), ("right", 0)):
+            m = OxmlElement(f"w:{side}")
+            m.set(qn("w:w"), str(wv))
+            m.set(qn("w:type"), "dxa")
+            mar.append(m)
+        cap_cell._tc.get_or_add_tcPr().append(mar)
+        cap = cap_cell.paragraphs[0]
+        cap.style = self.doc.styles["Caption"]
+        cap.add_run(f"Figure {self.figures} · {caption}")
+        cap.paragraph_format.space_before = Pt(0)
+        cap.paragraph_format.space_after = Pt(0)
+        for row in t.rows:
+            keep_row_together(row)
+        fixed_widths(t, [width_cm])
+        spacer = self.doc.add_paragraph()
+        spacer.paragraph_format.space_after = Pt(6)
 
     def bullets(self, items):
         for it in items:
@@ -439,6 +484,7 @@ class Writer:
 
     def line_list(self, items, refs=None):
         """Rows separated by hairlines, with an optional accent reference on the right."""
+        self.glue_previous()
         t = self.doc.add_table(rows=0, cols=2)
         table_base(t, pad=(50, 0))
         for i, item in enumerate(items):
@@ -453,6 +499,8 @@ class Writer:
                 if i < len(items) - 1:
                     cell_border(c, "bottom", self.c["separator"])
         fixed_widths(t, [self.text_width - 2.2, 2.2])
+        for row in t.rows[:-1] if len(t.rows) <= 12 else t.rows[:3]:
+            self.keep_row_with_next(row)
         self.doc.add_paragraph().paragraph_format.space_after = Pt(2)
 
     # ---- header and footer
@@ -812,7 +860,7 @@ def build(project):
                     w.para([(r.get("description", ""), ""), ((" Sees: " + r["scope"] + ".") if r.get("scope") else "", "sec")])
                 mine = [s for s in screens if s["type"] != "login" and r["id"] in (s.get("roles") or role_ids)]
                 if mine:
-                    w.para([("Screens", "medium")], before=4, after=2)
+                    w.para([("Screens", "medium")], before=4, after=2, keep=True)
                     w.line_list([s["title"] for s in mine], [short(refs.get(f"screen:{s['id']}")) for s in mine])
                 can = []
                 for s in mine:
@@ -824,12 +872,12 @@ def build(project):
                         if lab and lab not in can:
                             can.append(lab)
                 if can:
-                    w.para([("Can do", "medium")], before=4, after=2)
+                    w.para([("Can do", "medium")], before=4, after=2, keep=True)
                     w.para(", ".join(can[:14]) + ("…" if len(can) > 14 else ""))
                 mails = [n["event"] for n in spec.get("notifications", []) or []
                          if re.search(rf"\b{re.escape(r['name'])}\b", n.get("recipient", ""), re.I)]
                 if mails:
-                    w.para([("E-mails received", "medium")], before=4, after=2)
+                    w.para([("E-mails received", "medium")], before=4, after=2, keep=True)
                     w.para([("; ".join(mails), ""), ("  " + short(refs.get("section:notifications", "")), "ref")])
                 needed = [it for it in open_items if mentions(it, r)]
                 for it in needed[:6]:
@@ -842,7 +890,7 @@ def build(project):
             ch = number.split(".")[0]
             for gi, g in enumerate(groups, 1):
                 w.heading(f"{ch}.{gi} {g['title']}", 2)
-                w.para([(g["id"], "mono")], after=4)
+                w.para([(g["id"], "mono")], after=4, keep=True)
                 header = ["ID", "Requirement"] + (["Priority"] if has_priority else []) + (["Screen"] if has_screens else [])
                 widths = ([2.6, tw - 2.6 - (1.9 if has_priority else 0) - (1.9 if has_screens else 0)]
                           + ([1.9] if has_priority else []) + ([1.9] if has_screens else []))
@@ -872,8 +920,10 @@ def build(project):
             w.lead(fill(bp["mockup_intro"]))
             ch = number.split(".")[0]
             for i, s in enumerate(screens, 1):
-                w.heading(f"{ch}.{i} {s['title']}", 2)
-                w.para([(role_names(s.get("roles") or []), "sec")] + ([(" · " + fill(s["description"], f"screen {s['id']}"), "sec")] if s.get("description") else []), after=8)
+                h = w.heading(f"{ch}.{i} {s['title']}", 2)
+                if i > 1 and (fmt.get("layout") or {}).get("screens_new_page", True):
+                    h.paragraph_format.page_break_before = True
+                w.para([(role_names(s.get("roles") or []), "sec")] + ([(" · " + fill(s["description"], f"screen {s['id']}"), "sec")] if s.get("description") else []), after=8, keep=True)
                 sshots = by_screen.get(s["id"], [])
                 paged = [x for x in sshots if x.get("page") and not x.get("dialog") and not x.get("record")]
                 for shot in sshots:
@@ -914,7 +964,7 @@ def build(project):
                     if not d or d["id"] in shown or not d.get("fields") or d.get("srs_table") is False:
                         continue
                     shown.add(d["id"])
-                    w.para([(d["title"], "medium")], before=6, after=2)
+                    w.para([(d["title"], "medium")], before=6, after=2, keep=True)
                     rows, group = field_rows([{"fields": d["fields"]}])
                     w.table(field_header, rows, field_widths)
                 if reqs_for_screen.get(s["id"]):

@@ -30,6 +30,18 @@ beside a word (orange: needs an answer, red: blocks sign-off, green: done).
 Every page except the cover has a header (system, version, status) and a footer (company, confidential,
 page number).
 
+## Page flow
+
+Generated documents are laid out so nothing is cut off awkwardly between pages:
+
+- every chapter, and every screen, starts on a new page (screens can run on; see `layout` below);
+- a heading always stays on the same page as the text, screenshot or table that follows it;
+- a screenshot and its caption are never separated;
+- tables never start with a lone header at the foot of a page, short tables (up to six rows) are kept
+  whole, rows never split, and the header row repeats on every page of a long table;
+- short lists (a role's screens) stay together, and each sign-off form stays on one page;
+- no paragraph leaves a single line stranded at the top or bottom of a page.
+
 ## Changing the format
 
 Write only the keys you want to change in `workspace/branding/srs-format.yaml`; everything else keeps the
@@ -50,6 +62,7 @@ titles:
 | `sizes.*` | Point sizes: `body`, `table`, `table_header`, `caption`, `h1`, `h2`, `h3`, `cover_title` |
 | `colors.*` | Hex colours without `#`: `text`, `secondary`, `separator` (row lines), `line` (header line), `field` (tags), `ground` (cards and screenshot frames), `accent`, `ok`, `warning`, `error` |
 | `numbering` | `plain` (1, 1.1) or `decimal` (1.0, 1.1) |
+| `layout.screens_new_page` | `true` (default): every screen in the Screens chapter starts on a new page; `false`: screens run on |
 | `header_footer` | `generated` (system, version, status / company, page) or `template` (keep the header and footer of `branding/srs-template.docx`; `{company}` in it is replaced) |
 | `front` | Front matter in order: `cover`, `at_a_glance`, `about`, `contents` |
 | `chapters` | Chapters in order: `users_access`, `by_role`, `requirements`, `screens`, `nfr`, `extras`, `decisions`, `signoff` |

@@ -33,6 +33,9 @@ colors:                       # hex, no '#'
   error: FF3B30
 
 numbering: plain              # plain: 1, 1.1, 1.2   decimal: 1.0, 1.1, 1.2
+
+layout:
+  screens_new_page: true      # every screen in the Screens chapter starts on a new page (false: run them on)
 header_footer: generated      # generated: system, version and status on top, company and page number below
                               # template: keep the header and footer of branding/srs-template.docx
 

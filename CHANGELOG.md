@@ -23,6 +23,12 @@ See [docs/maintaining.md](docs/maintaining.md).
   restored.
 - `tools/project.py check` finds projects missing parts of the standard layout; `--fix` adds them.
 
+### Changed
+- SRS page flow: every screen starts on a new page (switch off with `layout.screens_new_page: false`),
+  headings stay with what follows them, screenshots stay with their captions, tables don't start with a
+  lone header at the foot of a page and short tables are kept whole, and paragraphs don't leave single
+  lines stranded. Documents are a few pages longer.
+
 ### Fixed
 - The documentation check that runs before commits made through Claude Code could block every shell
   command while the docs were incomplete. It now only ever acts on `git commit`.
