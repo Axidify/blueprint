@@ -11,6 +11,8 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-06
+
 ### Added
 - Issuing: "issue v1.3 to the client" (`tools/project.py issue`) records which SRS version went to whom
   and when, and locks it. Its files become read-only and the generator refuses to overwrite it, so later
@@ -93,6 +95,7 @@ First release.
 - One-step setup (`setup.cmd`) with a machine check, `present.cmd` for sessions, shared Claude Code
   permissions and a start-up status greeting.
 
-[Unreleased]: https://github.com/Axidify/blueprint/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Axidify/blueprint/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Axidify/blueprint/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Axidify/blueprint/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Axidify/blueprint/releases/tag/v0.1.0
