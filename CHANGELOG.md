@@ -11,6 +11,8 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-06
+
 ### Changed
 - In the requirements document, each screen's "Requirements · FR-…" line now sits right under the screen's
   description, before its screenshots, so readers see up front what the screen covers.
@@ -128,7 +130,8 @@ First release.
 - One-step setup (`setup.cmd`) with a machine check, `present.cmd` for sessions, shared Claude Code
   permissions and a start-up status greeting.
 
-[Unreleased]: https://github.com/Axidify/blueprint/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Axidify/blueprint/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/Axidify/blueprint/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/Axidify/blueprint/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Axidify/blueprint/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Axidify/blueprint/compare/v0.1.0...v0.2.0
