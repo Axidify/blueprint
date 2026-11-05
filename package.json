@@ -1,0 +1,9 @@
+{
+  "name": "blueprint",
+  "private": true,
+  "type": "module",
+  "description": "Node tooling for mock-up screenshots (uses the installed Microsoft Edge).",
+  "dependencies": {
+    "playwright-core": "^1.64.1"
+  }
+}

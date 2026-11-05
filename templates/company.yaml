@@ -1,0 +1,12 @@
+# Company profile. Setup copies this to workspace/company.yaml; edit it there.
+#
+# Optional files in workspace/branding/ replace the app's neutral templates:
+#   logo.png               logo on the SRS cover
+#   srs-template.docx      Word template (styles, header, footer). "{company}" in its header or footer is
+#                          replaced with the company name.
+#   srs-boilerplate.yaml   standard SRS wording (copy templates/srs-boilerplate.yaml and edit)
+name: Your Company Sdn. Bhd.
+short_name: YourCo
+day_rate:        # your standard day rate, used to cost estimates and variances
+currency: RM
+platforms: [Joget DX]

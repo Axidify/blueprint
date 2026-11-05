@@ -1,0 +1,227 @@
+# Sample project spec. Not a client project: it exists to test the mock-up, screenshot and SRS pipeline
+# and to show the spec format. The format is documented in tools/mockup/SPEC.md.
+
+project:
+  name: Leave Request System
+  short_name: LRS
+  client: Sample Client Sdn. Bhd.
+  client_short: SAMPLE
+  version: "0.1"
+  platform: Joget DX
+  theme: joget            # joget | modern
+  primary_color: "#1f6fb2"
+  prepared_by: Business Analyst
+  reviewed_by: Project Lead
+  date: 2026-11-06
+
+roles:
+  - id: employee
+    name: Employee
+    description: Applies for leave, tracks the status of their applications and cancels them when plans change.
+    scope: Own applications only
+  - id: manager
+    name: Line Manager
+    description: Approves or rejects leave applications from their direct reports.
+    scope: Applications from their direct reports
+  - id: hr
+    name: HR Admin
+    description: Maintains leave types and views all applications for reporting.
+    scope: All applications
+
+statuses:
+  - id: draft
+    name: Draft
+    meaning: Saved by the employee but not submitted. Only the employee can see, edit or delete it.
+  - id: pending
+    name: Pending Approval
+    meaning: Submitted and waiting for the line manager.
+  - id: approved
+    name: Approved
+    meaning: Approved by the line manager.
+  - id: rejected
+    name: Rejected
+    meaning: Rejected by the line manager with a reason; the employee may edit and resubmit.
+  - id: cancelled
+    name: Cancelled
+    meaning: Cancelled by the employee before the leave started.
+
+data:
+  applications:
+    - {id: "LV-2026-014", employee: "Nur Aisyah", leave_type: "Annual Leave", from: "2026-11-20", to: "2026-11-21", days: 2, reason: "Family event", status: "Pending Approval", submitted: "2026-11-05 09:12"}
+    - {id: "LV-2026-013", employee: "Nur Aisyah", leave_type: "Medical Leave", from: "2026-10-28", to: "2026-10-28", days: 1, reason: "Clinic visit", status: "Approved", submitted: "2026-10-28 08:01"}
+    - {id: "LV-2026-011", employee: "Daniel Tan", leave_type: "Annual Leave", from: "2026-12-22", to: "2026-12-31", days: 7, reason: "Year-end holiday", status: "Pending Approval", submitted: "2026-11-02 14:40"}
+    - {id: "LV-2026-009", employee: "Daniel Tan", leave_type: "Emergency Leave", from: "2026-10-10", to: "2026-10-10", days: 1, reason: "Home repair", status: "Rejected", submitted: "2026-10-09 18:22"}
+  leave_types:
+    - {name: "Annual Leave", entitlement: 16, requires_attachment: "No"}
+    - {name: "Medical Leave", entitlement: 14, requires_attachment: "Yes"}
+    - {name: "Emergency Leave", entitlement: 3, requires_attachment: "No"}
+
+screens:
+  - id: login
+    type: login
+    title: Login
+    description: Users sign in with their network account. In the mock-up, choose a role to sign in.
+
+  - id: my-applications
+    type: dashboard
+    title: My Leave Applications
+    menu: My Applications
+    roles: [employee]
+    description: The employee's own applications with summary counts and filters.
+    stats:
+      - {label: Pending, value: 1}
+      - {label: Approved, value: 1}
+      - {label: Rejected, value: 0}
+      - {label: Leave balance (days), value: 13}
+    list:
+      data: applications
+      where: {employee: "Nur Aisyah"}
+      columns:
+        - {field: id, label: Ref No}
+        - {field: leave_type, label: Leave Type}
+        - {field: from, label: From}
+        - {field: to, label: To}
+        - {field: days, label: Days}
+        - {field: status, label: Status, chip: true}
+      filters: [leave_type, status]
+      actions:
+        - {label: View, to: application-details}
+      toolbar:
+        - {label: "+ New Application", to: new-application, style: primary}
+
+  - id: new-application
+    type: form
+    title: New Leave Application
+    menu: New Application
+    roles: [employee]
+    description: The employee fills in the leave details and submits the application to their line manager.
+    sections:
+      - title: Leave Details
+        fields:
+          - {id: employee, label: Employee, type: text, readonly: true, default: "Nur Aisyah", length: 100, required: true, source: "System: signed-in user"}
+          - {id: leave_type, label: Leave Type, type: select, options_from: leave_types.name, required: true, source: "Leave Types maintained by HR Admin"}
+          - {id: from, label: From Date, type: date, required: true}
+          - {id: to, label: To Date, type: date, required: true, validation: "To Date must be on or after From Date"}
+          - {id: days, label: Number of Days, type: number, readonly: true, source: "Calculated: working days between From and To", default: "2"}
+          - {id: reason, label: Reason, type: textarea, length: 500, required: true}
+          - {id: attachment, label: Supporting Document, type: file, help: "Required for Medical Leave. PDF, JPG or PNG, max 5 MB.", validation: "File size must be less than 5 MB"}
+    buttons:
+      - {label: Cancel, to: my-applications}
+      - {label: Save as Draft, toast: "Draft saved: LV-2026-015", to: my-applications}
+      - {label: Submit, style: primary, toast: "Application LV-2026-015 submitted to your line manager", to: my-applications}
+
+  - id: application-details
+    type: detail
+    title: Leave Application Details
+    roles: [employee, manager, hr]
+    description: Read-only view of an application with its approval history.
+    data: applications
+    record: "LV-2026-014"
+    fields_from: new-application
+    timeline:
+      - {step: Submitted, by: "Nur Aisyah", at: "2026-11-05 09:12", status: Done}
+      - {step: Line Manager Approval, by: "Ahmad Faiz", at: "", status: Pending}
+    buttons:
+      - {label: Back, to: my-applications}
+      - {label: Cancel Application, style: danger, roles: [employee], dialog: cancel-dialog}
+
+  - id: approvals
+    type: list
+    title: Pending Approvals
+    menu: Pending Approvals
+    roles: [manager]
+    description: Applications from the manager's direct reports that are waiting for a decision.
+    list:
+      data: applications
+      where: {status: "Pending Approval"}
+      columns:
+        - {field: id, label: Ref No}
+        - {field: employee, label: Employee}
+        - {field: leave_type, label: Leave Type}
+        - {field: from, label: From}
+        - {field: days, label: Days}
+        - {field: submitted, label: Submitted}
+      filters: [employee, leave_type]
+      actions:
+        - {label: Review, to: review-application}
+
+  - id: review-application
+    type: detail
+    title: Review Leave Application
+    roles: [manager]
+    description: The manager reviews the application and approves or rejects it.
+    data: applications
+    record: "LV-2026-011"
+    fields_from: new-application
+    buttons:
+      - {label: Back, to: approvals}
+      - {label: Reject, style: danger, dialog: reject-dialog}
+      - {label: Approve, style: primary, dialog: approve-dialog}
+
+  - id: leave-types
+    type: list
+    title: Leave Types
+    menu: Leave Types
+    roles: [hr]
+    description: HR Admin maintains the leave types offered on the application form.
+    list:
+      data: leave_types
+      columns:
+        - {field: name, label: Leave Type}
+        - {field: entitlement, label: Entitlement (days)}
+        - {field: requires_attachment, label: Attachment Required}
+      actions:
+        - {label: Edit, toast: "Edit leave type (not shown in mock-up)"}
+      toolbar:
+        - {label: "+ Add Leave Type", style: primary, toast: "Add leave type (not shown in mock-up)"}
+
+dialogs:
+  - id: approve-dialog
+    title: Approve Application
+    fields:
+      - {id: comment, label: Comment, type: textarea, length: 500}
+    confirm: {label: Confirm Approve, style: primary, toast: "Application approved", to: approvals}
+  - id: reject-dialog
+    title: Reject Application
+    fields:
+      - {id: reason, label: Reason for rejection, type: textarea, length: 500, required: true, validation: "Please provide a reason for rejection"}
+    confirm: {label: Confirm Reject, style: danger, toast: "Application rejected", to: approvals}
+  - id: cancel-dialog
+    title: Cancel Application
+    message: Are you sure you want to cancel this application? Your line manager will be informed.
+    confirm: {label: Yes, cancel it, style: danger, toast: "Application cancelled", to: my-applications}
+
+# Extra screenshots beyond one per screen: dialogs, other roles or records.
+screenshots:
+  - {screen: review-application, role: manager, dialog: reject-dialog, name: review-application-reject}
+
+requirements:
+  - id: FR-APP-001
+    title: Apply for Leave
+    items:
+      - "System shall pre-fill Employee with the signed-in user's name (read-only)."
+      - "System shall offer the Leave Types maintained by HR Admin."
+      - "System shall calculate Number of Days as the working days between From Date and To Date."
+      - "System shall require a Supporting Document for Medical Leave."
+      - "System shall allow the employee to save a draft without validation."
+  - id: FR-APP-002
+    title: Approve or Reject
+    items:
+      - "System shall route a submitted application to the employee's line manager."
+      - "System shall require a reason when rejecting."
+      - "System shall e-mail the employee when the application is approved or rejected."
+  - id: FR-APP-003
+    title: Cancel Application
+    items:
+      - "System shall allow the employee to cancel a Pending or Approved application before the leave starts."
+      - "System shall inform the line manager by e-mail when an application is cancelled."
+
+integrations:
+  - {system: Active Directory, purpose: "User sign-in and line manager lookup", direction: Inbound, notes: "Line manager taken from the AD manager attribute"}
+  - {system: SMTP, purpose: "E-mail notifications", direction: Outbound, notes: ""}
+
+nfr:
+  - {area: Users, requirement: "Up to 300 employees, 30 concurrent users"}
+  - {area: Availability, requirement: "Business hours, 8am to 6pm on working days"}
+  - {area: Retention, requirement: "Applications and audit trail kept for 7 years"}
+  - {area: Browsers, requirement: "Latest Microsoft Edge and Google Chrome"}

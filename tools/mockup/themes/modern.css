@@ -1,0 +1,20 @@
+/* Modern custom look: light side menu, cards, rounded corners. Use when the project is custom-built
+   or the client expects a branded UI. */
+:root {
+  --font: "Inter", "Segoe UI", system-ui, sans-serif;
+  --text: #111827; --muted: #6b7280; --label: #374151;
+  --bg: #f6f7f9; --card: #fff; --border: #e5e7eb; --stripe: #fcfcfd;
+  --topbar-bg: #fff; --topbar-text: #111827;
+  --sidebar-bg: #fff; --sidebar-text: #374151; --sidebar-hover: #f3f4f6; --sidebar-active: #eef4fb; --sidebar-active-text: var(--primary);
+  --th-bg: #f9fafb; --th-text: #6b7280;
+  --input-border: #d1d5db; --btn-bg: #fff; --btn-border: #d1d5db;
+  --radius: 10px; --radius-sm: 6px; --label-width: 140px;
+  --login-bg: linear-gradient(135deg, #eef4fb, #f6f7f9);
+}
+.sidebar { border-right: 1px solid var(--border); padding: 16px 10px; }
+.menu-item { border-left: 0; border-radius: 6px; margin-bottom: 2px; }
+.datalist th { text-transform: uppercase; font-size: 11.5px; letter-spacing: .4px; }
+.form-section, .stat, .table-wrap { box-shadow: 0 1px 2px rgba(16,24,40,.05); }
+.stat { border-top: 0; }
+.f-row { grid-template-columns: 1fr; gap: 4px; }
+.f-label { padding-top: 0; font-weight: 500; }

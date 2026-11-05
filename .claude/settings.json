@@ -1,0 +1,45 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -I tools/extract.py *)",
+      "Bash(python -I tools/register.py *)",
+      "Bash(python -I tools/mockup.py *)",
+      "Bash(python -I tools/generate_srs.py *)",
+      "Bash(python -I tools/status.py *)",
+      "Bash(python -I tools/status.py)",
+      "Bash(python -I tools/doctor.py)",
+      "Bash(python -I tools/new_project.py *)",
+      "Bash(node tools/screenshot.mjs *)",
+      "Bash(npm install *)",
+      "Bash(npm install)",
+      "PowerShell(python -I tools/extract.py *)",
+      "PowerShell(python -I tools/register.py *)",
+      "PowerShell(python -I tools/mockup.py *)",
+      "PowerShell(python -I tools/generate_srs.py *)",
+      "PowerShell(python -I tools/status.py *)",
+      "PowerShell(python -I tools/status.py)",
+      "PowerShell(python -I tools/doctor.py)",
+      "PowerShell(python -I tools/new_project.py *)",
+      "PowerShell(node tools/screenshot.mjs *)",
+      "PowerShell(npm install *)",
+      "PowerShell(npm install)",
+      "Edit(projects/**)",
+      "Edit(inbox/**)",
+      "Edit(knowledge/**)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -I tools/status.py --brief",
+            "timeout": 30,
+            "statusMessage": "Loading Blueprint status"
+          }
+        ]
+      }
+    ]
+  }
+}

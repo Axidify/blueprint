@@ -1,0 +1,26 @@
+# Standard SRS wording. Placeholders: {system} {client} {client_short} {company} {company_short}
+# Copy to workspace/branding/srs-boilerplate.yaml to change it for your company.
+
+disclaimer:
+  - "This document has been developed based on the requirements gathered during the User Requirement Study (URS) sessions conducted between {client} and {company} ({company_short}) for the proposed {system}."
+  - "The content presented herein represents a structured translation of the agreed business processes, system requirements, and operational needs into a proposed system design, including workflows, features, and functional specifications. While all efforts have been made to accurately capture the requirements, the content remains subject to further validation, refinement, and formal approval."
+
+confidentiality:
+  - "All information contained in this document is confidential and proprietary to {client} and {company} ({company_short}). This document, in whole or in part, shall not be disclosed, reproduced, distributed, or transmitted to any third party without prior written consent from both parties."
+  - "The information provided shall be used solely for the purpose of requirement validation, system design confirmation, and project implementation."
+
+concept:
+  - "The system concepts, process flows, screen designs, mock-ups, user interface elements, and functional specifications documented herein are derived from the requirements captured during the URS sessions. These representations aim to reflect the intended system behaviour and user interaction based on the agreed requirements."
+  - "All visual elements, including layouts, colours, labels, and user experience flows, are subject to refinement and adjustment during subsequent design and development phases, based on stakeholder confirmation and final approval."
+  - "{client} is requested to review and formally acknowledge the documented requirements, scope, system flows, and functional specifications presented in this document. Any discrepancies, clarifications, or change requests should be communicated to ensure alignment prior to finalisation."
+
+mockup_intro: "The screens below are taken from the conceptual mock-up with sample data. Labels, layouts and colours are subject to refinement during development."
+
+open_issues_intro: "The following items remain open at the time of this version. They shall be resolved before sign-off or carried forward as agreed by both parties; resolutions may affect the scope, timeline and effort."
+
+signoff:
+  - "By signing this document, the client acknowledges that the {system} – System Requirement Specifications has been reviewed for discussion, alignment, and confirmation purposes."
+  - "The client acknowledges that the document outlines the proposed system concept, high-level process flow, user roles, access matrix, functional requirements, and conceptual screen pages based on discussions between the relevant parties."
+  - "The client further acknowledges that the conceptual screen pages, user interface design, colours, labels, layout, and user experience flow are subject to refinement based on feedback, validation, and final agreement during the project implementation stage."
+  - "Any changes, additions, or refinements requested after sign-off may be subject to further review, impact assessment, timeline adjustment, and mutual agreement between the parties."
+  - "The client acknowledges that timely provision of external system integration details, environment access, credentials, URLs, test data, and technical support contacts is required to support development, testing, UAT, and production deployment activities."

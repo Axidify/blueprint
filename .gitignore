@@ -1,0 +1,22 @@
+# The workspace (company profile, knowledge, client projects) never goes into git.
+# projects, knowledge and inbox are links into it.
+workspace/
+/projects
+/knowledge
+/inbox
+
+# Documents dropped in the root by mistake
+/*.docx
+/*.doc
+/*.pdf
+/*.xlsx
+/*.pptx
+.blueprint-local.json
+
+# Python
+__pycache__/
+*.pyc
+node_modules/
+examples/*/mockup/
+examples/*/feedback/
+examples/*/output/

@@ -1,0 +1,18 @@
+/* Joget DX look: dark side menu, label-left forms, plain datalists. What the client sees is close to
+   what Joget delivers without custom UI work. */
+:root {
+  --font: "Open Sans", "Segoe UI", Arial, sans-serif;
+  --text: #333; --muted: #777; --label: #555;
+  --bg: #ecf0f5; --card: #fff; --border: #dde2e8; --stripe: #f9fafb;
+  --topbar-bg: var(--primary); --topbar-text: #fff;
+  --sidebar-bg: #222d32; --sidebar-text: #b8c7ce; --sidebar-hover: #1e282c; --sidebar-active: #1e282c; --sidebar-active-text: #fff;
+  --th-bg: #f4f4f4; --th-text: #333;
+  --input-border: #ccc; --btn-bg: #f4f4f4; --btn-border: #ddd;
+  --radius: 3px; --radius-sm: 3px; --label-width: 150px;
+  --login-bg: #d2d6de;
+}
+.topbar { border-bottom: 0; }
+.brand-mark { background: rgba(255,255,255,.2); }
+.login-card .brand-mark { background: var(--primary); }
+.form-section h3 { border-bottom: 1px solid var(--border); padding-bottom: 8px; color: var(--primary); }
+.stat { border-top: 0; border-left: 4px solid var(--primary); }
