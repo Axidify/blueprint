@@ -54,8 +54,8 @@ mock-up version.
 **Ask:** "generate the requirements document", "issue version 1.0"
 Builds the requirements document from the spec and fresh screenshots in your company's format: cover, document at a
 glance (counts, how to review it, sign-off status, version history), users and access, requirements by
-role, functional requirements linked to screens, every screen with its fields, NFRs, decisions needed
-before sign-off, a sign-off block per signatory, and appendices. It warns about stale cross-references
+role, functional requirements linked to screens, every screen with its fields, NFRs, the project timeline (drafted from the scope of work
+if you have one), decisions needed before sign-off, a sign-off block per signatory, and appendices. It warns about stale cross-references
 and mock-up remarks in requirements, then reviews the document with `review-requirements`.
 See [Document format](document-format.md).
 **Output:** `projects/<name>/output/<System> – System Requirement Specifications v<version>.docx`, a PDF

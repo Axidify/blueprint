@@ -465,6 +465,121 @@ class Writer:
         t._tbl.tblPr.append(ind)
         self.doc.add_paragraph().paragraph_format.space_after = Pt(2)
 
+    def gantt(self, stages, unit="Week"):
+        """The project timeline as a chart: one row per activity or milestone, one narrow column per week
+        (or per group of weeks on long projects), stages as shaded bands. Bars are paragraph shading on
+        cells with no side margins, so neighbouring weeks join into one thin bar."""
+        from docx.enum.table import WD_ROW_HEIGHT_RULE
+        from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT as VA
+        from docx.enum.text import WD_LINE_SPACING
+
+        def span(it):
+            if "milestone" in it:
+                w_ = int(it.get("week", it.get("start", 1)))
+                return w_, w_
+            return int(it["start"]), int(it.get("end", it["start"]))
+
+        last = max((span(it)[1] for st in stages for it in st.get("items", [])), default=1)
+        step = max(1, -(-last // 40))  # weeks per column: at most 40 columns
+        cols = -(-last // step)
+        # The label column fits the longest name on one line (rows have a fixed height), within limits.
+        char_cm = (self.s["table"] - 0.5) * 0.5 / 72 * 2.54
+        longest = max((len(str(it.get("name", ""))) + 5 for st in stages for it in st.get("items", [])), default=20)
+        label_w = min(7.5, max(4.5, longest * char_cm + 0.4))
+        col_w = (self.text_width - label_w) / cols
+        size = self.s["table"] - 0.5
+        n_rows = 1 + sum(1 + len(st.get("items", [])) for st in stages)
+        self.glue_previous()
+        t = self.doc.add_table(rows=n_rows, cols=cols + 1)
+        t.alignment = WD_TABLE_ALIGNMENT.LEFT
+        table_base(t, pad=(0, 0))
+
+        def label(cell, segments, fill=None):
+            p_ = cell.paragraphs[0]
+            p_.paragraph_format.space_after = Pt(0)
+            p_.paragraph_format.left_indent = Cm(0.1)
+            self.runs(p_, segments, size)
+            cell.vertical_alignment = VA.CENTER
+            if fill:
+                shade(cell._tc.get_or_add_tcPr(), fill)
+
+        def bar(cell, fill):
+            p_ = cell.paragraphs[0]
+            p_.paragraph_format.space_after = Pt(0)
+            p_.paragraph_format.line_spacing_rule = WD_LINE_SPACING.EXACTLY
+            p_.paragraph_format.line_spacing = Pt(5)
+            shade(p_._p.get_or_add_pPr(), fill)
+            mark = OxmlElement("w:rPr")
+            sz = OxmlElement("w:sz")
+            sz.set(qn("w:val"), "8")
+            mark.append(sz)
+            p_._p.get_or_add_pPr().append(mark)
+            cell.vertical_alignment = VA.CENTER
+
+        def diamond(cell):
+            p_ = cell.paragraphs[0]
+            p_.paragraph_format.space_after = Pt(0)
+            p_.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r = p_.add_run("\u25C6")
+            set_fonts(r._r, "Segoe UI Symbol")
+            r.font.size = Pt(size)
+            r.font.color.rgb = rgb(self.c["accent"])
+            cell.vertical_alignment = VA.CENTER
+
+        light = self.c.get("timeline_bar", "C9D8EF")
+        rows = list(t.rows)
+        for row in rows:
+            row.height = Cm(0.5)
+            row.height_rule = WD_ROW_HEIGHT_RULE.EXACTLY
+            keep_row_together(row)
+        # header: a week number every 4 columns
+        head = rows[0]
+        label(head.cells[0], [(unit, "sec")])
+        starts = list(range(1, cols + 1, 4))
+        for c in reversed(starts):
+            n = min(4, cols - c + 1)
+            cell = head.cells[c].merge(head.cells[c + n - 1]) if n > 1 else head.cells[c]
+            label(cell, [(str((c - 1) * step + 1), "sec")])
+        for cell in head.cells:
+            cell_border(cell, "bottom", self.c["line"], 6)
+        repeat_header(head)
+        r_i = 1
+        for st in stages:
+            band = rows[r_i].cells[0].merge(rows[r_i].cells[-1])
+            label(band, [(st.get("name", ""), "medium")], self.c["ground"])
+            r_i += 1
+            for it in st.get("items", []):
+                cells = rows[r_i].cells
+                a, b = span(it)
+                if "milestone" in it:
+                    label(cells[0], [(str(it["milestone"]).ljust(4), "mono"), (it.get("name", ""), "ref")])
+                    cells[0].paragraphs[0].runs[0].font.color.rgb = rgb(self.c["accent"])
+                    diamond(cells[(a - 1) // step + 1])
+                else:
+                    ref = str(it.get("ref", ""))
+                    label(cells[0], ([(ref.ljust(4), "mono")] if ref else []) + [(it.get("name", ""), "")])
+                    fill = self.c["accent"] if it.get("client") else light
+                    first, end = (a - 1) // step + 1, (b - 1) // step + 1
+                    # One merged cell per bar, so the bar is a single unbroken shape.
+                    for cell in cells:
+                        cell_border(cell, "bottom", self.c["separator"])
+                    span_cell = cells[first].merge(cells[end]) if end > first else cells[first]
+                    bar(span_cell, fill)
+                    r_i += 1
+                    continue
+                for cell in cells:
+                    cell_border(cell, "bottom", self.c["separator"])
+                r_i += 1
+        fixed_widths(t, [label_w] + [col_w] * cols)
+        # Keep the chart on one page when it fits; otherwise keep only the header with the first row.
+        whole = n_rows <= 38
+        for i, row in enumerate(rows[:-1]):
+            if whole or i == 0:
+                self.keep_row_with_next(row)
+        gap = self.doc.add_paragraph()
+        gap.paragraph_format.space_after = Pt(2)
+        return t
+
     def figure(self, image, caption, width_cm=None):
         """A screenshot on the grey ground, like a product shot, with a quiet caption."""
         width_cm = width_cm or (self.text_width - 0.8)
@@ -572,9 +687,11 @@ def plan_sections(spec, fmt, reg_items):
             continue
         if key == "by_role" and not spec.get("roles"):
             continue
+        if key == "timeline" and not spec.get("timeline"):
+            continue
         n += 1
         chapters.append((key, chap(n), fmt["titles"][key]))
-        refs[f"section:{ {'users_access': 'users', 'by_role': 'by-role', 'requirements': 'requirements', 'screens': 'screens', 'nfr': 'nfr', 'decisions': 'open-issues'}[key] }"] = f"section {chap(n)}"
+        refs[f"section:{ {'users_access': 'users', 'by_role': 'by-role', 'requirements': 'requirements', 'screens': 'screens', 'nfr': 'nfr', 'timeline': 'timeline', 'decisions': 'open-issues'}[key] }"] = f"section {chap(n)}"
         if key == "decisions":
             refs["section:decisions"] = f"section {chap(n)}"
         if key == "users_access":
@@ -1019,6 +1136,37 @@ def build(project):
             else:
                 w.para([("warning", "dot"), ("To be confirmed: number of users, performance, availability, backup, retention, security and "
                                              f"supported browsers. See {refs.get('section:open-issues', 'the decisions section')}.", "")])
+
+        # ---------------------------------------------------------------- project timeline
+        elif key == "timeline":
+            tl = spec["timeline"]
+            w.heading(f"{number} {title}", 1)
+            w.lead(fill(tl.get("intro") or "The high-level plan for the project. Week 1 is the week of the kick-off meeting; "
+                                              "calendar dates are set once the kick-off date is confirmed."))
+            if tl.get("summary"):
+                w.cards([(x["value"], x["label"], x.get("color")) for x in tl["summary"]], value_size=14)
+            stages = tl.get("stages") or []
+            w.gantt(stages, unit=tl.get("unit", "Week"))
+            legend = [("\u25A0 ", ""), ("Activity", "sec"), ("      \u25A0 ", ""), ("Client involvement needed", "sec"),
+                      ("      \u25C6 ", ""), ("Milestone", "sec")]
+            if any(it.get("ref") for st in stages for it in st.get("items", [])):
+                legend += [("      Numbers are the scope of work items", "sec")]
+            lp = w.para(legend, size=w.s["caption"], after=10)
+            lp.runs[0].font.color.rgb = rgb(w.c.get("timeline_bar", "C9D8EF"))
+            for k in (2, 4):
+                lp.runs[k].font.color.rgb = rgb(w.c["accent"])
+            for k in (0, 2, 4):
+                set_fonts(lp.runs[k]._r, "Segoe UI Symbol")
+            ms = [it for st in stages for it in st.get("items", []) if "milestone" in it]
+            if ms:
+                w.para([("Milestones", "medium")], size=w.s["h3"], before=6, after=3, keep=True)
+                w.table(["ID", "Milestone", tl.get("unit", "Week"), "Client action"],
+                        [[[(str(m["milestone"]), "mono")], fill(m.get("title") or m.get("name", "")),
+                          str(m.get("week", m.get("start", ""))), fill(m.get("client_action") or "\u2013")] for m in ms],
+                        [1.4, 6.0, 1.6, tw - 9.0])
+            if tl.get("assumptions"):
+                w.para([("Assumptions", "medium")], size=w.s["h3"], before=6, after=3, keep=True)
+                w.bullets([fill(a) for a in tl["assumptions"]])
 
         # ---------------------------------------------------------------- extra sections
         elif key == "extra":

@@ -35,6 +35,7 @@ colors:                       # hex, no '#'
   ok: 34C759
   warning: FF9500
   error: FF3B30
+  timeline_bar: C9D8EF        # timeline bars; client activities use the accent
 
 numbering: plain              # plain: 1, 1.1, 1.2   decimal: 1.0, 1.1, 1.2
 
@@ -47,7 +48,7 @@ header_footer: generated      # generated: system, version and status on top, co
 front: [cover, at_a_glance, about, contents]
 
 # Numbered chapters, in order. Remove an entry to leave it out (sign-off is never numbered).
-chapters: [users_access, by_role, requirements, screens, nfr, extras, decisions, signoff]
+chapters: [users_access, by_role, requirements, screens, nfr, timeline, extras, decisions, signoff]
 
 titles:
   users_access: Users and access
@@ -55,6 +56,7 @@ titles:
   requirements: Functional requirements
   screens: Screens
   nfr: Non-functional requirements
+  timeline: Project timeline
   decisions: Decisions needed before sign-off
   signoff: Client acknowledgement and sign-off
   at_a_glance: Document at a glance

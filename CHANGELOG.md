@@ -11,6 +11,22 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-06
+
+### Added
+- The requirements document can include a **project timeline** chapter: summary figures, a week-by-week
+  chart of stages, activities and milestones (activities where the client must take part are highlighted),
+  a milestones table with what the client must do, and the assumptions behind the plan. Weeks count from
+  the kick-off, so the plan holds until a start date is agreed. Fill in `timeline` in the project spec
+  (see the spec format); when it is missing, generating the document offers to draft it from the scope of
+  work, one line per SOW item. Projects without a timeline are unchanged.
+- Document format: a `timeline` chapter (after the NFRs) and a `timeline_bar` colour. A company format
+  that lists its own `chapters` must add `timeline` to show it.
+
+### Changed
+- The starter requirements standard describes what a timeline must contain: stages, activities and
+  milestones by week, what the client must do, and the assumptions behind it.
+
 ## [0.4.1] - 2026-11-06
 
 ### Changed
@@ -130,7 +146,8 @@ First release.
 - One-step setup (`setup.cmd`) with a machine check, `present.cmd` for sessions, shared Claude Code
   permissions and a start-up status greeting.
 
-[Unreleased]: https://github.com/Axidify/blueprint/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/Axidify/blueprint/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/Axidify/blueprint/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/Axidify/blueprint/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/Axidify/blueprint/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Axidify/blueprint/compare/v0.2.0...v0.3.0

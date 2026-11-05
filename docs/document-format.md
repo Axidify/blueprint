@@ -30,7 +30,8 @@ beside a word (orange: needs an answer, red: blocks sign-off, green: done).
 | 3 Functional requirements | Each group with its requirements, priority (when set) and the screens it applies to | Spec `requirements` |
 | 4 Screens | Each screen: who uses it, screenshot, fields (type, required, rule or source), list columns, dialogs, linked requirements | Spec, mock-up |
 | 5 Non-functional requirements | Areas and measurable requirements, or a "to be confirmed" note | Spec `nfr` |
-| 6 onwards | Extra sections: environments, infrastructure, timeline … | Spec `extra_sections` |
+| 6 Project timeline | Summary figures, a week-by-week chart of stages, activities and milestones (client activities highlighted), the milestones with what the client must do, and the assumptions behind the plan. Left out when the spec has no timeline | Spec `timeline` |
+| 7 onwards | Extra sections: environments, infrastructure … | Spec `extra_sections` |
 | Decisions needed before sign-off | Every open client question with its impact, owner, due date and the requirements it affects | Register |
 | Client acknowledgement and sign-off | Standard wording; what is being signed (version, open decisions excluded, how to sign); one form per signatory, client first: name, designation, signature and date rows and a company stamp box | Spec `signoff` |
 | Appendices | Appendix A, B … | Spec `extra_sections` with `appendix: true` |
@@ -59,7 +60,7 @@ default from `templates/document-format.yaml`.
 colors:
   accent: 0B6E4F          # links and highlights
 numbering: decimal         # 1.0, 1.1 instead of 1, 1.1
-chapters: [users_access, requirements, screens, nfr, extras, decisions, signoff]   # no role section
+chapters: [users_access, requirements, screens, nfr, timeline, extras, decisions, signoff]   # no role section
 titles:
   decisions: Open issues
 ```
@@ -69,12 +70,12 @@ titles:
 | `document.title`, `document.short` | What your company calls this document, e.g. "System Requirement Specifications" and "SRS", or "Functional Specification" and "FS". Used on the cover, in the sign-off wording and in file names. Default: "Requirements Specification" |
 | `fonts.body`, `fonts.heading`, `fonts.mono` | Typefaces. The defaults (Geist, Geist Medium, Geist Mono) are installed by `setup.cmd`; any other font must be installed on the machines that generate documents |
 | `sizes.*` | Point sizes: `body`, `table`, `table_header`, `caption`, `h1`, `h2`, `h3`, `cover_title` |
-| `colors.*` | Hex colours without `#`: `text`, `secondary`, `separator` (row lines), `line` (header line), `field` (tags), `ground` (cards and screenshot frames), `accent`, `ok`, `warning`, `error` |
+| `colors.*` | Hex colours without `#`: `text`, `secondary`, `separator` (row lines), `line` (header line), `field` (tags), `ground` (cards and screenshot frames), `accent`, `ok`, `warning`, `error`, `timeline_bar` (timeline bars; client activities use `accent`) |
 | `numbering` | `plain` (1, 1.1) or `decimal` (1.0, 1.1) |
 | `layout.screens_new_page` | `true` (default): every screen in the Screens chapter starts on a new page; `false`: screens run on |
 | `header_footer` | `generated` (system, version, status / company, page) or `template` (keep the header and footer of `branding/document-template.docx`; `{company}` in it is replaced) |
 | `front` | Front matter in order: `cover`, `at_a_glance`, `about`, `contents` |
-| `chapters` | Chapters in order: `users_access`, `by_role`, `requirements`, `screens`, `nfr`, `extras`, `decisions`, `signoff` |
+| `chapters` | Chapters in order: `users_access`, `by_role`, `requirements`, `screens`, `nfr`, `timeline`, `extras`, `decisions`, `signoff`. A company file that lists its own chapters must add `timeline` to get the timeline |
 | `titles.*` | Chapter and page titles |
 | `labels.*` | Words used in the document: impact levels, "Decision needed", the default status, "Confidential" |
 

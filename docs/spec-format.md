@@ -23,9 +23,44 @@ One YAML file per project drives both the clickable mock-up (`tools/mockup.py`) 
 | `nfr` | `{area, requirement}` |
 | `glossary` | `{term, meaning}`. document section 1.5 |
 | `process_flow` | `{title, steps: [{name, role, optional, status}], reject, notes}`. Drawn as a diagram (mock-up URL `#/__flow`), screenshotted and placed in document section 1.3, so it always matches the statuses |
+| `timeline` | The project timeline chapter (below) |
 | `extra_sections` | Free-form document sections after the NFRs: `{title, appendix, content: [{heading} \| {text} \| {bullets} \| {table: {header, rows}} \| {image, caption}]}`. `appendix: true` puts it after sign-off as Appendix A, B… Text may use `{client}` and `{system}` |
 
 Optional files next to `app.yaml`: `client-logo.png` (document cover) and `process-flow.png` (document section 1.3).
+
+## Timeline
+
+The project timeline chapter: a week-by-week chart, the milestones and the assumptions. Draft it from
+the scope of work (SOW) with the lead developer; weeks count from the kick-off, so the plan stays right
+until a kick-off date is agreed.
+
+```yaml
+timeline:
+  unit: Week                       # column heading; default Week
+  intro: …                         # optional; a standard sentence otherwise
+  summary:                         # optional figures above the chart
+    - {value: "27 – 32 weeks", label: Kick-off to go-live}
+  stages:
+    - name: Requirements
+      items:
+        - {ref: "2", name: Requirement workshops, start: 1, end: 3, client: true}
+        - {milestone: M2, name: Requirements signed off, week: 6,
+           title: Requirements document signed off, client_action: Review and sign within 5 working days}
+  assumptions:
+    - Three developers during development …
+```
+
+| Item key | Meaning |
+|---|---|
+| `ref` | The SOW item number, shown before the name, so the client can match each line to the SOW |
+| `name` | Activity or milestone name, kept short (one line) |
+| `start`, `end` | First and last week of an activity |
+| `client` | `true` when the client must take part (workshops, reviews, data, UAT, training): drawn in the accent colour |
+| `milestone`, `week` | A milestone's ID (M1, M2 …) and the week it falls in; drawn as a diamond |
+| `title`, `client_action` | A milestone's full name and what the client must do, for the milestones table |
+
+Projects longer than 40 weeks show one column per 2 or more weeks. Mandays are not durations: state the
+team size and other assumptions that turn the SOW's mandays into weeks.
 
 ## Screens
 
@@ -82,7 +117,7 @@ sections are added. Use a reference the generator resolves, and it warns about a
 |---|---|
 | `{ref:screen:<screen id>}` | the screen's section, e.g. "section 4.3" |
 | `{ref:role:<role id>}` | the role's section in Requirements by role |
-| `{ref:section:roles\|access\|flow\|integrations\|notifications\|glossary\|users\|by-role\|requirements\|screens\|nfr\|decisions}` | that section's number (`open-issues` still works for `decisions`) |
+| `{ref:section:roles\|access\|flow\|integrations\|notifications\|glossary\|users\|by-role\|requirements\|screens\|nfr\|timeline\|decisions}` | that section's number (`open-issues` still works for `decisions`) |
 | `{ref:extra:<extra section title>}` | "section n.0" or "Appendix X" |
 | `{ref:req:<FR id>}` | the requirement group id |
 

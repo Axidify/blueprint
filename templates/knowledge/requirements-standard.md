@@ -27,7 +27,7 @@ high-severity internal finding.
 | 14 | Diagrams | Use case, activity, data flow, if promised in the SOW |
 | 15 | Mock-up screens | Every screen referenced by the requirements |
 | 16 | Infrastructure | Environments and sizing |
-| 17 | Timeline | Phases |
+| 17 | Timeline | Stages, activities and milestones by week from kick-off; what the client must do and by when; the assumptions (team size, review turnaround) behind it |
 | 18 | Open issues | Every TBC with owner, due date and estimate impact |
 | 19 | Glossary | Every acronym used |
 | 20 | Sign-off | Client and supplier signatories |
