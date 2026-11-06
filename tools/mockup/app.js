@@ -77,10 +77,10 @@
   document.documentElement.style.setProperty("--primary", P.primary_color || (DESK ? "#1F5FBF" : "#1f6fb2"));
   // The engine's own words on the client's screens (the spec's words are drawn as the spec writes them).
   const W = DESK
-    ? { select: "Select…", logout: "Sign out", login: "Sign in", clear: "Clear filters", status: "Status", progress: "Approval progress",
+    ? { select: "Select…", selectUser: "Select a person…", logout: "Sign out", login: "Sign in", clear: "Clear filters", status: "Status", progress: "Approval progress",
         by: "Handled by", at: "Date and time", comment: "Comment", step: "Step", action: "Actions", waiting: "Waiting",
         showing: (n, total) => (Number(n) === Number(total) ? `${total} record${Number(total) === 1 ? "" : "s"}` : `${n} of ${total} records`) }
-    : { select: "-- Please Select --", logout: "Logout", login: "Login", clear: "Clear Filters", status: "Status:", progress: "Approval Progress",
+    : { select: "-- Please Select --", selectUser: "-- Select user --", logout: "Logout", login: "Login", clear: "Clear Filters", status: "Status:", progress: "Approval Progress",
         by: "Handled By", at: "Date &amp; Time", comment: "Comment", step: "Step", action: "Action", waiting: "Waiting",
         showing: (n, total) => `Showing ${n} of ${total} records` };
   // project.text_size: larger text on the client's screens (the presenter's tools keep their size).
@@ -190,6 +190,13 @@
   const formOnRecord = (screen, q) => !!screen.data && (!!q.record || (screen.record != null && screen.record !== ""));
   // `options_from: cars.reg_no`, or with a filter `{list: cars, field: reg_no, where: {status: Available}}`: the
   // choices follow the walk-through (a car put on loan leaves the drop-down).
+  // The people a user field offers: the `user` of each of its roles, or everyone the spec names.
+  function peopleFor(field) {
+    const wanted = field.roles == null ? null : [].concat(field.roles);
+    const fromRoles = (S.roles || []).filter((r) => !wanted || wanted.includes(r.id)).map((r) => r.user).filter(Boolean);
+    const listed = wanted ? [] : ((S.data || {}).users || []).map((u) => u && (u.full_name || u.name || u.username)).filter(Boolean);
+    return [...new Set([...fromRoles, ...listed])];
+  }
   function options(field) {
     if (field.options) return field.options;
     const from = field.options_from;
@@ -616,7 +623,14 @@
       // A file field and a signature field answer a click: a sample file is attached, the signed-in person signs.
       case "file": input = ro ? `<div class="f-value">${esc(v) || "-"}</div>` : `<div class="file-drop" data-fake="file"><input type="hidden"><span class="fake-view">Drop file here or <span class="link">browse</span></span></div>`; break;
       case "signature": input = ro ? `<div class="signature">${v ? `<span class="sig-ink">${esc(v)}</span>` : "Sign here"}</div>` : `<div class="signature" data-fake="signature"><input type="hidden"><span class="fake-view">Sign here</span></div>`; break;
-      case "user": input = `<select class="f-input"><option>${esc(v || "-- Select user --")}</option></select>`; break;
+      // A user field offers people: those of its `roles` (each role's `user`), or, without roles, everyone the
+      // spec names (the roles' users and a `users` list in the data); `options` or `options_from` win.
+      case "user": {
+        const people = options(f).length ? options(f) : peopleFor(f);
+        const all = v !== "" && !people.map(String).includes(String(v)) ? [v, ...people] : people;
+        input = `<select class="f-input"><option value="">${W.selectUser}</option>${all.map((o) => `<option ${String(o) === String(v) ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
+        break;
+      }
       default: input = `<input class="f-input" value="${esc(v)}" placeholder="${esc(f.placeholder || "")}">`;
     }
     return `<div class="f-row ${f.type === "textarea" ? "wide" : ""}" data-el="field:${esc(f.id)}" ${f.required && !ro ? "data-required" : ""}><label class="f-label">${esc(f.label)}${req}</label><div class="f-control">${input}${f.help && !ro ? `<div class="f-help">${esc(f.help)}</div>` : ""}</div></div>`;
@@ -863,6 +877,9 @@
     const missing = missingRequired(el, r);
     const label = el.textContent.trim();
     if (!missing.length || typed.warned === label) {
+      // Going on with required fields still empty is the mock-up's allowance, not the system's: say so, so
+      // nobody in the room takes it for the real behaviour.
+      if (missing.length) toast(`Only the mock-up goes on with ${missing.length === 1 ? "a required field" : "required fields"} empty: the real system will not ${inDialog ? "accept it" : "send the form"} until ${missing.length === 1 ? "it is" : "they are"} filled in.`, "warn");
       Object.assign(typed, { required: null, warned: null });
       return true;
     }

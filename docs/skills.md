@@ -15,7 +15,9 @@ example "prepare the workshop". How to write a skill: [Maintaining](maintaining.
 **Ask:** `/start`, "help", "what can you do?"
 Checks your machine, shows each project with its next step, and offers a menu of the common tasks. It
 also points you to each project's overview page (`Project overview.html` at the top of the project folder),
-which shows every document, who it is for and the next step to anyone browsing the shared folder.
+which shows every document, who it is for and the next step to anyone browsing the shared folder. For a
+project still in the old folder layout it offers, once, to "migrate the folders" (see
+[Moving a project to the new folder layout](workspace.md#moving-a-project-to-the-new-folder-layout)).
 
 ### tour
 
@@ -58,9 +60,9 @@ and every gap pattern in the knowledge base. Every finding cites its location.
 A document the client already signed is reviewed too: its findings become possible change requests for
 change control. A scope-of-work or manday appendix inside the document is used as the SOW. For a document
 Blueprint generated, fixes go into the spec and most findings are internal.
-**Output:** findings in the [register](register.md), `register.xlsx` for the BA, and a review report in
-`projects/<name>/reviews/<review>/review.md` with the verdict, top risks and the screens to walk through
-with users, also as a Word file beside it (`<document> review.docx`, marked internal on every page); and
+**Output:** findings in the [register](register.md), `Questions and fixes register.xlsx` for the BA, and a review report in
+`_blueprint/reviews/<review>/review.md` with the verdict, top risks and the screens to walk through
+with users, also as a Word file in `2 Reviews` (`<document> review.docx`, marked internal on every page); and
 the next step (usually preparing the workshop or building the mock-up).
 
 ### build-mockup
@@ -72,7 +74,7 @@ spec cannot describe is built in the project's own mock-up code rather than left
 work on the platform is tagged "Custom development" while presenting. New mock-ups get the calm `desk` look
 in the project's colour (`joget` on a Joget platform); existing ones keep theirs. The client's logo, font,
 corners, menu and top bar are set with `mockup-design`.
-**Output:** `projects/<name>/mockup/` (open with `present.cmd`), screenshots, register questions.
+**Output:** the mock-up in `_blueprint/mockup/` (open with **Open the mock-up** or `present.cmd`), screenshots in `4 Mock-up screenshots`, register questions.
 
 ### mockup-design
 
@@ -84,7 +86,7 @@ guidelines or their website and proposes it in plain words. It shows each screen
 when white words are hard to read on the brand colour or when the look is custom work on the platform, and
 changes the spec only once you are happy.
 **Output:** the look settings in the project's spec, before-and-after pictures in
-`projects/<name>/mockup/look-preview/`, and the rebuilt mock-up and screenshots. See
+the project's `_blueprint/mockup/look-preview/`, and the rebuilt mock-up and screenshots. See
 [The client's look](spec-format.md#the-clients-look).
 
 ### present
@@ -119,7 +121,7 @@ Builds the agenda for a client session from what is still open: the register's c
 spec does not say yet and the gap patterns that apply, with those that already cost mandays first. It asks
 you the date, the length and who attends, groups the questions the way the client thinks, fits them to the
 time and says what it left for later and why.
-**Output:** in `projects/<name>/workshops/`: the agenda for the client and the facilitator notes for the
+**Output:** in the project's `3 Workshops`: the agenda for the client and the facilitator notes for the
 BA (internal), both Word documents.
 
 ### client-answers
@@ -134,7 +136,7 @@ possible change request (flagged, internal, not built until you agree; with `cha
 was signed). It then says whether the requirements document needs generating again and whether the lead
 developer should revisit the estimate.
 **Output:** the register (answers on the **For client** sheet), the spec and mock-up where an answer
-changed them, and the client's file filed in the project's `docs/`.
+changed them, and the client's file filed in the project's `1 Client documents`.
 
 ### apply-feedback
 
@@ -142,7 +144,7 @@ changed them, and the client's file filed in the project's `docs/`.
 Turns comments left in the mock-up, BA notes or a meeting transcript into spec changes, decisions,
 questions and possible change requests (flagged, not built, until you agree), then releases a new
 mock-up version.
-**Output:** updated spec and mock-up, register items, `reviews/mockup-v<version>-changes.md`.
+**Output:** updated spec and mock-up, register items, the change notes (`_blueprint/reviews/mockup-v<version>-changes.md`, as a Word file in `2 Reviews`).
 
 ### generate-requirements
 
@@ -155,7 +157,7 @@ and team-only text anywhere the client will read it (the mock-up, "proposed", re
 requirement ids of another document), lists the parts still missing before issuing (NFRs, timeline, scope,
 signatories), then reviews the document with `review-requirements`.
 See [Document format](document-format.md).
-**Output:** `projects/<name>/output/<System> – System Requirement Specifications v<version>.docx`, a PDF
+**Output:** `5 Requirements document/<System> – System Requirement Specifications v<version>.docx`, a PDF
 when Word is installed, and a snapshot of the spec used.
 When the document goes to the client, say "issue v1.3 to the client": the version is recorded and
 locked, so later changes become a new version.
@@ -181,8 +183,8 @@ projects the rates rest on. When there is a scope of work, it compares the sold 
 puts the largest differences first. It ends with the workshop questions that would narrow the range most.
 The estimate is internal and never goes into a client document; the project timeline is drafted from it,
 in weeks. See [Estimates](estimates.md).
-**Output:** `projects/<name>/estimates/<date> estimate from <basis>.xlsx` (and the `.json` it is rendered
-from); it opens on a one-page Overview, and while rates are missing its Rates needed sheet is a form for
+**Output:** `Internal – estimates and change requests/<date> estimate from <basis>.xlsx` (and the `.json` it is rendered
+from, in `_blueprint/estimates/`); it opens on a one-page Overview, and while rates are missing its Rates needed sheet is a form for
 the lead developer. Afterwards it offers to save the lead developer's rates in the knowledge base (also
 from a returned Rates needed sheet: "save these rates") and to add the questions to the register.
 
@@ -205,8 +207,8 @@ was left open: a client question goes into the register) or **New** (a change re
 the knowledge base's building blocks with the estimate's rules (ranges, never an invented rate) for the
 team, mapped to a gap pattern so `close-project` can learn from it, and written up for the client. See
 [Change requests](change-requests.md).
-**Output:** `projects/<name>/changes/crs.json` and `CR log (internal).xlsx` (internal), and for a new CR
-`CR-001 <title> - change request note.docx` for the client: what was asked, why it is a change, what it
+**Output:** the CR log (`_blueprint/changes/crs.json`, and `CR log (internal).xlsx` in `Internal – estimates and change
+requests`), and for a new CR `7 Change requests/CR-001 <title> - change request note.docx` for the client: what was asked, why it is a change, what it
 would change, the timeline impact in weeks, and the price once the project lead has set it ("Quotation to
 follow" until then).
 
@@ -220,7 +222,7 @@ field checks of every form and dialog, the screens each role may not open, the d
 notifications and integrations. It then adds the edge cases from the gap patterns that apply, merges and
 removes what overlaps, and checks that every requirement is covered or excluded with a reason. See
 [UAT scripts](uat.md).
-**Output:** in `projects/<name>/uat/`: a workbook for the client's testers (one row per step, with Actual
+**Output:** in the project's `6 UAT`: a workbook for the client's testers (one row per step, with Actual
 result, Pass/Fail, Tester, Date and Defect ref) and the test scripts as a Word document in your company's
 format, both for the client; and the `.json` they are made from. After UAT, drop the filled-in workbook into
 the inbox: failed steps are listed, and those that are really new wishes go to `change-request`.

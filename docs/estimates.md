@@ -6,7 +6,7 @@ it and a **confidence level**. It is counted in the building blocks of the [know
 "estimate this project"; see the `estimate` skill in [Skills](skills.md).
 
 **Estimates are internal.** They are for the lead developer and the project lead. They live in the
-project's `estimates/` folder and never appear in the mock-up, the requirements document or the client
+project's `Internal – estimates and change requests` folder (their `.json` sources in `_blueprint/estimates/`) and never appear in the mock-up, the requirements document or the client
 sheet of the register. The one thing that leaves them is the project timeline, in weeks (see below).
 
 **Blueprint does not make up figures.** Rates and shares are yours: set them in the knowledge base, or give
@@ -43,8 +43,8 @@ asked twice. It changes the knowledge base only after you agree.
 
 ## The files
 
-`projects/<name>/estimates/<date> estimate from <basis>.json` is the source; the Excel file with the same
-name is the copy to read. To change an estimate, tell Blueprint what to change (a count, a rate, an
+`projects/<name>/_blueprint/estimates/<date> estimate from <basis>.json` is the source; the Excel file with the same
+name, in `Internal – estimates and change requests`, is the copy to read. To change an estimate, tell Blueprint what to change (a count, a rate, an
 assumption) rather than editing the Excel file: it is rewritten every time. Every sheet is marked
 *Internal: not for the client*, prints landscape and one page wide, and repeats its headings on each page.
 
@@ -150,7 +150,7 @@ milestones go into the spec; mandays, rates and cost stay in the estimate. See `
   "assumptions": ["Two approval levels", "Test data provided by the client"],
   "gap_patterns": [{"id": "GP-10", "why": "One integration in the brief, endpoints not listed"}],
   "questions": [{"question": "Which couriers must tracking cover?", "source": "GP-10", "narrows": ["R-012", "L02"]}],
-  "sow": {"source": "docs/2026-11-02 SOW.xlsx",
+  "sow": {"source": "2026-11-02 SOW.xlsx",
           "lines": [{"ref": "1", "item": "Project management", "mandays": 5}]}
 }
 ```

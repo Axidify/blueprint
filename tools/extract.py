@@ -384,7 +384,7 @@ def prepare_output(out):
             names = sorted(p.name for p in out.iterdir())
             listed = ", ".join(names[:5]) + (f" and {len(names) - 5} more" if len(names) > 5 else "")
             sys.exit(f"{out} already holds files that are not an earlier extraction ({listed}). Nothing was touched.\n"
-                     "Give the extraction a folder of its own, for example projects/<slug>/reviews/<review>/extract.")
+                     "Give the extraction a folder of its own, for example projects/<slug>/_blueprint/reviews/<review>/extract.")
         for name in OURS:
             target = out / name
             if target.is_dir():
@@ -422,9 +422,14 @@ def main():
     for n, line in enumerate(text.splitlines(), 1):
         if OPEN_ITEM.search(line) and "(TOC)" not in line:
             open_items.append({"line": n, "text": line.strip()[:200]})
-    # A requirements document Blueprint generated (in a project's output/ folder) says "To be confirmed"
-    # wherever its spec is silent: expected, and each one is a gap in the spec rather than in the wording.
-    generated = src.resolve().parent.name == "output" and (src.resolve().parent.parent / "spec" / "app.yaml").exists()
+    # A requirements document Blueprint generated (in a project's "5 Requirements document" or output/ folder)
+    # says "To be confirmed" wherever its spec is silent: expected, and each one is a gap in the spec rather
+    # than in the wording.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import layout
+
+    folder = src.resolve().parent
+    generated = folder == layout.output_dir(folder.parent).resolve() and layout.spec_file(folder.parent).exists()
     labels = sum(1 for o in open_items if "to be confirmed" in o["text"].lower()) if generated else 0
 
     (out / "text.md").write_text(text, encoding="utf-8")

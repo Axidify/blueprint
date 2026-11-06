@@ -117,8 +117,10 @@ def preview():
     if not pdf.exists():
         print("No PDF (Word not available): open the .docx to look at it.")
         return
-    folder = project / "output" / "preview"
-    folder.mkdir(exist_ok=True)
+    import layout
+
+    folder = layout.preview_dir(project)
+    folder.mkdir(parents=True, exist_ok=True)
     for old in folder.glob("page-*.png"):
         old.unlink()
     d = pymupdf.open(pdf)

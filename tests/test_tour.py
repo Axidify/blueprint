@@ -15,6 +15,7 @@ import yaml
 import support
 
 import extract
+import layout
 import mockup
 import project as project_tool
 import status
@@ -37,15 +38,17 @@ def test_start_makes_a_copy_and_leaves_the_sample_alone(app):
     before = fingerprint(tour.EXAMPLE)
     copy = tour.start(root=app)
     assert copy == app / ".tour" / "leave-request"
-    assert (copy / "spec" / "app.yaml").read_bytes() == (tour.EXAMPLE / "spec" / "app.yaml").read_bytes()
+    assert layout.is_new(copy), "the copy is in the folder layout a new project has"
+    assert (copy / "_blueprint" / "spec" / "app.yaml").read_bytes() == (tour.EXAMPLE / "spec" / "app.yaml").read_bytes()
     assert (copy / tour.MARKER).is_file()
-    for sub in ("docs", "reviews", "spec", "feedback"):
+    for sub in ("1 Client documents", "_blueprint/spec", "_blueprint/feedback"):
         assert (copy / sub).is_dir()
-    register = json.loads((copy / "register.json").read_text(encoding="utf-8"))
+    assert not (copy / "spec").exists() and not (copy / "docs").exists()
+    register = json.loads((copy / "_blueprint" / "register.json").read_text(encoding="utf-8"))
     assert register["project"] == "Leave Request System" and register["items"] == []
-    assert tour.draft_of(copy) is not None
+    assert tour.draft_of(copy) is not None and tour.draft_of(copy).parent == copy / "1 Client documents"
     # what is built from the sample is built afresh by the tour, never copied
-    assert not (copy / "mockup").exists() and not (copy / "output").exists() and not list(copy.rglob("*.xlsx"))
+    assert not layout.mockup_dir(copy).exists() and not layout.output_dir(copy).exists() and not list(copy.rglob("*.xlsx"))
     tour.remove_copy(root=app)
     assert fingerprint(tour.EXAMPLE) == before
 
@@ -60,12 +63,12 @@ def test_the_copy_is_ignored_by_git():
 def test_start_again_starts_over(app):
     copy = tour.start(root=app)
     (copy / "stray.txt").write_text("left from an earlier tour", encoding="utf-8")
-    (copy / "spec" / "app.yaml").write_text("project: {name: changed}\n", encoding="utf-8")
+    layout.spec_file(copy).write_text("project: {name: changed}\n", encoding="utf-8")
     tour.add_comment(root=app)
     again = tour.start(root=app)
     assert again == copy
-    assert not (copy / "stray.txt").exists() and not (copy / "feedback" / "feedback.json").exists()
-    assert (copy / "spec" / "app.yaml").read_bytes() == (tour.EXAMPLE / "spec" / "app.yaml").read_bytes()
+    assert not (copy / "stray.txt").exists() and not layout.feedback_file(copy).exists()
+    assert layout.spec_file(copy).read_bytes() == (tour.EXAMPLE / "spec" / "app.yaml").read_bytes()
 
 
 def test_end_removes_the_copy_and_nothing_else(app):
@@ -109,7 +112,7 @@ def test_the_tour_is_not_one_of_the_projects(app, monkeypatch, capsys):
 
 def test_the_planted_draft_has_its_gaps(app, monkeypatch, capsys):
     copy = tour.start(root=app)
-    out = copy / "reviews" / "draft-v0.1" / "extract"
+    out = layout.reviews_dir(copy) / "draft-v0.1" / "extract"
     monkeypatch.setattr(sys, "argv", ["extract.py", str(tour.draft_of(copy)), str(out)])
     extract.main()
     text = (out / "text.md").read_text(encoding="utf-8")
@@ -128,12 +131,12 @@ def test_the_planted_draft_has_its_gaps(app, monkeypatch, capsys):
 def test_the_tools_work_on_the_copy(app, capsys):
     copy = tour.start(root=app)
     mockup.build(copy)
-    assert (copy / "mockup" / "index.html").exists()
+    assert (copy / "_blueprint" / "mockup" / "index.html").exists()
     saved = tour.add_comment(root=app)
     assert saved["id"] == "FB-001"
-    spec = yaml.safe_load((copy / "spec" / "app.yaml").read_text(encoding="utf-8"))
+    spec = yaml.safe_load(layout.spec_file(copy).read_text(encoding="utf-8"))
     screen = next(s for s in spec["screens"] if s["id"] == saved["screen"])
     assert saved["element"].split(":")[1] in [f["id"] for sec in screen["sections"] for f in sec["fields"]]
     assert saved["role"] in screen["roles"]
-    comments = json.loads((copy / "feedback" / "feedback.json").read_text(encoding="utf-8"))
+    comments = json.loads(layout.feedback_file(copy).read_text(encoding="utf-8"))
     assert [c["id"] for c in comments] == ["FB-001"]

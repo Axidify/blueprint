@@ -5,7 +5,7 @@ description: Create or extend the clickable mock-up for a project from a brief, 
 
 # Build a mock-up
 
-The mock-up is generated from `projects/<slug>/spec/app.yaml`. The same spec later generates the requirements document,
+The mock-up is generated from the project's spec, `_blueprint/spec/app.yaml`. The same spec later generates the requirements document,
 so every decision put into the spec shows up in both. Format: `docs/spec-format.md`. Working example:
 `examples/leave-request/spec/app.yaml`.
 
@@ -21,8 +21,8 @@ so every decision put into the spec shows up in both. Format: `docs/spec-format.
     existing project's theme unless the user asks (its screenshots would be out of date).
     In `desk`, write titles, menu items, labels and buttons in sentence case ("New application", "Leave
     type"), give the screen's main action `style: primary` and leave the rest unstyled.
-  - Brand colour, and the client logo: put it at `spec/client-logo.png` (the document's cover) and set
-    `logo: client-logo.png` to show it in the mock-up too. For the rest of the client's look (font,
+  - Brand colour, and the client logo: put it at `_blueprint/spec/client-logo.png` (the document's cover) and
+    set `logo: client-logo.png` to show it in the mock-up too. For the rest of the client's look (font,
     corners, menu, top bar), or to learn it from their own systems, use the `mockup-design` skill.
 
 ## 2. Write the spec
@@ -70,7 +70,7 @@ so every decision put into the spec shows up in both. Format: `docs/spec-format.
    duplicates) so it goes on the BA's list, and show a sensible placeholder on the screen.
 6. **Build everything; label custom work.** Whatever the client should see is in the mock-up. What the spec
    cannot describe (a behaviour, a layout, an interaction, an integration, faked with sample data) is built
-   in the project's own mock-up code, `spec/mockup.js` and `spec/mockup.css` ("The project's own mock-up
+   in the project's own mock-up code, `_blueprint/spec/mockup.js` and `mockup.css` beside it ("The project's own mock-up
    code" in `docs/spec-format.md`), and its behaviour written into `requirements`. Leave something out only
    when a browser genuinely cannot show it, and tell the user what and why. What is custom work or not
    supported on the platform is tagged in the mock-up while presenting (step 3.3 records it); the project's
@@ -82,7 +82,7 @@ so every decision put into the spec shows up in both. Format: `docs/spec-format.
 1. `python -I tools/mockup.py build projects/<slug>` — fix any spec errors it reports, and the settings it
    says the mock-up ignores (a misspelling, or a comma inside unquoted text between `{ }`).
 2. `python -I tools/mockup.py screenshots projects/<slug>` and look at every screenshot. If it stops at a
-   screen, it names that screen and the error the browser reported: fix the spec or `spec/mockup.js` there. Check for layout
+   screen, it names that screen and the error the browser reported: fix the spec or `mockup.js` there. Check for layout
    problems, empty lists, wrong roles, and leftover sample text. Screens are captured 1000 pixels wide so
    their text is readable in the requirements document; if the command says a screen was taken wider
    because it does not fit, its text will print smaller: consider fewer or shorter list columns.
@@ -102,7 +102,7 @@ so every decision put into the spec shows up in both. Format: `docs/spec-format.
   the open questions added to the register, so the BA covers them in the session. For each screen and list
   the BA should ask "is this element needed?" and "which columns?" (GP-05, GP-06): a document review cannot
   catch those later.
-- **Where and for whom:** the mock-up and its screenshots in the project's `mockup` folder, **for the
+- **Where and for whom:** the mock-up (in `_blueprint/mockup`) and its screenshots (in `4 Mock-up screenshots`), **for the
   client** to see in a session (opened with **Open the mock-up** on `Project overview.html`, or
   `present.cmd`); the register's questions on its **For client** sheet; the custom-work findings
   **internal** (the room sees only the Custom development tags).

@@ -8,8 +8,9 @@ Usage:
     python -I tools/mockup.py look         <project_dir> [--try key=value ...]
     python -I tools/mockup.py live <start|list|take|done|mark|undo|end|wait|checkpoint> <project_dir> ...
 
-<project_dir> is projects/<slug> (or examples/<name>). It must contain spec/app.yaml; the format is in
-docs/spec-format.md.
+<project_dir> is projects/<slug> (or examples/<name>). It must contain the spec, spec/app.yaml (in its
+_blueprint folder, in the new folder layout: tools/layout.py); the format is in docs/spec-format.md. Below,
+spec/, mockup/ and feedback/ are in _blueprint/ in a project in the new layout.
 
 build        validates the spec and writes <project_dir>/mockup/ (self-contained: open index.html).
 serve        An open mock-up follows its spec: when the spec changes, the mock-up is built again and every
@@ -23,7 +24,7 @@ serve        An open mock-up follows its spec: when the spec changes, the mock-u
              It stops with a message when the port is already taken (another mock-up is still open):
              close that one, or pick another port with --port.
 screenshots  builds, then captures every screen (and extra shots from the spec) with Microsoft Edge into
-             <project_dir>/mockup/screenshots/, listed in shots.json. It notes which screens they show, so the
+             <project_dir>/mockup/screenshots/ ("4 Mock-up screenshots" in the new layout), listed in shots.json. It notes which screens they show, so the
              document generator can warn when the spec's screens have changed since.
 feedback     prints the saved comments, grouped by screen.
 look         shows the look of the client's screens (theme, colour, font, corners, menu, top bar, logo), and notes
@@ -56,6 +57,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))  # the sibling tools: `python -I` does not put this folder on the path
+import layout  # noqa: E402  (where everything is in a project folder)
 ENGINE = ROOT / "tools" / "mockup"
 SCREEN_TYPES = {"login", "dashboard", "list", "form", "detail", "custom"}
 TEXT_SIZES = ("normal", "large", "larger")
@@ -94,7 +96,7 @@ LOOK_PREVIEW = "look-preview"  # in mockup/: the pictures `look --try` takes, ne
 def look_file(project, spec, key):
     """The file a look setting (`logo`, `font_file`) names, in the project's spec/ folder, or None if unset."""
     name = ((spec or {}).get("project") or {}).get(key)
-    return (Path(project) / "spec" / str(name)) if project is not None and name not in (None, "") else None
+    return (layout.spec_dir(project) / str(name)) if project is not None and name not in (None, "") else None
 
 
 def look_errors(spec, project=None):
@@ -122,7 +124,7 @@ def look_errors(spec, project=None):
         if Path(name).is_absolute() or ".." in Path(name).parts or Path(name).suffix.lower() not in kinds:
             errors.append(f"project: {key} '{name}' must be a file in the project's spec folder ending {', '.join(kinds)}")
         elif project is not None and not look_file(project, spec, key).is_file():
-            errors.append(f"project: {key} '{name}' is not in {Path(project) / 'spec'}: put the file there, or take the setting out")
+            errors.append(f"project: {key} '{name}' is not in {layout.spec_dir(project)}: put the file there, or take the setting out")
     return errors
 
 
@@ -167,7 +169,8 @@ def project_code(project):
     """The project's own mock-up code files that exist: {name in spec/: path}."""
     if project is None:
         return {}
-    return {name: Path(project) / "spec" / name for name in PROJECT_CODE if (Path(project) / "spec" / name).is_file()}
+    folder = layout.spec_dir(project)
+    return {name: folder / name for name in PROJECT_CODE if (folder / name).is_file()}
 STATUS_COLORS = ("green", "amber", "red", "grey")  # "gray" is accepted too
 FIELD_TYPES = {"text", "textarea", "select", "radio", "checkbox", "date", "datetime", "number", "file", "signature", "user"}
 # The keys the spec format knows, by where they are written. A key that is not one of these but nearly spells
@@ -180,7 +183,7 @@ KNOWN_KEYS = {
     "column": {"field", "label", "chip"},
     "section": {"title", "page", "page_title", "note", "fields"},
     "field": {"id", "label", "type", "required", "readonly", "default", "length", "options", "options_from", "placeholder", "help",
-              "source", "validation"},
+              "source", "validation", "roles"},
     "button": {"label", "style", "to", "toast", "dialog", "roles", "when", "example", "access", "set_status", "also_move", "creates"},
     "dialog": {"id", "title", "message", "fields", "list", "doc_table", "srs_table", "confirm"},
     "figure": {"label", "value", "count", "formula"},
@@ -462,7 +465,7 @@ def tied_list(spec, screen, button=None):
 def first_status(spec, name, label):
     """The status a new record starts in when its button does not say (`set_status`): the first status of the
     spec, or the one after it when that is a draft and the button is not about a draft (Submit is not Save as
-    Draft). Without statuses: a waiting status of the sample records. None when the records have no status."""
+    Draft): the draft's first `next`, or, when it lists none, the next status of the list. Without statuses: a waiting status of the sample records. None when the records have no status."""
     rows_ = [r for r in (spec.get("data") or {}).get(name) or [] if isinstance(r, dict)]
     if rows_ and not any("status" in r for r in rows_):
         return None
@@ -470,8 +473,10 @@ def first_status(spec, name, label):
     if statuses:
         first = statuses[0]
         is_draft = "draft" in f"{first.get('id')} {first.get('name')}".lower()
-        if is_draft and "draft" not in str(label).lower() and isinstance(first.get("next"), list) and first["next"]:
-            first = find_status(spec, first["next"][0]) or first
+        if is_draft and "draft" not in str(label).lower():
+            # Its first next step; a draft that lists none is followed by the next status of the list.
+            nxt = first.get("next") if isinstance(first.get("next"), list) and first["next"] else None
+            first = (find_status(spec, nxt[0]) if nxt else None) or (statuses[1] if len(statuses) > 1 else first)
         return str(first.get("name") or first.get("id"))
     seen = [str(r["status"]) for r in rows_ if r.get("status") not in (None, "")]
     return next((s for s in seen if any(w in s.lower() for w in WAITING_WORDS)), seen[0] if seen else None)
@@ -521,7 +526,7 @@ def forms_without_a_list(spec):
 
 # ------------------------------------------------------------------ spec
 def load_spec(project):
-    path = Path(project) / "spec" / "app.yaml"
+    path = layout.spec_file(project)
     if not path.exists():
         sys.exit(f"No spec at {path}")
     spec = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -611,6 +616,13 @@ def validate(spec, warnings=None):
                               + (f" (did you mean '{close[0]}'?)" if close else ""))
             source = f.get("options_from")
             here = f"{where}, field {f.get('id', '?')}"
+            if f.get("roles") is not None:  # a user field offers the people of these roles
+                wanted = f["roles"] if isinstance(f["roles"], list) else [f["roles"]]
+                if f.get("type") != "user":
+                    errors.append(f"{here}: roles is for a user field (type: user), to say whose people it offers")
+                for rid in wanted:
+                    if rid not in roles:
+                        errors.append(f"{here}: roles names '{rid}', which is not a role of the spec")
             if isinstance(source, dict):  # {list, field, where}: the choices are the records the filter lets through
                 misspelt(f"{here}, options_from", "options_from", source)
                 name, field = source.get("list"), source.get("field")
@@ -953,10 +965,10 @@ def build_inputs(project):
     Blueprint's mock-up engine. Compared by content, not by file times, which on Windows move in steps of
     about 15 milliseconds: a change saved in the same step as a build would otherwise be missed."""
     project = Path(project)
-    # The logo and font files the look may name are counted before the spec is read: every one in spec/.
+    # The logo and font files the look may name are counted before the spec is read: every one in the spec folder.
     kinds = {kind for kinds in LOOK_FILES.values() for kind in kinds}
-    look = sorted(f for f in (project / "spec").glob("*") if f.is_file() and f.suffix.lower() in kinds)
-    files = [project / "spec" / "app.yaml", *sorted(project_code(project).values()), *look, Path(__file__).resolve(),
+    look = sorted(f for f in layout.spec_dir(project).glob("*") if f.is_file() and f.suffix.lower() in kinds)
+    files = [layout.spec_file(project), *sorted(project_code(project).values()), *look, Path(__file__).resolve(),
              ENGINE / "app.js", ENGINE / "base.css", ENGINE / "look.css", *sorted((ENGINE / "themes").glob("*.css"))]
     value = hashlib.sha256()
     for f in files:
@@ -967,7 +979,7 @@ def build_inputs(project):
 def build(project):
     inputs = build_inputs(project)  # before reading the spec: a change made during the build is seen next time
     spec = load_spec(project)
-    out = Path(project) / "mockup"
+    out = layout.mockup_dir(project)
     (out / "assets").mkdir(parents=True, exist_ok=True)
     theme = spec["project"].get("theme") or UNSET_THEME
     theme_file = ENGINE / "themes" / f"{theme}.css"
@@ -1050,9 +1062,9 @@ def snapshot(project, spec):
     The copy of a version that was issued to the client is never replaced: it stays what the client saw."""
     import project as project_tool
 
-    out = Path(project) / "mockup"
+    out = layout.mockup_dir(project)
     version = str(spec["project"].get("version", "draft"))
-    dest = out / "versions" / f"v{version}"
+    dest = layout.versions_dir(project) / f"v{version}"
     issued = project_tool.is_issued(Path(project), version)
     if issued and dest.exists():
         print(f"v{version} was issued to {issued['to']} on {issued['date']}: the saved mock-up of that version is kept as it was. "
@@ -1385,14 +1397,14 @@ def lan_addresses():
 def serve(project, port, lan, version=None):
     if not version:
         build(project)
-    mock = (Path(project) / "mockup").resolve()
+    mock = layout.mockup_dir(project).resolve()
     if version:
-        mock = mock / "versions" / f"v{version.lstrip('v')}"
+        mock = layout.versions_dir(project).resolve() / f"v{version.lstrip('v')}"
         if not mock.exists():
-            have = sorted(p.name for p in (Path(project) / "mockup" / "versions").glob("v*"))
+            have = sorted(p.name for p in layout.versions_dir(project).glob("v*"))
             sys.exit(f"No mock-up v{version.lstrip('v')}. Available: {', '.join(have) or 'none'}")
         print(f"Showing the saved mock-up {mock.name} (comments are still saved to the project).")
-    fb_file = (Path(project) / "feedback" / "feedback.json").resolve()
+    fb_file = layout.feedback_file(project).resolve()
     try:
         server = make_server(mock, fb_file, "0.0.0.0" if lan else "127.0.0.1", port, None if version else project)
     except OSError as e:
@@ -1415,10 +1427,32 @@ def serve(project, port, lan, version=None):
         webbrowser.open(url)
     except Exception:
         pass
+    with server_mark(project, port):
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            pass
+
+
+@contextlib.contextmanager
+def server_mark(project, port):
+    """While a project's mock-up is served, a mark in its feedback folder says so (the port and this program),
+    so the project's folders are not moved under it (tools/project.py migrate checks it)."""
+    mark = layout.server_file(project)
     try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        pass
+        mark.parent.mkdir(parents=True, exist_ok=True)
+        mark.write_text(json.dumps({"port": port, "pid": os.getpid(), "started": dt.datetime.now().isoformat(timespec="seconds")}),
+                        encoding="utf-8")
+    except OSError:
+        mark = None
+    try:
+        yield
+    finally:
+        if mark is not None:
+            try:
+                mark.unlink()
+            except OSError:
+                pass
 
 
 # ------------------------------------------------------------------ the home page: every mock-up, one click away
@@ -1519,10 +1553,10 @@ def without_mockup(projects):
     folder = Path(projects)
     found = []
     for p in sorted(folder.iterdir()) if folder.is_dir() else []:
-        if not p.is_dir() or p.name.startswith(("_", ".")) or (p / "spec" / "app.yaml").exists():
+        if not p.is_dir() or p.name.startswith(("_", ".")) or layout.spec_file(p).exists():
             continue
         try:
-            reg = json.loads((p / "register.json").read_text(encoding="utf-8"))
+            reg = json.loads(layout.register_json(p).read_text(encoding="utf-8"))
         except (OSError, ValueError):
             reg = {}
         reg = reg if isinstance(reg, dict) else {}
@@ -1535,7 +1569,7 @@ def mockups(projects):
     [{slug, name, client, mark, color, version, built, shown, comments, waiting, versions, problem}]."""
     found = []
     for folder in sorted(Path(projects).iterdir()) if Path(projects).is_dir() else []:
-        spec_file = folder / "spec" / "app.yaml"
+        spec_file = layout.spec_file(folder)
         if not folder.is_dir() or folder.name.startswith(("_", ".")) or not spec_file.exists():
             continue
         entry = {"slug": folder.name, "name": folder.name, "client": "", "mark": folder.name[:1].upper(), "color": "#1f5fbf", "version": "",
@@ -1547,16 +1581,16 @@ def mockups(projects):
                          color=str(project.get("primary_color") or entry["color"]), version=str(project.get("version") if project.get("version") is not None else ""))
         except Exception:
             entry["problem"] = "its spec could not be read"
-        built = folder / "mockup" / "index.html"
+        built = layout.mockup_dir(folder) / "index.html"
         if built.exists():
             entry["built"] = dt.datetime.fromtimestamp(built.stat().st_mtime)
         try:
-            comments = standing(json.loads((folder / "feedback" / "feedback.json").read_text(encoding="utf-8")))
+            comments = standing(json.loads(layout.feedback_file(folder).read_text(encoding="utf-8")))
             entry["comments"] = len(comments)
             entry["waiting"] = sum(1 for c in comments if isinstance(c, dict) and not c.get("status"))
         except (OSError, ValueError):
             pass
-        saved = folder / "mockup" / "versions"
+        saved = layout.versions_dir(folder)
         entry["versions"] = sorted((p.name for p in saved.glob("v*") if (p / "index.html").exists()), key=_natural, reverse=True) if saved.is_dir() else []
         entry["shown"] = max((t for t in map(presented_at, entry["versions"]) if t), default=None)  # the last live session
         found.append(entry)
@@ -1627,8 +1661,8 @@ def ensure_built(project):
         newest = build_inputs(project)
     except OSError as e:
         return f"The spec could not be read: {e}"
-    stamp = project / "mockup" / BUILT_FROM
-    if (project / "mockup" / "index.html").exists() and stamp.exists() and stamp.read_text(encoding="utf-8") == newest:
+    stamp = layout.mockup_dir(project) / BUILT_FROM
+    if (layout.mockup_dir(project) / "index.html").exists() and stamp.exists() and stamp.read_text(encoding="utf-8") == newest:
         return ""
     if _could_not_build.get(project, (None, ""))[0] == newest:
         return _could_not_build[project][1]
@@ -1686,16 +1720,16 @@ def make_home(projects, host, port):
             if not m:
                 return None
             project = projects / m.group(1)
-            if project.parent != projects or not (project / "spec" / "app.yaml").exists():
+            if project.parent != projects or not layout.spec_file(project).exists():
                 return None
             rest = m.group(2)
             if rest is None:
                 return project, None, None  # no trailing slash yet
             version = re.match(r"/v/([0-9A-Za-z.-]+)(/.*)?$", rest)
             if version:
-                mock = project / "mockup" / "versions" / f"v{version.group(1)}"
+                mock = layout.versions_dir(project) / f"v{version.group(1)}"
                 return (project, mock, version.group(2)) if mock.is_dir() else None
-            return project, project / "mockup", rest
+            return project, layout.mockup_dir(project), rest
 
         def translate_path(self, path):
             self.directory = str(self._mock)
@@ -1714,8 +1748,8 @@ def make_home(projects, host, port):
                 self.end_headers()
                 return None
             if rest.startswith("/api/feedback"):
-                return self._send(json.dumps(for_the_room(read_feedback(project / "feedback" / "feedback.json")), ensure_ascii=False), kind="application/json")
-            current = mock == project / "mockup"  # not a saved earlier version, which never changes
+                return self._send(json.dumps(for_the_room(read_feedback(layout.feedback_file(project))), ensure_ascii=False), kind="application/json")
+            current = mock == layout.mockup_dir(project)  # not a saved earlier version, which never changes
             if rest.startswith("/api/build"):
                 return self._send(json.dumps({**build_stamp(mock, project if current else None), "presenter": True}), kind="application/json")
             if rest.startswith("/api/state"):
@@ -1745,14 +1779,14 @@ def make_home(projects, host, port):
                     body = read_body(self)
                     if body is None:
                         return self._send(json.dumps({"error": "Not a comment."}), 400, "application/json")
-                    code, answer = change_comment(where[0] / "feedback" / "feedback.json", action, body, True)  # this page is only ever on this computer
+                    code, answer = change_comment(layout.feedback_file(where[0]), action, body, True)  # this page is only ever on this computer
                     return self._send(json.dumps(answer, ensure_ascii=False), code, "application/json")
             if not where or not where[2] or not where[2].startswith("/api/feedback"):
                 return self._send(json.dumps({"error": "not found"}), 404, "application/json")
             item = comment_in(self)
             if item is None:
                 return self._send(json.dumps({"error": "a comment is a JSON object with a 'text'"}), 400, "application/json")
-            return self._send(json.dumps(for_the_room([save_comment(where[0] / "feedback" / "feedback.json", item)])[0], ensure_ascii=False), kind="application/json")
+            return self._send(json.dumps(for_the_room([save_comment(layout.feedback_file(where[0]), item)])[0], ensure_ascii=False), kind="application/json")
 
     return MockupServer((host, port), Handler)
 
@@ -1803,7 +1837,7 @@ KEPT = ("app.yaml",) + tuple(PROJECT_CODE)  # what a change can touch in spec/, 
 
 
 def live_file(project):
-    return Path(project) / "feedback" / "live.json"
+    return layout.live_file(project)
 
 
 def live_read(project):
@@ -1870,9 +1904,10 @@ def live_start(project):
     project = Path(project)
     spec = build(project)
     version = str(spec["project"].get("version", "draft"))
-    kept = project / "mockup" / "versions" / f"v{version}-presented-{dt.datetime.now():%Y%m%d-%H%M}"
+    kept = layout.versions_dir(project) / f"v{version}-presented-{dt.datetime.now():%Y%m%d-%H%M}"
+    mock = layout.mockup_dir(project)
     if not kept.exists():
-        shutil.copytree(project / "mockup", kept, ignore=lambda d, names: ["versions", LOOK_PREVIEW] if Path(d) == project / "mockup" else [])
+        shutil.copytree(mock, kept, ignore=lambda d, names: ["versions", LOOK_PREVIEW] if Path(d) == mock else [])
     live_write(project, {"started": dt.datetime.now().isoformat(timespec="seconds"), "version": version, "kept": kept.name,
                          "heartbeat": time.time(), "changes": []})
     print(f"Live session open for {spec['project'].get('name', project.name)}, version {version}.")
@@ -1883,14 +1918,14 @@ def live_start(project):
 
 def waiting_comments(project):
     try:
-        return [c for c in standing(read_feedback(Path(project) / "feedback" / "feedback.json")) if not c.get("status")]
+        return [c for c in standing(read_feedback(layout.feedback_file(project))) if not c.get("status")]
     except ValueError:
         return []  # being written this instant: look again
 
 
 def show_waiting(project, waiting):
     project = Path(project)
-    spec = json.loads(json.dumps(yaml.safe_load((project / "spec" / "app.yaml").read_text(encoding="utf-8")) or {}, default=str))
+    spec = json.loads(json.dumps(yaml.safe_load(layout.spec_file(project).read_text(encoding="utf-8")) or {}, default=str))
     screens = {s.get("id"): s.get("title") or s.get("id") for s in spec.get("screens") or []}
     roles = {r.get("id"): r.get("name") for r in spec.get("roles") or []}
     print(f"{len(waiting)} comment{'s' if len(waiting) != 1 else ''} waiting on {spec.get('project', {}).get('name', project.name)}:")
@@ -1937,7 +1972,7 @@ def live_mark(project, comment, status, note=None, register=None):
     project = Path(project)
     if status not in LIVE_STATUSES:
         sys.exit(f"'{status}' is not one of {', '.join(LIVE_STATUSES)}")
-    fb_file = project / "feedback" / "feedback.json"
+    fb_file = layout.feedback_file(project)
     with SAVING, feedback_lock(fb_file):
         items = read_feedback(fb_file)
         found = next((c for c in items if isinstance(c, dict) and str(c.get("id")).lower() == str(comment).lower()), None)
@@ -1964,13 +1999,13 @@ def live_keep(project, label, comments=()):
     project = Path(project)
     data = live_session(project)
     name = f"{len(data.get('changes') or []) + 1:03d}"
-    folder = project / "feedback" / "live" / name
+    folder = layout.feedback_dir(project) / "live" / name
     if folder.exists():
         shutil.rmtree(folder)  # left by a change that was undone
     folder.mkdir(parents=True)
     for file in KEPT:
-        if (project / "spec" / file).is_file():
-            shutil.copy2(project / "spec" / file, folder / file)
+        if (layout.spec_dir(project) / file).is_file():
+            shutil.copy2(layout.spec_dir(project) / file, folder / file)
     data.setdefault("changes", []).append({"before": name, "for": label, "at": dt.datetime.now().isoformat(timespec="seconds"),
                                            **({"comments": list(comments)} if comments else {})})
     live_write(project, data)
@@ -1987,7 +2022,7 @@ def live_checkpoint(project, label):
 
 def comment_ids(project, comments):
     """The ids as the feedback file has them; stops with the ones it does not have."""
-    items = [c for c in read_feedback(Path(project) / "feedback" / "feedback.json") if isinstance(c, dict)]
+    items = [c for c in read_feedback(layout.feedback_file(project)) if isinstance(c, dict)]
     known = {str(c.get("id")).lower(): c.get("id") for c in items}
     missing = [c for c in comments if str(c).lower() not in known]
     if missing:
@@ -2008,7 +2043,7 @@ def live_take(project, comments):
     for c in ids:
         live_mark(project, c, "working")
     # The text as it is now: a comment may have been edited in the mock-up since it was listed. From here it is locked.
-    by_id = {c.get("id"): c for c in read_feedback(project / "feedback" / "feedback.json") if isinstance(c, dict)}
+    by_id = {c.get("id"): c for c in read_feedback(layout.feedback_file(project)) if isinstance(c, dict)}
     for c in ids:
         text = by_id.get(c, {}).get("text")
         print(f"{c}: \"{text}\"" + ("  (edited in the mock-up after it was first saved: work from this text)" if by_id.get(c, {}).get("edited") else ""))
@@ -2049,9 +2084,9 @@ def live_undo(project):
     if not data.get("changes"):
         sys.exit("Nothing to undo: no change was made in this session.")
     last = data["changes"].pop()
-    kept = project / "feedback" / "live" / last["before"]
+    kept = layout.feedback_dir(project) / "live" / last["before"]
     for file in KEPT:
-        now = project / "spec" / file
+        now = layout.spec_dir(project) / file
         if (kept / file).is_file():
             now.write_bytes((kept / file).read_bytes())  # written now, so the mock-up is built again
         elif now.exists():
@@ -2065,7 +2100,7 @@ def live_undo(project):
                 live_mark(project, c, "received", "its change was undone in the session")
         except SystemExit:
             continue  # no longer in the feedback file
-        found = next((x for x in read_feedback(project / "feedback" / "feedback.json") if isinstance(x, dict) and x.get("id") == c), {})
+        found = next((x for x in read_feedback(layout.feedback_file(project)) if isinstance(x, dict) and x.get("id") == c), {})
         if found.get("register_id"):
             linked.append(f"{c} ({found['register_id']})")
     live_alive(project)
@@ -2084,7 +2119,7 @@ def live_end(project):
     data = live_session(project)
     data["ended"] = dt.datetime.now().isoformat(timespec="seconds")
     live_write(project, data)
-    items = standing(read_feedback(project / "feedback" / "feedback.json"))
+    items = standing(read_feedback(layout.feedback_file(project)))
     count = lambda *statuses: sum(1 for c in items if c.get("status") in statuses)
     print(f"Live session closed. {len(data.get('changes') or [])} change{'s' if len(data.get('changes') or []) != 1 else ''} made to the spec"
           + (": for " + ", ".join(c["for"] for c in data["changes"]) if data.get("changes") else "") + ".")
@@ -2231,7 +2266,9 @@ def fingerprint(spec, project=None):
 def record_screenshots(project, spec):
     """Note which screens the screenshots just taken show."""
     record = {"screens": fingerprint(spec, project), "taken": dt.datetime.now().isoformat(timespec="seconds")}
-    (Path(project) / "mockup" / "screenshots" / RECORD).write_text(json.dumps(record, indent=2), encoding="utf-8")
+    target = layout.screenshots_record(project)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(record, indent=2), encoding="utf-8")
 
 
 def screenshot_problems(project, spec):
@@ -2241,22 +2278,22 @@ def screenshot_problems(project, spec):
     Screenshots taken by an older Blueprint have no record of the screens they show; for those only the list
     of shots is compared, which catches added and removed screens, steps, roles and dialogs."""
     project = Path(project)
-    shot_dir = project / "mockup" / "screenshots"
+    shot_dir = layout.screenshots_dir(project)
     retake = f"Take them again: python -I tools/mockup.py screenshots {project}"
     expected = shot_list(spec)
     try:
-        plan = json.loads((project / "mockup" / "shots.json").read_text(encoding="utf-8"))
+        plan = json.loads(layout.shots_plan(project).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         plan = None
     try:
-        shown = json.loads((shot_dir / RECORD).read_text(encoding="utf-8")).get("screens")
+        shown = json.loads(layout.screenshots_record(project).read_text(encoding="utf-8")).get("screens")
     except (OSError, ValueError, AttributeError):
         shown = None
     problems = []
     if plan != expected or (shown is not None and shown != fingerprint(spec, project)):
         problems.append("the screens in the spec changed after the screenshots were taken, so the pictures may not "
                         f"show what the tables describe. {retake}")
-    own_flow = (project / "spec" / "process-flow.png").exists()  # the project's own diagram replaces the shot
+    own_flow = (layout.spec_dir(project) / "process-flow.png").exists()  # the project's own diagram replaces the shot
     missing = [s["name"] for s in expected
                if not (shot_dir / f"{s['name']}.png").exists() and not (s["name"] == "process-flow" and own_flow)]
     if missing:
@@ -2339,11 +2376,15 @@ def screenshot_failure(code, said, left, mock):
 
 def screenshots(project):
     spec = build(project)
-    mock = (Path(project) / "mockup").resolve()
-    out = mock / "screenshots"
-    if out.exists():
+    mock = layout.mockup_dir(project).resolve()
+    out = layout.screenshots_dir(project).resolve()
+    if out == mock / "screenshots" and out.exists():
         shutil.rmtree(out)
-    out.mkdir()
+    elif out.exists():  # the folder people open: only the pictures of the last run go, anything else put there stays
+        for old in out.glob("*.png"):
+            old.unlink()
+    out.mkdir(exist_ok=True)
+    layout.screenshots_record(project).unlink(missing_ok=True)
     shots = shot_list(spec)
     plan = mock / "shots.json"
     plan.write_text(json.dumps(shots, indent=2), encoding="utf-8")
@@ -2439,7 +2480,7 @@ def look_lines(spec, project):
 
     theme_font = (re.findall(r'--font:\s*"?([^",;]+)', theme_text) or ["the browser's"])[-1].strip()
     theme_colour = DESK_ACCENT if theme == "desk" else "#1f6fb2"
-    spec_dir = Path(project) / "spec"
+    spec_dir = layout.spec_dir(project)
     logos = sorted(f.name for f in spec_dir.glob("*") if f.suffix.lower() in LOOK_FILES["logo"] and f.name != "process-flow.png")
     own = project_code(project)
     lines = [
@@ -2508,7 +2549,7 @@ def try_look(project, tries):
     project = Path(project)
     load_spec(project)  # the spec as it is must build
     changes = parse_tries(tries)
-    raw = yaml.safe_load((project / "spec" / "app.yaml").read_text(encoding="utf-8"))
+    raw = yaml.safe_load(layout.spec_file(project).read_text(encoding="utf-8"))
     tried = json.loads(json.dumps(raw, default=str))
     for key, value in changes.items():
         if value is None:
@@ -2522,7 +2563,7 @@ def try_look(project, tries):
         errors.append(f"theme '{theme}' is not one of {', '.join(sorted(p.stem for p in (ENGINE / 'themes').glob('*.css')))}")
     if errors:
         sys.exit("The settings tried do not build:\n  " + "\n  ".join(errors))
-    out = project / "mockup" / LOOK_PREVIEW
+    out = layout.mockup_dir(project) / LOOK_PREVIEW
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)
@@ -2531,12 +2572,12 @@ def try_look(project, tries):
     with tempfile.TemporaryDirectory() as tmp:
         for label in ("now", "try"):
             scratch = Path(tmp) / label
-            shutil.copytree(project / "spec", scratch / "spec")
+            shutil.copytree(layout.spec_dir(project), scratch / "spec")  # a scratch project in the plain layout
             if label == "try":
-                (scratch / "spec" / "app.yaml").write_text(yaml.safe_dump(tried, sort_keys=False, allow_unicode=True), encoding="utf-8")
+                layout.spec_file(scratch).write_text(yaml.safe_dump(tried, sort_keys=False, allow_unicode=True), encoding="utf-8")
             with contextlib.redirect_stdout(io.StringIO()):
                 spec = build(scratch)
-            mock = (scratch / "mockup").resolve()
+            mock = layout.mockup_dir(scratch).resolve()
             shots = preview_shots(spec)
             plan = mock / "shots.json"
             plan.write_text(json.dumps(shots, indent=2), encoding="utf-8")
@@ -2559,7 +2600,7 @@ def try_look(project, tries):
 
 
 def show_feedback(project):
-    fb = Path(project) / "feedback" / "feedback.json"
+    fb = layout.feedback_file(project)
     items = standing(json.loads(fb.read_text(encoding="utf-8"))) if fb.exists() else []  # taken back in the mock-up: left out
     sys.stdout.reconfigure(encoding="utf-8")
     if not items:
@@ -2595,8 +2636,8 @@ def main():
         folder = Path(a.project)
         if not folder.is_dir():
             sys.exit(f"No project at {folder}. The projects on this machine are listed by: python -I tools/status.py")
-        if not (folder / "spec" / "app.yaml").exists():
-            sys.exit(f"No spec at {folder / 'spec' / 'app.yaml'}: this project has no mock-up yet. "
+        if not layout.spec_file(folder).exists():
+            sys.exit(f"No spec at {layout.spec_file(folder)}: this project has no mock-up yet. "
                      "Say 'build a mock-up' in Claude: it writes the spec from the brief or document, then builds it.")
     if a.command == "build":
         build(a.project)

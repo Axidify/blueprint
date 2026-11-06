@@ -62,46 +62,92 @@ working on which project, especially during a session.
 
 ## Inside a project folder
 
-| Folder or file | What it holds | Managed by |
-|---|---|---|
-| `docs/` | Documents from the client and your team. New ones are named with the date and what they are, e.g. `2026-11-12 client comments on v1.3.docx` | `process-inbox`, `new-project`, `tools/project.py file` |
-| `Project overview.html` | The project at a glance, for anyone browsing the folder: the next step, the open questions and fixes, and every document in the order of the process, each a link with a line saying what it is and who it is for (see below) | `tools/overview.py`, rebuilt by the tools |
-| `Open the mock-up.cmd`, `Open the mock-up.command` | Double-click to open the project's mock-up so comments typed in it are saved (`.cmd` on Windows, `.command` on a Mac). Only in a project with a mock-up | `tools/overview.py` |
-| `reviews/<document and version>/` | One folder per reviewed document version: extraction, the review report (`review.md`) and the same as a Word file for the BA (`<document> review.docx`, internal) | `review-requirements`, `tools/review_doc.py` |
-| `spec/` | The project spec, client logo, process-flow image, and the project's own mock-up code (`mockup.js`, `mockup.css`) | `build-mockup`, `apply-feedback` |
-| `mockup/` | The current mock-up and screenshots; `mockup/versions/v0.1/`, `v0.2/` … keep every version | `tools/mockup.py` |
-| `feedback/` | Comments from mock-up sessions | the mock-up's Feedback mode |
-| `output/` | Every generated requirements document (Word and PDF) and the spec that produced it; `issued.json` lists the versions sent to the client | `generate-requirements`, `tools/project.py issue` |
-| `estimates/` | Manday estimates, one dated Excel file (and its `.json` source) per estimate. Internal: never sent to the client | `estimate` |
-| `workshops/` | One dated agenda (`.json` source) per client session, and the two Word documents made from it: the agenda for the client and the facilitator notes, which are internal | `prep-workshop` |
-| `register.json`, `register.xlsx` | The project register | the skills |
+Teammates often look in a project folder without Claude, from OneDrive or SharePoint. So what people open
+is at the top, in numbered folders that sort in the order of the process, and Blueprint's working files are
+tucked away in `_blueprint`. A folder appears only once the project has something for it.
+
+| Folder or file | What it holds | For whom | Made by |
+|---|---|---|---|
+| `Project overview.html` | The project at a glance: the next step, the open questions and fixes, and every document in the order of the process, each a link with a line saying what it is and who it is for (see below) | everyone | `tools/overview.py`, rebuilt by the tools |
+| `Open the mock-up.cmd`, `Open the mock-up.command` | Double-click to open the project's mock-up so comments typed in it are saved (`.cmd` on Windows, `.command` on a Mac). Only in a project with a mock-up | everyone | `tools/overview.py` |
+| `Questions and fixes register.xlsx` | The project register for the BA. Only its "For client" sheet goes to the client | client sheet only | the skills, `tools/register.py render` |
+| `1 Client documents/` | The client's documents (and your team's notes), kept as received. New ones are named with the date and what they are, e.g. `2026-11-12 client comments on v1.3.docx` | from the client | `process-inbox`, `new-project`, `tools/project.py file` |
+| `2 Reviews/` | Each review as a Word file (`<document> review.docx`), and the mock-up's change notes (`Mock-up v0.2 changes.docx`) | internal | `review-requirements`, `apply-feedback`, `tools/overview.py` |
+| `3 Workshops/` | For each session, the agenda for the client and the facilitator notes, which are internal | client / internal | `prep-workshop` |
+| `4 Mock-up screenshots/` | The pictures of the mock-up, as used in the requirements document | can be shared | `tools/mockup.py screenshots` |
+| `5 Requirements document/` | Every generated requirements document version, Word and PDF | for the client | `generate-requirements` |
+| `6 UAT/` | The testers' workbook and the UAT scripts document | for the client | `uat-scripts` |
+| `7 Change requests/` | The client's change request notes | for the client | `change-request` |
+| `Internal – estimates and change requests/` | Manday estimates (one dated Excel file each) and the CR log. Mandays, rates and cost live here only: never send these | internal | `estimate`, `change-request` |
+| `_blueprint/` | Blueprint's working files, with a `README.txt` saying to leave them as they are: the spec and the project's own mock-up code (`spec/`), `register.json`, comments from sessions (`feedback/`), the built mock-up and every version of it (`mockup/`, `mockup/versions/v0.1/` …), each review's extraction and `review.md` and the change notes (`reviews/`), the `.json` source of each workshop, estimate, UAT script and the CR log, and the spec of each generated version with `issued.json`, the record of what went to the client (`output/`) | Blueprint | the tools |
+
+The names are kept short so the full path stays well inside what Windows allows, even with the workspace
+deep in a OneDrive folder.
 
 ### The overview page and the mock-up shortcut
 
-A project folder holds a few hundred files once the mock-up has screenshots and versions. `Project
-overview.html` is the way in: double-click it, from the shared folder too, to see what is open, what to do
-next (in the words to say to Claude) and every document as a row that opens it. Each row says who the file
-is for: **From the client**, **For the client**, **Client sheet only** (the register: send only its "For
-client" sheet), **Show the client**, **Can be shared**, or **Internal** with a lock (estimates, facilitator
-notes, reviews and change notes: never send these). The page never shows mandays, rates or cost. Blueprint
-rebuilds it whenever one of its tools writes into the project; to rebuild it by hand,
-`python -I tools/overview.py build projects/<slug>` (or `build --all`).
+A project folder holds a few hundred files once the mock-up has screenshots and versions, nearly all of
+them in `_blueprint`. `Project overview.html` is the way in: double-click it, from the shared folder too,
+to see what is open, what to do next (in the words to say to Claude) and every document as a row that
+opens it. Each row says who the file is for: **From the client**, **For the client**, **Client sheet only**
+(the register: send only its "For client" sheet), **Show the client**, **Can be shared**, or **Internal**
+with a lock (estimates, facilitator notes, reviews and change notes: never send these). The page never
+shows mandays, rates or cost. Blueprint rebuilds it whenever one of its tools writes into the project; to
+rebuild it by hand, `python -I tools/overview.py build projects/<slug>` (or `build --all`).
 
 **Open the mock-up** starts the mock-up the way `present.cmd` does, so the comments people type in it are
-saved to the project (opening `mockup/index.html` directly only shows it). The shortcut is the same in
-every project and works on any machine with Blueprint set up, wherever the app folder is: `setup.cmd`
-(`setup.sh` on a Mac) records where the app is in `.blueprint/app-path` in the person's home folder, and
-the shortcut reads it. On a machine without Blueprint it says what to do. On a Mac, a `.command` file that
-came through a synced folder may need to be allowed once (right-click, Open); if it still does not start,
-ask Claude to "present the mock-up". On Linux, use `./present.sh <slug>`.
-
-Other files at the top of the project folder are Blueprint's working files (`spec/`, `feedback/`,
-`register.json`, the `.json` beside each document): leave them as they are.
+saved to the project (opening the mock-up's `index.html` in `_blueprint/mockup` directly only shows it). The
+shortcut is the same in every project and works on any machine with Blueprint set up, wherever the app
+folder is: `setup.cmd` (`setup.sh` on a Mac) records where the app is in `.blueprint/app-path` in the
+person's home folder, and the shortcut reads it. On a machine without Blueprint it says what to do. On a
+Mac, a `.command` file that came through a synced folder may need to be allowed once (right-click, Open); if
+it still does not start, ask Claude to "present the mock-up". On Linux, use `./present.sh <slug>`.
 
 Versions sent to the client are **locked**: their files are read-only and the generator refuses to
 overwrite them, so every change after issuing becomes a new version. Delivered projects move to
 `projects/_archive/` with `tools/project.py archive`, out of the status list; `restore` brings one back.
-`python -I tools/project.py check --fix` brings an older project up to this layout.
+`python -I tools/project.py check --fix` brings a project up to its layout's standard folders.
+
+## Moving a project to the new folder layout
+
+Projects started before this layout keep the old one: `docs/`, `reviews/`, `spec/`, `mockup/`, `feedback/`,
+`output/`, `workshops/`, `estimates/`, `uat/`, `changes/`, `register.json` and `register.xlsx` all at the
+top. Nothing has to change: every tool works on both, and so does Blueprint on a teammate's machine while
+the team moves over. `python -I tools/status.py` and `project.py check` name the projects still in the old
+layout.
+
+To move one, say **"migrate the folders"** to Claude, or run it yourself:
+
+```bash
+python -I tools/project.py migrate <slug> --dry-run     lists every move; nothing moves
+python -I tools/project.py migrate <slug>               moves it
+python -I tools/project.py migrate --all                every active project, with a line per project
+python -I tools/project.py migrate <slug> --undo        moves it back to the old layout
+```
+
+- **Where things go.** `docs/` becomes `1 Client documents/`; each review's Word file goes to `2 Reviews/`;
+  the workshop documents to `3 Workshops/`; the screenshots to `4 Mock-up screenshots/`; the requirements
+  documents (Word and PDF) to `5 Requirements document/`; the UAT workbook and document to `6 UAT/`; the
+  client's CR notes to `7 Change requests/`; the estimate Excel files and the CR log to `Internal – estimates
+  and change requests/`; `register.xlsx` becomes `Questions and fixes register.xlsx`. Everything else
+  (`spec/`, `register.json`, `feedback/`, the built mock-up and its versions, the review extractions, the
+  `.json` sources, the spec snapshots and `issued.json`) goes into `_blueprint/`. Anything else at the top of
+  the folder is left where it is, and listed.
+- **What it keeps.** Issued files stay read-only, comments keep their ids, the register's Excel file is still
+  read back by its column headings (answers typed into it are taken in as before), and saved mock-up
+  versions can still be shown. The overview page and the Open the mock-up shortcuts are made again, and
+  the mock-up's change notes get a Word copy in `2 Reviews/`. A log of the moves is kept in
+  `_blueprint/migration.json`.
+- **When it refuses**, nothing is moved and it says why: the project's mock-up is open (close its window, or
+  press Ctrl+C where it runs), a live session is still open (end it), one of its Word, Excel or PDF files is
+  open (here, or on a teammate's computer: Office leaves a `~$` lock file beside an open file in a synced
+  folder), or a folder of the new layout is already there. If a move fails half-way, everything moved so
+  far is put back.
+- **Undo** puts every file back where it was, byte for byte, including files added since in the numbered
+  folders; the Word copies of the change notes and the README go.
+
+Agree a moment with the team: a teammate with the project open in Word or Excel, or presenting its mock-up,
+stops the move until they close it.
 
 ## Moving or renaming the app folder
 

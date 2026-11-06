@@ -8,7 +8,7 @@ description: Change how a project's mock-up looks - theme, brand colour, logo, f
 Read `docs/design-language.md` first: every look, and every colour you choose, follows it.
 
 A project's mock-up is drawn in a **theme** and the client's **look** on top of it, all set in the
-`project` section of `projects/<slug>/spec/app.yaml` (reference: "Themes" and "The client's look" in
+`project` section of the project's spec, `_blueprint/spec/app.yaml` (reference: "Themes" and "The client's look" in
 `docs/spec-format.md`). The same screens become the pictures in the requirements document, so the look
 reaches the client twice.
 
@@ -17,15 +17,15 @@ reaches the client twice.
 | `theme` | `desk`, `joget`, `modern`, `vivid` | Everything: layout, type, buttons, how a status is drawn |
 | `primary_color` | `"#1F5FBF"` | The one accent, the loud colour: main buttons, links, selection |
 | `data_colors` | `["#1597B0", "#D55181"]` | The complementary pair, for data only (people's initials in `desk`) |
-| `logo` | a file in `spec/` | The client's logo in place of the letters, top left and on sign-in |
-| `font` (+ `font_file`) | a font name (+ its file in `spec/`) | The type of the client's screens |
+| `logo` | a file in the spec folder | The client's logo in place of the letters, top left and on sign-in |
+| `font` (+ `font_file`) | a font name (+ its file in the spec folder) | The type of the client's screens |
 | `corners` | `square`, `small`, `normal`, `round` | Corners of cards, fields and buttons, as a share of the theme's |
 | `menu` | `light`, `dark` | The side menu |
 | `header` | `light`, `dark`, `brand` | The top bar (`brand`: in the project's colour) |
 | `text_size` | `normal`, `large`, `larger` | Larger text, for a room that sits far from the screen |
 
 Anything left out is drawn as the theme draws it. What the settings cannot say (a layout, a gradient, an
-icon set) goes in the project's own `spec/mockup.css`, written with the theme's variables (`--primary`,
+icon set) goes in the project's own `mockup.css` in the spec folder, written with the theme's variables (`--primary`,
 `--radius`, `--font`); keep it short.
 
 ## Colours: one loud accent, a complementary pair for data, greys
@@ -51,13 +51,13 @@ Every colour scheme follows the design language (`docs/design-language.md`, Colo
 `look` notes an accent or data colour that breaks these rules in `desk`.
 
 Start with `python -I tools/mockup.py look projects/<slug>`: it prints the look in effect, the logo files
-already in `spec/`, whether the current version was issued, and notes to pass on.
+already in the spec folder, whether the current version was issued, and notes to pass on.
 
 ## A. Change something on request
 
 Translate the request into settings:
 
-- "use their logo" → save it as `spec/client-logo.png` (or `.svg`) and `logo: client-logo.png`. A logo on
+- "use their logo" → save it as `client-logo.png` (or `.svg`) in the spec folder and `logo: client-logo.png`. A logo on
   a white or transparent ground reads best; on a dark or `brand` top bar it sits on a small white plate.
 - "in their colours" → `primary_color` and `data_colors` by the colour rules above (six hex digits in quotes);
   `header: brand` only when their own systems have a coloured top bar.
@@ -79,7 +79,7 @@ Translate the request into settings:
 3. Propose the look in plain words ("their navy #0B3D91 as the accent, a dark menu, square corners, their
    logo top left; their typeface Lato, if you can get the font file"), with the settings you would write.
    Say what you could not tell, and leave it as the theme has it.
-4. A logo from the guidelines or website: ask the user to save the file into `spec/` (logos are often only
+4. A logo from the guidelines or website: ask the user to save the file into the spec folder (logos are often only
    given in a brand pack); never draw or recreate one.
 
 ## C. Preview, then change
@@ -87,7 +87,7 @@ Translate the request into settings:
 1. `python -I tools/mockup.py look projects/<slug> --try key=value ...` (for example `--try menu=dark
    corners=square logo=client-logo.png`). It builds a scratch copy and saves the sign-in page and the
    first dashboard, list and form as they are now and as tried, `<screen>-now.png` and `<screen>-try.png`
-   in `mockup/look-preview/`. `key=none` takes a setting out. Nothing in the project changes.
+   in `_blueprint/mockup/look-preview/`. `key=none` takes a setting out. Nothing in the project changes.
 2. Look at each pair and show the user the ones that changed. Pass on its notes:
    - **Hard to read:** white words on the project's colour below 4.5 to 1. Offer a darker shade of the same
      colour for `primary_color`.
@@ -111,7 +111,7 @@ data colours off words and buttons.
   what was learnt from the client's material and what was left as the theme has it, and any note about
   readability or custom work on the platform.
 - **Where and for whom:** the settings in the project's spec; the before-and-after pictures in the
-  project's `mockup/look-preview` folder, internal; the rebuilt mock-up and its screenshots **for the
+  project's `_blueprint/mockup/look-preview` folder, internal; the rebuilt mock-up and its screenshots **for the
   client** to see in the next session.
 - **Next step, in the words to say:** "present the mock-up", or "generate the requirements document" so
   its pictures show the new look (an issued version needs a new version number first). For the lead

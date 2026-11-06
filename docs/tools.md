@@ -7,6 +7,11 @@ app folder, always with `python -I` (it keeps Python from loading stray files).
 `python -I tools/estimate.py --help`). The skills read it rather than repeating the options, so it is the
 reference that is kept up to date.
 
+Paths inside a project below are those of the project folder layout (see
+[Inside a project folder](workspace.md#inside-a-project-folder)): `_blueprint/...` for Blueprint's working
+files, the numbered folders for what people open. A project not yet migrated keeps the old layout
+(`docs/`, `spec/`, `output/` … at the top); every tool finds its files in either, through `layout.py`.
+
 ### doctor.py
 
 ```bash
@@ -37,7 +42,8 @@ are shown as usual.
 ```bash
 python -I tools/new_project.py courier-booking "Courier Booking System" "Acme Logistics Sdn. Bhd." --platform "Joget DX"
 ```
-Creates `projects/<slug>/` with `docs/`, `reviews/`, `spec/`, `feedback/` and an empty register, says
+Creates `projects/<slug>/` in the project folder layout (`1 Client documents/`, and `_blueprint/` with
+`spec/`, `feedback/`, an empty register and a README), says
 which look its mock-up starts with (`desk`, or `joget` when the platform is Joget) and what to do next. It refuses a folder name an archived project already has (restore that one with
 `project.py restore`), and warns when an active, archived or delivered project has the same or a similar
 system name (see `project.py find`).
@@ -45,7 +51,7 @@ system name (see `project.py find`).
 ### extract.py
 
 ```bash
-python -I tools/extract.py "<document>" projects/<slug>/reviews/<review>/extract
+python -I tools/extract.py "<document>" projects/<slug>/_blueprint/reviews/<review>/extract
 ```
 Turns a Word, PDF, Excel, Markdown or text file into `text.md` (reading order, tables as rows, tracked
 changes, comments), `meta.json` (metadata, counts, every open-item marker: TBC, TBD, "to be confirmed",
@@ -65,7 +71,7 @@ A spreadsheet cell with a formula is given as its calculated value followed by t
 the Windows encoding; `meta.json` says which.
 
 Give it a folder of its own. It replaces an earlier extraction there and leaves any other file in that
-folder alone; a folder that holds files and is not an earlier extraction (a project's `docs/`, say) is
+folder alone; a folder that holds files and is not an earlier extraction (a project's client documents, say) is
 refused and nothing in it is touched.
 
 ### register.py
@@ -79,8 +85,9 @@ python -I tools/register.py validate projects/<slug>
 python -I tools/register.py render   projects/<slug> [--overwrite] [--from "<returned register.xlsx>"]
 python -I tools/register.py next-id  projects/<slug>
 ```
-Adds items, finds items like a given one, changes fields of items, validates `register.json`, renders
-`register.xlsx`, or prints the next free item ID.
+Adds items, finds items like a given one, changes fields of items, validates `register.json` (in
+`_blueprint/`), renders `register.xlsx` (`Questions and fixes register.xlsx` at the top of the project), or
+prints the next free item ID.
 
 `add` takes one item or a list (JSON, UTF-8, from a file or standard input), gives them the next IDs,
 fills `raised` and `status` where missing, refuses the whole batch if any item is invalid, names likely
@@ -116,7 +123,7 @@ is close to a status colour or is violet or indigo, and a look that is custom wo
 `--try data_colors=#1597B0,#D55181` tries a pair. With `--try` (for example `--try menu=dark corners=square
 logo=client-logo.png`; `key=none` takes a setting out) it builds a scratch copy as the project is now and one
 with the settings tried, and saves the sign-in page and the first dashboard, list and form of each to
-`mockup/look-preview/` as `<screen>-now.png` and `<screen>-try.png`. The project is not changed, and the
+`_blueprint/mockup/look-preview/` as `<screen>-now.png` and `<screen>-try.png`. The project is not changed, and the
 preview is never kept with a mock-up version. See [The client's look](spec-format.md#the-clients-look).
 
 `serve` without a project opens a page that lists every mock-up on this machine, one click from each and
@@ -149,7 +156,7 @@ python -I tools/mockup.py live undo  projects/<slug>
 python -I tools/mockup.py live end   projects/<slug>
 ```
 A live session, used by the `present` skill. `start` keeps the mock-up as it is presented
-(`mockup/versions/v<version>-presented-<date>`). `list` shows the comments waiting. `take` marks
+(`_blueprint/mockup/versions/v<version>-presented-<date>`). `list` shows the comments waiting. `take` marks
 comments "Working on it" and keeps the spec and the project's own mock-up code as they are; `done` builds
 the change, refuses it when it has a mistake, and marks the comments applied: run it once per comment, each
 with its own note (several ids share one note). `mark` records what became of a comment (`working`, `applied`, `question`, `decision`,
@@ -162,7 +169,7 @@ comment, are there for working on each comment at once.) The mock-up is only eve
 comment's text and one of four words (Received, Working on it, Applied, Noted for follow-up): notes,
 register items and the word "scope" stay in the project.
 
-Builds the mock-up from the spec (self-contained: `mockup/index.html` opens without a server), serves it
+Builds the mock-up from the spec (self-contained: `_blueprint/mockup/index.html` opens without a server), serves it
 with feedback capture, captures screenshots with Edge, or lists saved feedback by screen.
 `present.cmd` runs `serve` (`present.sh` on macOS and Linux). See [Spec format](spec-format.md).
 
@@ -175,10 +182,11 @@ show their message, and how many parts of the mock-up carry a "Custom developmen
 `platform_fit` and the project's own code). It also lists, as warnings, settings the mock-up ignores (a
 misspelling, a stray key from a comma in unquoted text).
 
-Every build keeps a copy of the mock-up in `mockup/versions/v<version>/`. The copy of a version that
+Every build keeps a copy of the mock-up in `_blueprint/mockup/versions/v<version>/`. The copy of a version that
 was issued to the client is never replaced: bump `project.version` to keep a new one.
 
-`screenshots` also notes which screens the pictures show (`mockup/screenshots/taken-from.json`), so the
+`screenshots` writes the pictures into `4 Mock-up screenshots/` and notes which screens they show
+(`_blueprint/mockup/screenshots/taken-from.json`), so the
 document generator can warn when the spec's screens have changed since. When a screen cannot be drawn, it
 stops with that screen's name, the error the browser reported and the likely cause (the spec, or the
 project's `spec/mockup.js`).
@@ -213,7 +221,8 @@ python -I tools/generate_requirements.py projects/<slug>
 ```
 Generates the requirements document from the spec, screenshots (run `mockup.py screenshots` first) and register, using the
 company profile, branding and [Document format](document-format.md). Prints warnings for anything to fix in the
-spec. With Word installed it also updates the table of contents and page numbers, embeds the fonts and
+spec. It writes the Word file (and the PDF) into `5 Requirements document/` and the spec it was made from into
+`_blueprint/output/`. With Word installed it also updates the table of contents and page numbers, embeds the fonts and
 writes a PDF.
 
 - **The spec and the format are checked first.** The spec with the check the mock-up runs, plus the
@@ -221,7 +230,7 @@ writes a PDF.
   requirements, glossary, extra sections, the timeline); the document format for settings that do not
   exist and values that cannot be used. Mistakes stop the run with the list of what to fix.
 - **Screenshots are checked against the spec.** It warns when the screens changed after the screenshots
-  were taken (`mockup.py screenshots` notes what they show in `mockup/screenshots/taken-from.json`) and
+  were taken (`mockup.py screenshots` notes what they show in `_blueprint/mockup/screenshots/taken-from.json`) and
   when a screen has no picture. Text only the document prints (requirements, descriptions, rules, the
   version) does not count as a change.
 - **The PDF always matches the Word file.** A PDF from an earlier run is removed before the new document
@@ -264,10 +273,10 @@ python -I tools/workshop.py check  projects/<slug> ["<agenda.json>"]
 python -I tools/workshop.py render projects/<slug> ["<agenda.json>"]
 ```
 `gaps` lists what a workshop has to settle: the open client questions, what the spec does not say yet and
-the gap patterns with their evidence. `check` checks an agenda file in `projects/<slug>/workshops/`:
+the gap patterns with their evidence. `check` checks an agenda file in `_blueprint/workshops/`:
 every reference is an open client question, every screen exists, the sections fit the time, and no open
-high-severity question is left out without a reason. `render` checks it and writes two Word documents next
-to it: the agenda for the client, and the facilitator notes for the BA, which add why each question
+high-severity question is left out without a reason. `render` checks it and writes two Word documents into
+`3 Workshops/`: the agenda for the client, and the facilitator notes for the BA, which add why each question
 matters, your recommendation and what was left for later. The notes are internal; neither document holds
 mandays or cost. The file format is at the top of the script. Used by the `prep-workshop` skill.
 
@@ -279,15 +288,15 @@ python -I tools/uat.py check   projects/<slug> ["<scripts.json>"]
 python -I tools/uat.py render  projects/<slug> ["<scripts.json>"]
 python -I tools/uat.py results projects/<slug> ["<filled-in workbook.xlsx>"]
 ```
-`draft` writes `projects/<slug>/uat/<date> uat scripts v<version>.json` from the spec, the same way every
+`draft` writes `_blueprint/uat/<date> uat scripts v<version>.json` from the spec, the same way every
 time: the main process as each role in turn, the other status moves, what each role may not do in each
 status, field checks, access, dashboard figures, notifications, integrations, and a case for every
-requirement no scenario covers yet. It uses the version issued last (`output/spec-v<version>.yaml`), or the
+requirement no scenario covers yet. It uses the version issued last (`_blueprint/output/spec-v<version>.yaml`), or the
 current spec when nothing is issued or with `--current`, and refuses to replace a draft of the same name
 without `--force`. `check` checks that every requirement is covered or excluded with a reason, case ids are
 unique, every step has an expected result, roles and screens exist and nothing internal is in it (mandays,
 rates, internal register items, platform findings), and lists the draft's `todo`s still open. `render`
-checks and writes, next to the JSON, the workbook for the testers (one row per step, Pass/Fail chosen from a
+checks and writes, into `6 UAT/`, the workbook for the testers (one row per step, Pass/Fail chosen from a
 list, a summary of coverage and results) and the test scripts as a Word document in the company's format.
 `results` reads a filled-in workbook and lists the failed and blocked steps. The file format is at the top
 of the script. Used by the `uat-scripts` skill. See [UAT scripts](uat.md).
@@ -328,15 +337,15 @@ python -I tools/estimate.py rates-from "<estimate.xlsx>" [--json]
 `blocks` lists the building blocks and rates for a platform, the shares set for other work, and how many
 delivered projects they rest on. `inventory` lists what a project has to count from: documents, screens,
 forms, lists, integrations and open register items. `render` checks an estimate file, works out the
-ranges, the confidence level and the comparison with the scope of work, and writes the Excel file next to
-it; lines with no rate or share are listed as not priced and left out of the total. While a building
+ranges, the confidence level and the comparison with the scope of work, and writes the Excel file into
+`Internal – estimates and change requests/`; lines with no rate or share are listed as not priced and left out of the total. While a building
 block has no rate, it gives no total at all: it says the build is not priced and shows what is priced so
 far, and lists the scope-of-work lines that cannot be compared yet. `weeks` turns the
 estimate into working weeks for a team size (`--days` sets the working days a week, default 5), for
 drafting the project timeline. `rates-from` reads the figures a lead developer filled in on the
 *Rates needed* sheet of an estimate's Excel file and prints them as rows for `knowledge/building-blocks.md`
 (low confidence), with the blocks left empty and any figure it could not read; `--json` prints the same
-for Claude. It changes nothing: the rates are saved only after you agree. `render` and `weeks` take the newest file in `estimates/` (by the date its name starts with, then by
+for Claude. It changes nothing: the rates are saved only after you agree. `render` and `weeks` take the newest file in `_blueprint/estimates/` (by the date its name starts with, then by
 version number, so "spec v0.10" is newer than "spec v0.9") unless you name
 one. Add `--knowledge <folder>` before the command to use another knowledge base.
 See [Estimates](estimates.md).
@@ -352,16 +361,16 @@ python -I tools/change_request.py check  projects/<slug>
 python -I tools/change_request.py render projects/<slug>
 python -I tools/change_request.py note   projects/<slug> CR-001
 ```
-`scope` lists what in the version the client signed (the latest in `output/issued.json`, from its spec
+`scope` lists what in the version the client signed (the latest in `_blueprint/output/issued.json`, from its spec
 snapshot; with nothing issued, the current spec, with a warning) reads most like a request: requirements,
 screens, dialogs, status rules, scope lines, integrations, notifications, non-functional requirements, and
 the register's decisions and open items, with ids and sections. It is a lead, not a verdict. `add` puts
-CRs in `changes/crs.json` with the next ids and checks the log; `update` changes their status and the sold
+CRs in `_blueprint/changes/crs.json` with the next ids and checks the log; `update` changes their status and the sold
 figure the project lead gives. `ask` adds an Ambiguous request's client question to the register.
 `check` checks the log and sizes each CR in building blocks with the estimate's rules, and shows the
 knowledge base's calibration notes about change requests; `render` also writes
-`changes/CR log (internal).xlsx`. `note` writes the client's change request note (Word, company format)
-for a New CR: no sizing in it, and "Quotation to follow" until the project lead has entered the sold
+`Internal – estimates and change requests/CR log (internal).xlsx`. `note` writes the client's change request note (Word, company format,
+into `7 Change requests/`) for a New CR: no sizing in it, and "Quotation to follow" until the project lead has entered the sold
 figure. The file format is at the top of the script. Used by the `change-request` skill. See
 [Change requests](change-requests.md).
 
@@ -377,17 +386,30 @@ python -I tools/project.py find    "<system name>"
 python -I tools/project.py match   "<file>" [--text <extracted text.md>] [--json]
 python -I tools/project.py hold    "<file>" --reason "not sure which project"
 python -I tools/project.py check   [<slug>] [--fix]
+python -I tools/project.py migrate <slug> | --all [--dry-run] [--undo]
 ```
 Project housekeeping. `issue` records that the current document version went to the client and locks it (its
 files become read-only and the generator refuses to overwrite it, so the next change needs a new version).
-`file` moves a document into `docs/` with a dated, descriptive name such as
+`file` moves a document into `1 Client documents/` with a dated, descriptive name such as
 `2026-11-12 client comments on v1.3.docx`. `archive` moves a delivered project to `projects/_archive/`,
 out of the status list; `restore` brings it back. `archive` refuses when an archived project already has
 that name, and moves nothing. `find` lists earlier work on the same or a similar system name (words like
 "system" and "phase 2" are ignored): active and archived projects, and systems delivered before, from
 `knowledge/actuals/` and the projects log; `new-project` and `process-inbox` run it so a new document for a
 system you already built is not treated as brand new. `check` reports projects missing parts of the
-standard layout, and `--fix` creates them.
+standard layout, and `--fix` creates them; it also names the projects still in the old folder layout, with
+the command that moves them.
+
+`migrate` moves a project from the old folder layout to the new one (see
+[Moving a project to the new folder layout](workspace.md#moving-a-project-to-the-new-folder-layout)).
+`--dry-run` lists every move and moves nothing; `--undo` moves a project back; `--all` does every active
+project and reports on each. Nothing moves, and it says why, while the project's mock-up is served or a live
+session is open, while one of its Word, Excel or PDF files is open (on Windows a file another program holds;
+anywhere, a file with Office's `~$` lock file beside it, which a teammate's open copy leaves in a synced
+folder), or when a folder of the other layout is already there. Folders move whole where they can, so a
+synced folder sees few changes; a move that fails half-way puts back everything moved so far. Issued files
+stay read-only, comments keep their ids, the moves are logged in `_blueprint/migration.json`, and the
+overview page and shortcuts are made again (with the mock-up's change notes as Word files in `2 Reviews/`).
 
 `match` says which active project a file belongs to, so that `process-inbox` never files one on a guess. It
 reads Word, PDF (its text), Excel, text files and mock-up comments exports (`--text` uses an extraction made
@@ -436,7 +458,8 @@ when something on it changed. For a project with a mock-up it also writes the **
 shortcuts (`Open the mock-up.cmd` for Windows, `Open the mock-up.command` for a Mac): they find Blueprint on
 the computer they are opened on (in `~/.blueprint/app-path`, which setup writes) and start the mock-up
 through `present`, so comments are saved; without Blueprint set up they say what to do. It also makes the
-Word version of any review that has none. `register.py` (add, update, render), `workshop.py render`,
+Word version of any review that has none, and in the new folder layout of each mock-up change note (in
+`2 Reviews/`). It works on a project in either layout. `register.py` (add, update, render), `workshop.py render`,
 `estimate.py render`, `generate_requirements.py`, `project.py file` and `issue`, `new_project.py` and
 `review_doc.py` rebuild the page after they write; a failure there never stops them (they print one line).
 The start-up summary does not. The made-up sample in `examples/` is left alone.
@@ -444,10 +467,10 @@ The start-up summary does not. The made-up sample in `examples/` is left alone.
 ### review_doc.py
 
 ```bash
-python -I tools/review_doc.py projects/<slug> [reviews/<review>]
+python -I tools/review_doc.py projects/<slug> [<review>]
 ```
-Turns a review's `review.md` (written by the `review-requirements` skill) into
-`reviews/<review>/<document> review.docx`, for example `SRS v1.0 review.docx`: headings, numbered and
+Turns a review's `review.md` (written by the `review-requirements` skill in `_blueprint/reviews/<review>/`)
+into `2 Reviews/<document> review.docx` (beside `review.md` in the old layout), for example `SRS v1.0 review.docx`: headings, numbered and
 bulleted lists, tables, bold, italic and code, in the company's Word template and document format (as the
 workshop documents are). Every page says it is internal. Without a review named it takes the one written
 last. `review.md` stays the source: change it and run this again.
@@ -474,7 +497,8 @@ python -I tools/tour.py end
 ```
 The scratch copy the `tour` skill works on. `start` copies the made-up sample (`examples/leave-request`,
 without what is built from it) into `.tour/leave-request` in the app folder, gives it an empty register and
-puts a one-page draft requirements document with a few gaps planted in it in its `docs/`; running it again
+lays it out in the project folder layout a new project has, puts a one-page draft requirements document
+with a few gaps planted in it in its `1 Client documents/`; running it again
 starts over. The copy is ignored by git and is not one of the projects (`status.py` and the page that lists
 every mock-up never show it); every tool that takes `projects/<slug>` works on `.tour/leave-request`.
 `comment` saves one sample comment on the copy's mock-up, as the mock-up's Feedback would. `end` removes the
@@ -484,6 +508,18 @@ copy and refuses any other folder, or a folder the tour did not make. Nothing re
 
 Shared helper, not run directly: finds the workspace, reads the company profile, and picks branding files
 from the workspace or the neutral templates.
+
+### layout.py
+
+```bash
+python -I tools/layout.py projects/<slug>
+```
+Says which folder layout a project is in and where each part of it is. Every tool asks it where a part of a
+project is (the spec, the register and its Excel file, the client documents, reviews, workshops, the
+mock-up, its screenshots and versions, comments, the requirements documents and issued versions, estimates,
+UAT and change requests, the overview page), so all of them work on both layouts: a project with a
+`_blueprint/` folder is in the new layout, any other in the old one. It also holds the migration that
+`project.py migrate` runs, and the map from each old place to its new one.
 
 ### check_docs.py
 

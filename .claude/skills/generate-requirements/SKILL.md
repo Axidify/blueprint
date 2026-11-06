@@ -5,7 +5,7 @@ description: Generate the requirements document (Word and PDF) for a project fro
 
 # Generate the requirements document
 
-The document is built from `projects/<slug>/spec/app.yaml` and the mock-up screenshots, in the company's
+The document is built from the project's spec (`_blueprint/spec/app.yaml`) and the mock-up screenshots, in the company's
 document format (`docs/document-format.md`; change it with `document-format`), Word template and standard
 wording (`workspace/branding/`, else the neutral ones in `templates/`). Access matrix, statuses, field
 tables and screenshots all come from the spec, so they cannot contradict each other. What the generator
@@ -46,8 +46,8 @@ into the spec. An issued version is locked.
 1. `python -I tools/mockup.py screenshots projects/<slug>`, always, so the pictures match the spec (no spec
    yet: build a mock-up first).
 2. `python -I tools/generate_requirements.py projects/<slug>`. It stops with a list of mistakes in the spec or
-   the format: fix them there and run it again. It writes the `.docx` to `output/`, a PDF when Word is
-   installed, and a spec snapshot.
+   the format: fix them there and run it again. It writes the `.docx` to `5 Requirements document`, a PDF when Word is
+   installed, and a spec snapshot (in `_blueprint/output/`).
 3. Read every warning and note; **do not issue a version with warnings.**
    - Screenshots older than the screens, or missing: take them again and generate again.
    - Team-only text (the mock-up, "proposed", `FB-` ids, register ids not under Decisions needed,
@@ -70,7 +70,7 @@ entry and generate again. Never unlock an issued version: the client has that fi
 Run `review-requirements` on the generated document, focused on what generation cannot guarantee: workflow
 edge cases, undefined KPIs, integration scope, NFRs and open items. Fix findings in the spec and generate
 again. Something the generator does not produce (a process-flow diagram) goes in as a spec file
-(`spec/process-flow.png`) or as a change to the generator.
+(`_blueprint/spec/process-flow.png`) or as a change to the generator.
 
 ## 4. Issue it
 

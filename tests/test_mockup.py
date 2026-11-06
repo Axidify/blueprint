@@ -1581,6 +1581,11 @@ def test_pressing_the_button_again_goes_on_without_the_required_fields(browser):
     assert not second["dialog"] and second["screen"] == "approvals" and "Application rejected" in second["toasts"]
     form = browser["required"]["formSecond"]
     assert form["screen"] == "my-applications" and any("submitted" in t for t in form["toasts"])
+    # and the room is told that only the mock-up goes on: the real system would not send the form
+    assert any(t.startswith("Only the mock-up goes on with required fields empty: the real system will not send the form")
+               for t in form["toasts"])
+    assert any(t.startswith("Only the mock-up goes on with a required field empty: the real system will not accept it")
+               for t in second["toasts"])
 
 
 def test_the_main_button_of_a_form_in_steps_names_the_step_with_the_empty_required_fields(browser):
@@ -2629,3 +2634,36 @@ def test_desk_follows_the_design_languages_sizes():
     for rule in (".form-buttons .btn { height: 44px;", "gap: 24px; margin-bottom: 24px; }", "table.datalist { font-size: calc(15px * var(--ts)); }",
                  ".datalist th { padding: 10px 8px;", "#app .datalist td { padding: 13px 8px;"):
         assert rule in css, rule
+
+
+# ---------------------------------------------------------------------- user fields and the draft rule
+def new_application_fields(spec):
+    screen = next(s for s in spec["screens"] if s["id"] == "new-application")
+    return screen["sections"][0]["fields"]
+
+
+def test_a_user_field_may_name_the_roles_whose_people_it_offers():
+    spec = mockup_spec()
+    new_application_fields(spec).append({"id": "backup", "label": "Backup approver", "type": "user", "roles": ["manager"]})
+    assert mockup.validate(spec) == []
+
+
+def test_roles_on_a_field_must_be_on_a_user_field_and_name_roles_of_the_spec():
+    spec = mockup_spec()
+    fields = new_application_fields(spec)
+    fields.append({"id": "backup", "label": "Backup approver", "type": "user", "roles": ["nobody"]})
+    fields.append({"id": "note", "label": "Note", "type": "text", "roles": ["manager"]})
+    errors = mockup.validate(spec)
+    assert any("roles names 'nobody'" in e for e in errors)
+    assert any("field note" in e and "roles is for a user field" in e for e in errors)
+
+
+def test_submit_after_a_draft_with_no_next_goes_to_the_status_after_it():
+    """A draft that lists no `next` used to keep a submitted request as Draft; it now starts in the status
+    after the draft, while Save as Draft still makes a draft."""
+    spec = mockup_spec()
+    for st in spec["statuses"]:
+        st.pop("next", None)
+    second = spec["statuses"][1]
+    assert mockup.first_status(spec, "applications", "Submit") == second["name"]
+    assert mockup.first_status(spec, "applications", "Save as Draft") == spec["statuses"][0]["name"]

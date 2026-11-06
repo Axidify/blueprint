@@ -3,14 +3,17 @@
 Usage:
     python -I tools/generate_requirements.py <project_dir>
 
-Reads  <project_dir>/spec/app.yaml, <project_dir>/mockup/screenshots/ + shots.json (run
-       `python -I tools/mockup.py screenshots <project_dir>` first), <project_dir>/register.json (open
-       client items become "Decisions needed"), optional spec/client-logo.png and spec/process-flow.png.
+Reads  the project's spec/app.yaml, the mock-up's screenshots + shots.json (run
+       `python -I tools/mockup.py screenshots <project_dir>` first), register.json (open client items
+       become "Decisions needed"), optional spec/client-logo.png and spec/process-flow.png. spec/,
+       register.json and the mock-up are in _blueprint/ in a project in the new folder layout
+       (tools/layout.py), the screenshots in "4 Mock-up screenshots".
 Uses   the company profile and branding from the workspace (see tools/workspace.py), and the document format:
        templates/document-format.yaml, overridden key by key by workspace/branding/document-format.yaml.
-Writes <project_dir>/output/<System> – <document title> v<version>.docx, a PDF when
-       Microsoft Word is installed, and a snapshot of the spec used. A PDF from an earlier run is removed
-       first, so the Word file and the PDF in output/ are always the same version of the content.
+Writes <System> – <document title> v<version>.docx into the project's "5 Requirements document" folder
+       (output/ in a project not yet moved to the new folder layout), a PDF when Microsoft Word is
+       installed, and a snapshot of the spec used (spec-v<version>.yaml, in _blueprint/output/). A PDF from
+       an earlier run is removed first, so the Word file and the PDF are always the same version of the content.
 Warns  when the screenshots were taken before the spec's screens last changed, or one is missing, and about
        team-only text in what the client reads (the mock-up, "proposed", FB-/R- ids, requirement ids of
        another document); lists the parts still missing before issuing (NFRs, timeline, scope, signatories).
@@ -28,6 +31,9 @@ from pathlib import Path
 
 import yaml
 from docx import Document
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import layout  # noqa: E402  (where everything is in a project folder)
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK, WD_TAB_ALIGNMENT
 from docx.oxml import OxmlElement
@@ -1136,7 +1142,7 @@ def team_notes(text, known_requirements, register=None, listed=(), system=True):
 # ====================================================================== main
 def build(project):
     project = Path(project)
-    spec_file = project / "spec" / "app.yaml"
+    spec_file = layout.spec_file(project)
     if not project.is_dir():
         sys.exit(f"No project at {project}. Give the project's folder, for example projects/<slug>.")
     if not spec_file.exists():
@@ -1150,7 +1156,7 @@ def build(project):
     if issued:
         sys.exit(f"v{issued['version']} was issued to {issued['to']} on {issued['date']} and is locked. "
                  "Bump project.version in the spec (e.g. to the next minor version) and generate again.")
-    shots_file = project / "mockup" / "shots.json"
+    shots_file = layout.shots_plan(project)
     if not shots_file.exists():
         sys.exit("No screenshots yet. Run: python -I tools/mockup.py screenshots " + str(project))
     errors = mockup.validate(spec)
@@ -1160,7 +1166,7 @@ def build(project):
     if errors:
         sys.exit("The spec has errors in the parts the document prints. Fix them, then generate:\n  " + "\n  ".join(errors))
     shots = json.loads(shots_file.read_text(encoding="utf-8"))
-    shot_dir = project / "mockup" / "screenshots"
+    shot_dir = layout.screenshots_dir(project)
     fmt = load_format()
     errors = format_errors(fmt)
     if errors:
@@ -1173,7 +1179,7 @@ def build(project):
     doc_short = (fmt.get("document") or {}).get("short") or ""
     names = {"system": P["name"], "client": P.get("client", ""), "client_short": P.get("client_short", P.get("client", "")),
              "company": co["name"], "company_short": co.get("short_name") or co["name"], "document": doc_title}
-    reg_file = project / "register.json"
+    reg_file = layout.register_json(project)
     items = json.loads(reg_file.read_text(encoding="utf-8"))["items"] if reg_file.exists() else []
     open_items = [it for it in items if it["audience"] == "client" and it["status"] not in ("resolved", "wont-fix")]
     made_items = [it for it in items if it["audience"] == "client" and it["status"] == "resolved" and str(it.get("answer") or "").strip()]
@@ -1349,7 +1355,7 @@ def build(project):
             logo = workspace.asset("logo.png")
             if logo:
                 logos.rows[0].cells[0].paragraphs[0].add_run().add_picture(str(logo), height=Cm(1.3))
-            client_logo = project / "spec" / "client-logo.png"
+            client_logo = layout.spec_dir(project) / "client-logo.png"
             if client_logo.exists():
                 cell = logos.rows[0].cells[1].paragraphs[0]
                 cell.alignment = WD_ALIGN_PARAGRAPH.RIGHT
@@ -1449,7 +1455,7 @@ def build(project):
                 rest = (tw - (first or 0)) / (len(hdr) - (1 if first else 0))
                 w.table(hdr, body, ([first] if first else []) + [rest] * (len(hdr) - (1 if first else 0)))
             if "image" in block:
-                img = project / "spec" / block["image"]
+                img = layout.spec_dir(project) / block["image"]
                 if img.exists():
                     w.figure(img, block.get("caption", extra["title"]))
                 else:
@@ -1513,7 +1519,7 @@ def build(project):
                     header_height=longest if rotate else None)
             if spec.get("statuses"):
                 sub("Process and statuses")
-                flow = project / "spec" / "process-flow.png"
+                flow = layout.spec_dir(project) / "process-flow.png"
                 if not flow.exists():
                     flow = shot_dir / "process-flow.png"
                 if flow.exists():
@@ -1868,7 +1874,7 @@ def build(project):
         w.heading(f"Appendix {chr(65 + i)}  {extra['title']}", 1)
         extra_content(extra)
 
-    out_dir = project / "output"
+    out_dir = layout.output_dir(project)
     out_dir.mkdir(exist_ok=True)
     # The name on the cover may hold characters a file name cannot (a colon, a slash): the file name is cleaned.
     out = out_dir / (project_tool.safe_name(f"{P['name']} – {doc_title} v{version}") + ".docx")
@@ -1881,7 +1887,8 @@ def build(project):
     except PermissionError:
         sys.exit(f"Cannot replace the document in {out_dir}: {out.name} or its PDF is open in another program "
                  "(or is read-only). Close it and generate again.")
-    shutil.copy(project / "spec" / "app.yaml", out_dir / f"spec-v{version}.yaml")
+    layout.snapshots_dir(project).mkdir(parents=True, exist_ok=True)
+    shutil.copy(spec_file, layout.snapshot(project, version))
     print(f"Wrote {out}")
     print(f"  {w.figures} figures, {len(groups)} requirement groups, {len(open_items)} decisions needed, "
           f"{len(made_items)} decisions made, {len(signoff)} signatories")
