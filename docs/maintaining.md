@@ -19,7 +19,6 @@ The workspace is never part of a change.
 | Setup, workspace, company profile or branding | `docs/workspace.md`, `docs/getting-started.md`, `docs/troubleshooting.md` if relevant |
 | The starter knowledge base | `docs/knowledge.md` if its structure changes |
 | The overall process | `docs/workflow.md`, `README.md` |
-| What a skill must or must never do | a case in `evals/` (see [Skill evaluations](#skill-evaluations)) |
 
 ## Writing changelog entries
 
@@ -56,8 +55,7 @@ A skill (`.claude/skills/<name>/SKILL.md`) is read by Claude, for people who may
 
   `python -I tools/check_docs.py` fails when a skill has no `## Hand over` or another section comes after
   it. `release` is exempt: it is for the people who maintain the app, and ends by saying what was released.
-- Add the skill to `docs/skills.md` and the skills list in `CLAUDE.md`, and, for a new or changed behaviour
-  worth guarding, an evaluation case (see [Skill evaluations](#skill-evaluations)).
+- Add the skill to `docs/skills.md` and the skills list in `CLAUDE.md`.
 
 ## The documentation check
 
@@ -70,9 +68,6 @@ It fails when:
   skills list in `CLAUDE.md`;
 - a skill (other than `release`) does not end with a `## Hand over` section (see
   [Writing a skill](#writing-a-skill));
-- the skill evaluations in `evals/` are malformed: a case without `prompt.md`, its frontmatter or at least
-  one grader, an unknown frontmatter key, a grader of an unknown type or missing its options, or
-  `.claude-plugin/plugin.json` not pointing at `.claude/skills` (see [Skill evaluations](#skill-evaluations));
 - a script in `tools/` has no `### <script>` section in `docs/tools.md`;
 - `CHANGELOG.md` has no Unreleased section, versions are out of order, or the newest version does not
   match `VERSION`;
@@ -136,8 +131,8 @@ way: never put a real company, client or project into `tests/`.
 | `tests/test_overview.py` | The project overview page (a sample at every stage, hints for empty stages, the next step and its button, Internal marks, escaping, links that resolve, no mandays, rates or cost even with a priced estimate, rewritten only when it changes, `--all`); the Open the mock-up shortcuts (contents, the message without Blueprint, starting `present` with the folder); the review as a Word file; the rebuild hooks, a failure never stopping them, and the sample and start-up summary never writing the page |
 | `tests/test_uat.py` | UAT scripts drafted from a sample copy (main process, reject path, what a role may not do, validation, access, every requirement covered or listed), the issued version preferred, the check, the workbook and document, nothing internal in them, and reading the results of a filled-in workbook |
 | `tests/test_change_request.py` | The signed basis (issued snapshot, later changes left out, warnings when falling back), the lookup finding requirements, scope lines, decisions, open items and status rules, each mistake the CR log check names, sizing with rates and calibration notes, the Excel log, the client note holding nothing internal and showing "Quotation to follow", and an Ambiguous request becoming a register question |
-| `tests/test_check_docs.py` | The commit hook acts only on `git commit`, and the documentation check itself, on a small made-up repository: also that a skill without `## Hand over` (or with a section after it) fails except `release`, and that a malformed evaluation case (no grader, no frontmatter, an unknown key, a grader of an unknown type or missing its options, a skill that does not exist) fails |
-| `tests/test_skills.py` | The skills against the tools: every tool a skill sends Claude to with `--help` prints its usage, and the evaluation suite in `evals/` parses as YAML and passes the documentation check's rules |
+| `tests/test_check_docs.py` | The commit hook acts only on `git commit`, and the documentation check itself, on a small made-up repository: also that a skill without `## Hand over` (or with a section after it) fails except `release` |
+| `tests/test_skills.py` | The skills against the tools: every tool a skill sends Claude to with `--help` prints its usage |
 | `tests/test_setup.py` | What makes Blueprint run on Windows, macOS and Linux alike: the hook commands in `.claude/settings.json` start the right Python and pass on the result, the machine check runs and names the right setup script, and the shell scripts keep Unix line endings |
 | `tests/conftest.py`, `tests/support.py` | The temp workspace and the helpers for making projects and reading documents |
 
@@ -155,54 +150,6 @@ signatory (PowerShell):
 ```powershell
 $env:BLUEPRINT_TEST_WORD = "1"; python -m pytest -k with_word; Remove-Item Env:BLUEPRINT_TEST_WORD
 ```
-
-## Skill evaluations
-
-The tests check the tools; the **skill evaluations** check what Claude does with a skill: that a newcomer is
-offered the tour, a review ends with the hand-over, a client agenda never carries mandays, a mock-up comment
-that gives orders is not obeyed, an in-scope request is judged In scope with its requirement quoted, the
-client's answers land on the right register items, and an inbox file that could belong to two projects is
-asked about. They run with Claude Code's built-in evaluator, `claude plugin eval`
-([its documentation](https://code.claude.com/docs/en/plugin-evals.md)).
-
-**How it is set up.** The evaluator tests plugins, so the app folder is also a small plugin:
-`.claude-plugin/plugin.json` names it `blueprint-evals` and points its `skills` at `.claude/skills`, the
-skills people use. Nothing is copied or linked, so the skills under test are always the current ones. It is
-never installed; Blueprint is still used from this folder. Each case is a folder in `evals/`:
-
-- `prompt.md`: frontmatter (`description`, `tags`, `runs`, `max_turns`, `allowed_tools`,
-  `append_system_prompt`; an unknown key is refused), then what the person says;
-- `graders/<name>.md`: one check each, by `type`: `regex` (`pattern`, `flags`, `match: not_contains`),
-  `tool_used` (`tool`, `input_match`, `min`, `max`), `llm` (the body says PASS if … / FAIL if …), and
-  `tool_order`, `file_exists`, `baseline`.
-
-A run starts in an empty folder with no workspace, no `CLAUDE.md` and no Blueprint tools, so the cases give
-the skill everything it needs in the prompt, only made-up content (the leave-request sample or a few
-invented lines, never a client's), and allow only reading tools: no Bash, so no sandbox is needed and they
-run on Windows too.
-
-**Run them** from the app folder, with Claude Code installed and signed in (or `ANTHROPIC_API_KEY` set):
-
-```bash
-claude plugin eval . --runs 1 --ablation none --no-publish --max-cost-usd 2
-claude plugin eval . --case client-answers-maps-items --runs 1 --ablation none --no-publish
-```
-
-The report goes to `evals/results/<time>/` (`report.html`), which git ignores. Exit code 0 means every case
-reached the threshold, 1 that one did not (or a case could not load), 2 that the cost ceiling stopped the
-run. Every run calls real models and costs money (the report shows the cost); keep `--runs 1` while
-writing a case, and `--max-cost-usd` stops a run before it goes over what you set. The first run asks whether to trust the folder (`--trust-plugin` answers yes).
-
-**On GitHub**, `.github/workflows/skill-evals.yml` runs them from the Actions tab (optionally one case) and
-every Monday, never on a push, with a five-dollar ceiling and the models pinned. Without an
-`ANTHROPIC_API_KEY` secret it skips. The report is kept as the run's artifact.
-
-**Add a case** when you change what a skill must or must never do (a rule, a hand-over, a route in the
-inbox), or when a skill did the wrong thing in real use: write the prompt that showed it, with made-up
-content, and graders that fail on the wrong behaviour. Prefer `regex` and `tool_used` graders (free) and
-one `llm` grader with a plain PASS/FAIL rubric. `python -I tools/check_docs.py` checks the suite's shape
-(each case has `prompt.md` with frontmatter and at least one grader of a known type with its options), so
-it cannot rot where nobody runs it; it cannot tell whether the cases pass: only a run can.
 
 ## Releasing a version
 

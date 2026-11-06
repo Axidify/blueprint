@@ -67,84 +67,6 @@ def check_hand_over(errors):
             errors.append(f"{rel}: '{HAND_OVER}' must be the last section, but '{found[-1]}' comes after it")
 
 
-# The skill evaluations (docs/maintaining.md, "Skill evaluations"): the app folder is also a small plugin,
-# .claude-plugin/plugin.json pointing at .claude/skills, so `claude plugin eval .` runs the cases in evals/.
-# The check below keeps the suite from rotting where nobody runs it.
-PROMPT_KEYS = {"schema_version", "name", "description", "tags", "plugins", "runs", "expected_outcome", "model",
-               "max_turns", "timeout_seconds", "allowed_tools", "append_system_prompt", "env"}
-GRADER_NEEDS = {"regex": ("pattern",), "tool_used": ("tool",), "tool_order": ("before", "after"),
-                "file_exists": ("path",), "llm": (), "baseline": ("baseline_file",)}
-
-
-def frontmatter(text):
-    """({top-level key: raw value}, body) of a Markdown file with '---' frontmatter, or (None, text)."""
-    lines = text.splitlines()
-    if not lines or lines[0].strip() != "---":
-        return None, text
-    try:
-        end = next(i for i, line in enumerate(lines[1:], 1) if line.strip() == "---")
-    except StopIteration:
-        return None, text
-    keys = {}
-    for line in lines[1:end]:
-        if not line.strip() or line.lstrip().startswith("#") or line[0] in " \t-":
-            continue  # a comment, or a nested value of the key above
-        key, colon, value = line.partition(":")
-        if not colon or not re.fullmatch(r"[a-z_]+", key.strip()):
-            return None, text
-        keys[key.strip()] = value.strip()
-    return keys, "\n".join(lines[end + 1:])
-
-
-def check_evals(errors):
-    manifest = ROOT / ".claude-plugin" / "plugin.json"
-    if not manifest.exists():
-        return
-    try:
-        meta = json.loads(manifest.read_text(encoding="utf-8"))
-    except ValueError as e:
-        errors.append(f".claude-plugin/plugin.json: not valid JSON ({e})")
-        return
-    if not meta.get("name"):
-        errors.append(".claude-plugin/plugin.json: no name")
-    if meta.get("skills") != "./.claude/skills":
-        errors.append(".claude-plugin/plugin.json: 'skills' must be \"./.claude/skills\", or the evaluations run without Blueprint's skills")
-    suite = ROOT / ((meta.get("experimental") or {}).get("evals") or "evals")
-    skills = {p.parent.name for p in (ROOT / ".claude" / "skills").glob("*/SKILL.md")}
-    cases = sorted(p.parent for p in suite.glob("**/prompt.md") if "results" not in p.relative_to(suite).parts)
-    if not cases:
-        errors.append(f"{suite.relative_to(ROOT).as_posix()}: no eval cases (a folder with prompt.md)")
-    for case in cases:
-        rel = case.relative_to(ROOT).as_posix()
-        keys, body = frontmatter((case / "prompt.md").read_text(encoding="utf-8"))
-        if keys is None:
-            errors.append(f"{rel}/prompt.md: no frontmatter between '---' lines")
-            continue
-        for key in sorted(set(keys) - PROMPT_KEYS):
-            errors.append(f"{rel}/prompt.md: unknown frontmatter key '{key}' (claude plugin eval refuses it)")
-        if not body.strip():
-            errors.append(f"{rel}/prompt.md: no prompt after the frontmatter")
-        graders = sorted((case / "graders").glob("*.md"))
-        if not graders:
-            errors.append(f"{rel}: no graders (graders/<name>.md)")
-        for grader in graders:
-            g_keys, g_body = frontmatter(grader.read_text(encoding="utf-8"))
-            where = f"{rel}/graders/{grader.name}"
-            kind = (g_keys or {}).get("type", "").strip("\"'")
-            if kind not in GRADER_NEEDS:
-                errors.append(f"{where}: type must be one of {', '.join(GRADER_NEEDS)}")
-                continue
-            for need in GRADER_NEEDS[kind]:
-                if not g_keys.get(need) and not (need == "pattern" and g_body.strip()):
-                    errors.append(f"{where}: a {kind} grader needs '{need}'")
-            if kind == "llm" and not (g_body.strip() or g_keys.get("criteria")):
-                errors.append(f"{where}: an llm grader needs its PASS/FAIL criteria in the body")
-            if kind == "tool_used" and g_keys.get("tool", "").strip("\"'") == "Skill":
-                for skill in re.findall(r"\?([a-z0-9-]+)", g_keys.get("input_match", "")):
-                    if skill not in skills:
-                        errors.append(f"{where}: expects the skill '{skill}', which does not exist")
-
-
 def check_tools(errors):
     tools = sorted(p.name for p in (ROOT / "tools").iterdir() if p.suffix in (".py", ".mjs"))
     tools_doc = (ROOT / "docs" / "tools.md").read_text(encoding="utf-8")
@@ -272,7 +194,6 @@ def main():
     errors = []
     check_skills(errors)
     check_hand_over(errors)
-    check_evals(errors)
     check_tools(errors)
     check_changelog(errors)
     check_links(errors)

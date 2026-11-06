@@ -30,9 +30,6 @@ See [docs/maintaining.md](docs/maintaining.md).
   `where_record`), in the mock-up, its screenshot and the requirements document.
 - **Status moves the system makes on its own** (`auto` on a status) are no longer listed as moves no button
   makes; the requirements document marks them "(automatic)" and UAT scripts give them a case of their own.
-- **Skill evaluations for maintainers** in `evals/`, run with `claude plugin eval .`, with a weekly and
-  on-demand GitHub workflow that has a cost cap and skips without an API key. The documentation check also
-  checks the evaluation suite's shape.
 - **Change requests, checked against what the client signed.** Tell Blueprint "the client asked for…"
   during development or UAT and the new `change-request` skill checks the request against the version the
   client signed, quoting it: In scope, Ambiguous (a question for the client in the register) or New. A new
