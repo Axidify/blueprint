@@ -16,6 +16,7 @@ import pytest
 import yaml
 
 import support
+import layout
 import mockup
 
 BROWSER_SCRIPT = support.ROOT / "tests" / "mockup_browser.mjs"
@@ -373,9 +374,44 @@ def test_when_the_browser_cannot_start_the_screenshots_say_so_as_before(tmp_path
     assert stop.value.code == 77 and "Neither Microsoft Edge" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize("new", [False, True], ids=["old layout", "new layout"])
+@pytest.mark.parametrize("stopped", [(77, "Neither Microsoft Edge nor Google Chrome could be started", 0),
+                                     (1, "page.screenshot: Target crashed", 1)], ids=["no browser", "stopped half-way"])
+def test_screenshots_that_fail_keep_the_last_ones_that_worked(tmp_path, monkeypatch, capsys, new, stopped):
+    """They used to be deleted before the browser was started, so a run without a browser left none, and the
+    next requirements document had no figures."""
+    code, said, done = stopped
+    project = tmp_path / "leave-request"
+    if new:
+        layout.create_new(project)
+    support.write_spec(project, mockup_spec())
+    monkeypatch.setattr(mockup, "run_shots", fake_shots)
+    mockup.screenshots(project)
+    pictures = layout.screenshots_dir(project)
+    before = {p.name: p.read_bytes() for p in pictures.glob("*.png")}
+    note = layout.screenshots_record(project).read_text(encoding="utf-8")
+    assert before and note
+
+    def failing(command, quiet=False):
+        plan, out = Path(command[3]), Path(command[4])
+        names = [s["name"] for s in json.loads(plan.read_text(encoding="utf-8"))][:done]
+        for name in names:  # what was taken before it stopped
+            (out / f"{name}.png").write_bytes(b"half a run")
+        return code, said, names
+
+    monkeypatch.setattr(mockup, "run_shots", failing)
+    with pytest.raises(SystemExit) as stop:
+        mockup.screenshots(project)
+    assert stop.value.code == code
+    assert {p.name: p.read_bytes() for p in pictures.glob("*.png")} == before
+    assert layout.screenshots_record(project).read_text(encoding="utf-8") == note
+    assert "The screenshots of the last run that worked are kept" in capsys.readouterr().err
+    assert not list(layout.mockup_dir(project).glob(".screenshots-*")), "the scratch folder is removed"
+
+
 def test_the_errors_a_page_reports_in_the_browser_are_found(tmp_path):
     if not shutil.which("node") or not (support.ROOT / "node_modules" / "playwright-core").is_dir():
-        pytest.skip("needs Node.js and the Node packages (run setup.cmd or `npm install`)")
+        pytest.skip("needs Node.js and the Node packages (run setup.cmd or ./setup.sh)")
     page = tmp_path / "index.html"
     page.write_text("<!doctype html><body><script>throw new Error('the spec broke it')</script></body>", encoding="utf-8")
     found = mockup.browser_errors(page.as_uri())
@@ -1401,7 +1437,7 @@ def pictures(tmp_path_factory):
     from PIL import Image
 
     if not shutil.which("node") or not (support.ROOT / "node_modules" / "playwright-core").is_dir():
-        pytest.skip("needs Node.js and the Node packages (run setup.cmd or `npm install`)")
+        pytest.skip("needs Node.js and the Node packages (run setup.cmd or ./setup.sh)")
     project = tmp_path_factory.mktemp("pictures") / "leave-request"
     spec = mockup_spec()
     spec["screens"].append(WIDE_LIST)
@@ -1432,9 +1468,11 @@ def test_a_screen_that_does_not_fit_is_taken_wider_and_says_so(pictures):
 
 
 def test_screenshots_are_cropped_to_the_content(pictures):
-    """No minimum height: a list with two rows and the process flow are short pictures, not half-empty ones."""
+    """No minimum height: a list with two rows and the process flow are short pictures, not half-empty ones.
+    The window is 900 px tall (1800 in the picture), so well under that is short. Chrome on Linux sets text a little
+    wider than Edge on Windows, so a filter bar or a cell can wrap onto a second line: the list was 848 px there."""
     sizes = pictures["sizes"]
-    assert sizes["approvals"][1] < 800 and sizes["process-flow"][1] < 700
+    assert sizes["approvals"][1] < 1000 and sizes["process-flow"][1] < 700
     assert sizes["new-application-p1"][1] > sizes["approvals"][1] + 300, "a form is as tall as its fields"
     assert 800 < sizes["login"][1] < 1400, "the login card with space around it"
     assert sizes["review-application-reject"][1] >= sizes["review-application"][1], "a dialog never shortens its screen"
@@ -1446,7 +1484,7 @@ def desk_pictures(tmp_path_factory):
     from PIL import Image
 
     if not shutil.which("node") or not (support.ROOT / "node_modules" / "playwright-core").is_dir():
-        pytest.skip("needs Node.js and the Node packages (run setup.cmd or `npm install`)")
+        pytest.skip("needs Node.js and the Node packages (run setup.cmd or ./setup.sh)")
     project = tmp_path_factory.mktemp("desk") / "leave-request"
     spec = mockup_spec()
     spec["project"]["theme"] = "desk"
@@ -1477,10 +1515,10 @@ def test_the_desk_theme_draws_every_screen_type_at_1000_pixels(desk_pictures):
 @pytest.fixture(scope="module")
 def browser(built, tmp_path_factory):
     """The mock-up clicked through in Microsoft Edge by tests/mockup_browser.mjs. Skipped where Node, the
-    Node packages (`npm install`) or Edge are missing, as on GitHub."""
+    Node packages (setup) or Edge are missing, as on GitHub."""
     node = shutil.which("node")
     if not node or not (support.ROOT / "node_modules" / "playwright-core").is_dir():
-        pytest.skip("needs Node.js and the Node packages (run setup.cmd or `npm install`)")
+        pytest.skip("needs Node.js and the Node packages (run setup.cmd or ./setup.sh)")
     server = serve_in_thread(built / "mockup", tmp_path_factory.mktemp("browser-feedback") / "feedback.json")
     # The same mock-up with a red brand colour, for the look of the danger button.
     red_project = tmp_path_factory.mktemp("red") / "leave-request"
@@ -2408,7 +2446,7 @@ def test_the_logo_font_and_look_reach_the_mockup(tmp_path):
     assert '"logo": null' in (project / "mockup" / "build.js").read_text(encoding="utf-8")
 
 
-@pytest.mark.skipif(not (mockup.FONT_PACKAGE / mockup.BUNDLED_FONTS["Geist"]).is_file(), reason="needs the Node packages (npm install)")
+@pytest.mark.skipif(not (mockup.FONT_PACKAGE / mockup.BUNDLED_FONTS["Geist"]).is_file(), reason="needs the Node packages (run setup)")
 def test_desk_carries_geist_and_joget_carries_no_font(tmp_path):
     desk = look_project(tmp_path / "desk", theme="desk")
     quiet_build(desk)
@@ -2549,7 +2587,7 @@ def test_the_look_in_the_browser_from_the_folder(tmp_path):
     """The mock-up opened from its folder: the logo shows, the carried font loads and the settings draw."""
     node = shutil.which("node")
     if not node or not (support.ROOT / "node_modules" / "playwright-core").is_dir():
-        pytest.skip("needs Node.js and the Node packages (run setup.cmd or `npm install`)")
+        pytest.skip("needs Node.js and the Node packages (run setup.cmd or ./setup.sh)")
     project = look_project(tmp_path, theme="desk", logo="client-logo.png", corners="square", menu="dark", header="brand", primary_color="#0B3D91")
     quiet_build(project)
     run = subprocess.run([node, str(LOOK_SCRIPT), str(project / "mockup" / "index.html"), "approvals", "manager"],
@@ -2688,7 +2726,7 @@ CHANGES_SCRIPT = support.ROOT / "tests" / "mockup_changes.mjs"
 def what_changed(tmp_path, before, after):
     node = shutil.which("node")
     if not node or not (support.ROOT / "node_modules" / "playwright-core").is_dir():
-        pytest.skip("needs Node.js and the Node packages (run setup.cmd or `npm install`)")
+        pytest.skip("needs Node.js and the Node packages (run setup.cmd or ./setup.sh)")
     project = tmp_path / "changes"
     support.write_spec(project, after)
     quiet_build(project)
@@ -2793,7 +2831,7 @@ def test_a_box_for_something_new_keeps_its_place_when_the_layout_changes(tmp_pat
     under the card, at the same distance, with the panel closed and in a narrower window."""
     node = shutil.which("node")
     if not node or not (support.ROOT / "node_modules" / "playwright-core").is_dir():
-        pytest.skip("needs Node.js and the Node packages (run setup.cmd or `npm install`)")
+        pytest.skip("needs Node.js and the Node packages (run setup.cmd or ./setup.sh)")
     project = tmp_path / "box"
     spec = sample()
     spec["project"]["theme"] = "desk"

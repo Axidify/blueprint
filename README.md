@@ -16,13 +16,17 @@ https://github.com/user-attachments/assets/94a044d1-73c5-4213-94d9-ca1990de57b6
 ## Get started (5 minutes)
 
 1. **Install** [Claude Code](https://claude.com/claude-code), [Python 3.12](https://www.python.org/downloads/)
-   (on Windows tick "Add python.exe to PATH") and [Node.js LTS](https://nodejs.org/). Microsoft Edge or
-   Google Chrome is needed for screenshots; Microsoft Word is optional (on Windows it updates the table of
-   contents and makes PDFs).
-2. **Clone** this repository and **double-click `setup.cmd`** (on a Mac: `setup.command`, or run
-   `./setup.sh`). It installs everything else and checks your machine. Run it again any time something
-   looks wrong.
+   (on Windows tick "Add python.exe to PATH"), [Node.js LTS](https://nodejs.org/) and
+   [Git](https://git-scm.com/downloads) (on a Mac it is offered the first time you type `git`). Microsoft
+   Edge or Google Chrome is needed for screenshots; Microsoft Word is optional (on Windows it updates the
+   table of contents and makes PDFs).
+2. **Clone** this repository (`git clone https://github.com/Axidify/blueprint.git`) and **double-click
+   `setup.cmd`** (on a Mac: `setup.command`, or run `./setup.sh`). It installs everything else and checks
+   your machine. Run it again any time something looks wrong. On a Mac or Linux, read
+   [the few differences](docs/getting-started.md#on-a-mac) first.
 3. **Open the folder in Claude Code** and type **`/start`**.
+
+To update Blueprint later, pull the latest version (`git pull` in the folder) and run setup again.
 
 ## What you can ask for
 

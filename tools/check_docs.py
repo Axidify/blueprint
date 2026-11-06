@@ -133,20 +133,31 @@ def workspace_names():
     if local.exists():
         configured = json.loads(local.read_text(encoding="utf-8-sig")).get("workspace_dir")
         ws = Path(configured) if configured else ws
-    company = ws / "company.yaml"
-    if company.exists():
-        for key in ("name", "short_name"):
-            m = re.search(rf"^{key}:\s*(.+?)\s*$", company.read_text(encoding="utf-8"), re.M)
-            if m and not m.group(1).startswith("#"):
-                names.add(m.group(1).strip("\"'"))
-    regs = list((ws / "projects").glob("*/register.json")) + list((ws / "projects").glob("_archive/*/register.json")) if (ws / "projects").exists() else []
+    names.update(company_names(ws / "company.yaml"))
+    # A project's register is in _blueprint/ (the folder layout of new projects) or at its top (the old layout).
+    regs = [reg for pattern in ("*/register.json", "*/_blueprint/register.json", "_archive/*/register.json", "_archive/*/_blueprint/register.json")
+            for reg in (ws / "projects").glob(pattern)] if (ws / "projects").exists() else []
     for reg in regs:
         try:
             r = json.loads(reg.read_text(encoding="utf-8"))
         except Exception:
             continue
         names.update(v for v in (r.get("project"), r.get("client")) if v)
-    return {n for n in names if len(n) >= 2 and n not in ("Your Company", "YourCo")}
+    # The placeholder names of the app's own company profile, which setup copies into a new workspace, are not
+    # a company's: until someone puts their own name in, they would flag the template that holds them.
+    placeholders = {"Your Company", "YourCo"} | company_names(ROOT / "templates" / "company.yaml")
+    return {n for n in names if len(n) >= 2 and n not in placeholders}
+
+
+def company_names(company):
+    """The name and short name in a company profile (company.yaml), if it exists."""
+    names = set()
+    if company.exists():
+        for key in ("name", "short_name"):
+            m = re.search(rf"^{key}:\s*(.+?)\s*$", company.read_text(encoding="utf-8"), re.M)
+            if m and not m.group(1).startswith("#"):
+                names.add(m.group(1).strip("\"'"))
+    return names
 
 
 def check_no_workspace_names(errors):

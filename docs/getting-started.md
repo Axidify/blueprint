@@ -7,7 +7,8 @@
 | Claude Code (desktop app or command line) | Everything: you use Blueprint by talking to it | https://claude.com/claude-code |
 | Python 3.10 or newer (3.12 recommended) | All tools | https://www.python.org/downloads/ (on Windows tick "Add python.exe to PATH") |
 | Node.js LTS | Mock-up screenshots, and Blueprint's checks in Claude Code | https://nodejs.org/ |
-| Microsoft Edge or Google Chrome | Mock-up screenshots | Edge is already on Windows machines; on a Mac either will do |
+| Git | Getting Blueprint and its updates | https://git-scm.com/downloads (on a Mac it is offered the first time you type `git` in Terminal) |
+| Microsoft Edge or Google Chrome | Mock-up screenshots | Edge is already on Windows machines; on a Mac either will do; on Linux, Google Chrome (Chromium is not used) |
 | Microsoft Word | Optional. On Windows it updates the requirements document's table of contents and makes the PDF | |
 
 Blueprint is built on Windows and also runs on macOS and Linux (see [On a Mac](#on-a-mac)). It is tested
@@ -43,6 +44,19 @@ Everything works as on Windows, with three differences.
   sign-off pages are signed by hand, or the PDF is made on a Windows machine.
 
 Linux works the same way as a Mac (without Word).
+
+## Updating Blueprint
+
+In the Blueprint folder, pull the latest version, then run setup again so new packages are installed:
+
+```bash
+git pull
+```
+
+Then double-click `setup.cmd` (on a Mac: `setup.command`, or `./setup.sh`). Setup never changes the files
+that came with Blueprint, so the pull always goes through. Your workspace (projects, knowledge, company
+profile) is not part of the app folder's history and is never touched by an update. What changed is in the
+[changelog](../CHANGELOG.md).
 
 ## First session
 

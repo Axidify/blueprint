@@ -48,6 +48,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import webbrowser
@@ -2387,20 +2388,28 @@ def screenshots(project):
     spec = build(project)
     mock = layout.mockup_dir(project).resolve()
     out = layout.screenshots_dir(project).resolve()
-    if out == mock / "screenshots" and out.exists():
-        shutil.rmtree(out)
-    elif out.exists():  # the folder people open: only the pictures of the last run go, anything else put there stays
-        for old in out.glob("*.png"):
-            old.unlink()
-    out.mkdir(exist_ok=True)
-    layout.screenshots_record(project).unlink(missing_ok=True)
     shots = shot_list(spec)
     plan = mock / "shots.json"
     plan.write_text(json.dumps(shots, indent=2), encoding="utf-8")
     script = ROOT / "tools" / "screenshot.mjs"
-    code, said, taken = run_shots(["node", str(script), str(mock / "index.html"), str(plan), str(out)])
-    if code:
-        sys.exit(screenshot_failure(code, said, [s for s in shots if s["name"] not in taken], mock))
+    # The pictures are taken into a folder of their own and replace the last ones only when all of them are there:
+    # a run that stops (no browser, a screen that draws nothing) leaves the pictures and their note as they were.
+    with tempfile.TemporaryDirectory(dir=mock, prefix=".screenshots-") as fresh:
+        code, said, taken = run_shots(["node", str(script), str(mock / "index.html"), str(plan), fresh])
+        if code:
+            code = screenshot_failure(code, said, [s for s in shots if s["name"] not in taken], mock)
+            if out.is_dir() and any(out.glob("*.png")):
+                print(f"The screenshots of the last run that worked are kept, in {out}.", file=sys.stderr)
+            sys.exit(code)
+        if out == mock / "screenshots" and out.exists():
+            shutil.rmtree(out)
+        elif out.exists():  # the folder people open: only the pictures of the last run go, anything else put there stays
+            for old in out.glob("*.png"):
+                old.unlink()
+        out.mkdir(exist_ok=True)
+        layout.screenshots_record(project).unlink(missing_ok=True)
+        for picture in Path(fresh).iterdir():
+            shutil.move(str(picture), str(out / picture.name))
     record_screenshots(project, spec)
     snapshot(project, spec)
     print(f"Wrote {len(shots)} screenshots to {out}")
@@ -2553,8 +2562,6 @@ def preview_shots(spec):
 def try_look(project, tries):
     """Build a scratch copy of the project as it is and one with the settings tried, and capture the same few
     screens of each into mockup/look-preview/: <screen>-now.png and <screen>-try.png. The project is not changed."""
-    import tempfile
-
     project = Path(project)
     load_spec(project)  # the spec as it is must build
     changes = parse_tries(tries)

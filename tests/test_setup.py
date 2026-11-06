@@ -94,6 +94,24 @@ def test_word_on_a_mac_is_described_as_a_step_by_hand(monkeypatch):
     assert isinstance(found, bool) and "on a Mac you update the table of contents and save the PDF yourself" in meaning
 
 
+# ---------------------------------------------------------------------- the Node packages setup installs
+@pytest.mark.parametrize("name", ["setup.sh", "setup.ps1"])
+def test_setup_never_rewrites_the_lock_file(name):
+    """`npm install` rewrote package-lock.json whenever the npm on the machine was another version than the one
+    that wrote it, so a fresh clone showed a changed file after setup and the next git pull was refused."""
+    script = (support.ROOT / name).read_text(encoding="utf-8")
+    installs = [line.strip() for line in script.splitlines() if line.strip().startswith("npm ")]
+    assert installs and all(line.startswith("npm install --no-save ") for line in installs), installs
+
+
+def test_setup_installs_only_the_node_packages_blueprint_uses():
+    """The geist font package names Next.js as a peer, which npm installed as well: about 450 MB never used."""
+    assert "legacy-peer-deps=true" in (support.ROOT / ".npmrc").read_text(encoding="utf-8")
+    lock = json.loads((support.ROOT / "package-lock.json").read_text(encoding="utf-8"))
+    installed = sorted(p.split("node_modules/")[-1] for p in lock["packages"] if p)
+    assert installed == ["geist", "playwright-core"], installed
+
+
 # ---------------------------------------------------------------------- scripts for macOS and Linux
 @pytest.mark.parametrize("name", ["setup.sh", "setup.command", "present.sh", "present.command"])
 def test_shell_scripts_have_unix_line_endings_and_a_shebang(name):

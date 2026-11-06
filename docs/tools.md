@@ -199,7 +199,8 @@ was issued to the client is never replaced: bump `project.version` to keep a new
 (`_blueprint/mockup/screenshots/taken-from.json`), so the
 document generator can warn when the spec's screens have changed since. When a screen cannot be drawn, it
 stops with that screen's name, the error the browser reported and the likely cause (the spec, or the
-project's `spec/mockup.js`).
+project's `spec/mockup.js`). The new pictures replace the last ones only once all of them are taken: a run
+that stops, or finds no browser, leaves the pictures of the last run that worked and their note as they were.
 
 With `--lan`, `serve` prints the address others on the same network open. Comments saved by anyone appear
 on every open copy of the mock-up within a few seconds, numbered as they are saved (`FB-007` shows as 7).
@@ -212,7 +213,9 @@ in the Feedback panel.
 ### screenshot.mjs
 
 Called by `mockup.py screenshots`; you don't run it directly. Drives the installed Microsoft Edge through
-`playwright-core`, or Google Chrome where there is no Edge (common on a Mac).
+`playwright-core`, or Google Chrome where there is no Edge (common on a Mac and on Linux; Chromium is not
+used). When neither starts, it says so and quotes why the browser the system usually has (Edge on Windows,
+Chrome elsewhere) did not start.
 
 - **Width.** A screenshot is printed about 14 cm wide in the requirements document, so the narrower the
   window it is taken in, the larger the screen's text on paper. Each screen is taken 1000 pixels wide

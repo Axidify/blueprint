@@ -201,6 +201,33 @@ def test_workspace_names_must_not_appear_in_app_files(repo):
     assert "docs/tools.md: contains 'Borrowed Name Ltd' from your workspace" in result.stderr
 
 
+def test_the_placeholder_company_of_a_new_workspace_is_not_a_company(repo):
+    """Setup copies templates/company.yaml into a new workspace: until someone puts their own name in, its
+    placeholder name used to fail the check on the template itself, and block every commit."""
+    template = "name: Placeholder Co Sdn. Bhd.\nshort_name: PlCo\n"
+    (repo / "templates").mkdir()
+    (repo / "templates" / "company.yaml").write_text(template, encoding="utf-8")
+    (repo / "workspace").mkdir()
+    (repo / "workspace" / "company.yaml").write_text(template, encoding="utf-8")
+    (repo / ".gitignore").write_text("workspace/\n", encoding="utf-8")
+    result = check(repo)
+    assert result.returncode == 0, result.stderr
+
+
+def test_client_names_of_projects_in_the_new_folder_layout_are_checked(repo):
+    """A project's register is in _blueprint/ in the new folder layout; the check used to look only at the top."""
+    project = repo / "workspace" / "projects" / "courier" / "_blueprint"
+    project.mkdir(parents=True)
+    (project / "register.json").write_text(json.dumps({"project": "Courier Booking", "client": "Borrowed Client Bhd"}),
+                                           encoding="utf-8")
+    (repo / ".gitignore").write_text("workspace/\n", encoding="utf-8")
+    assert check(repo).returncode == 0
+    (repo / "docs" / "tools.md").write_text("# Tools\n\n### check_docs.py\nMade for Borrowed Client Bhd.\n", encoding="utf-8")
+    result = check(repo)
+    assert result.returncode == 1
+    assert "docs/tools.md: contains 'Borrowed Client Bhd' from your workspace" in result.stderr
+
+
 # ====================================================================== the hand-over every skill ends with
 def write_skill(repo, name, text):
     (repo / ".claude" / "skills" / name).mkdir(parents=True, exist_ok=True)

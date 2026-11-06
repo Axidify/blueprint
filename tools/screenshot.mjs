@@ -19,18 +19,21 @@ const WIDTHS = [1000, 1200, 1440];
 const SCALE = 2;
 
 // Edge is on every Windows machine; on a Mac or Linux it is often Chrome that is installed. Both draw the same.
-let browser, failure;
+let browser;
+const failures = {};
 for (const channel of ["msedge", "chrome"]) {
   try {
     browser = await chromium.launch({ channel, headless: true });
     break;
   } catch (e) {
-    failure = failure || e;
+    failures[channel] = e;
   }
 }
 if (!browser) {
+  // Quote why the browser this system usually has did not start: Edge on Windows, Chrome on a Mac or Linux.
+  const usual = failures[process.platform === "win32" ? "msedge" : "chrome"];
   console.error("Neither Microsoft Edge nor Google Chrome could be started, so no screenshots were taken. Install one of them."
-    + `\n${String(failure).split("\n")[0]}`);
+    + `\n${String(usual).split("\n")[0]}`);
   process.exit(77);
 }
 const page = await browser.newPage({ viewport: { width: WIDTHS[0], height: 900 }, deviceScaleFactor: SCALE });

@@ -26,7 +26,9 @@ if ($LASTEXITCODE -ne 0) { Write-Host "pip install failed; see the messages abov
 # 2. Node: screenshot tooling and the document fonts
 if (Get-Command node -ErrorAction SilentlyContinue) {
     Write-Host "Installing screenshot tooling and fonts..."
-    npm install --no-audit --no-fund --silent
+    # --no-save: install exactly what package-lock.json lists and never rewrite it, so the folder stays as it was
+    # cloned (a rewritten lock file would stop the next git pull).
+    npm install --no-save --no-audit --no-fund --silent
 } else {
     Write-Host "Node.js not found: install the LTS version from https://nodejs.org/ and run setup again (needed for screenshots and fonts)." -ForegroundColor Yellow
 }

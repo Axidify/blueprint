@@ -11,6 +11,31 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+### Fixed
+- **Setup no longer changes `package-lock.json`.** It used to rewrite the file whenever the machine's npm
+  was another version than the one that wrote it, so a fresh copy of Blueprint showed a changed file and the
+  next `git pull` was refused. If `git pull` stops at that file, run `git checkout package-lock.json` once,
+  then pull (see Troubleshooting).
+- **Screenshots that fail keep the last ones that worked.** Taking screenshots without a browser, or a run
+  that stopped at a screen, used to delete the pictures already in `4 Mock-up screenshots`, so the next
+  requirements document had no figures. The new pictures now replace the old ones only once all are taken.
+- **When no browser starts on a Mac or Linux,** the message quotes why Google Chrome did not start, not
+  Microsoft Edge.
+- **The check before a commit passes on a new workspace.** It took the placeholder company name that setup
+  puts in `company.yaml` for a real one and blocked every commit until the name was changed. It now also
+  checks the client names of projects in the new folder layout, which it missed.
+
+### Changed
+- **Setup downloads about 460 MB less.** The font package Blueprint uses named a web framework (Next.js)
+  that npm installed alongside it and Blueprint never runs; the Node packages are now 22 MB. Running setup
+  again removes it from an existing installation.
+- **The README and Getting started** name Git as something to install, show the clone command, point Mac
+  and Linux users to their differences, and say how to update Blueprint. On Linux, Google Chrome is the
+  browser for screenshots (Chromium is not used).
+- **The tests on GitHub** install the Node packages, so the screenshot tests run there in Google Chrome on
+  Linux, and fail if installing changed `package-lock.json`. A screenshot-size test allows for text that
+  wraps a little differently in Chrome on Linux than in Edge on Windows.
+
 ## [1.3.1] - 2026-11-07
 
 ### Fixed

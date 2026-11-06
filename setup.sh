@@ -31,7 +31,9 @@ echo "Installing Python packages..."
 # 2. Node: screenshot tooling, the document fonts and the checks Claude Code runs at the start of a session.
 if command -v node >/dev/null 2>&1; then
   echo "Installing screenshot tooling and fonts..."
-  npm install --no-audit --no-fund --silent
+  # --no-save: install exactly what package-lock.json lists and never rewrite it, so the folder stays as it was
+  # cloned (a rewritten lock file would stop the next git pull).
+  npm install --no-save --no-audit --no-fund --silent
 else
   echo "Node.js not found: install the LTS version from https://nodejs.org/ (or: brew install node) and run setup again."
   echo "It is needed for screenshots, the fonts and Blueprint's checks in Claude Code."

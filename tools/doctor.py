@@ -74,7 +74,7 @@ def check():
     node = shutil.which("node")
     results.append((bool(node), True, "Node.js", "Install Node.js LTS from https://nodejs.org/ (screenshots, and Blueprint's checks in Claude Code)."))
     pw = (ROOT / "node_modules" / "playwright-core").exists()
-    results.append((pw, True, "playwright-core (screenshots)", f"Run {SETUP} again (it runs npm install)."))
+    results.append((pw, True, "playwright-core (screenshots)", f"Run {SETUP} again (it installs the Node packages)."))
 
     found = browser()
     results.append((bool(found), True, f"{found or 'Microsoft Edge or Google Chrome'} (screenshots)", "Install Microsoft Edge or Google Chrome."))

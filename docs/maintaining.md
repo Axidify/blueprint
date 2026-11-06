@@ -74,7 +74,9 @@ It fails when:
 - `CHANGELOG.md` has no Unreleased section, versions are out of order, or the newest version does not
   match `VERSION`;
 - a relative link in `README.md`, `CHANGELOG.md` or `docs/` points to a file that does not exist;
-- an app file contains a company or client name from the current workspace profile.
+- an app file contains a company or client name from the current workspace profile, or a project or client
+  name from a project's register (in either folder layout). The placeholder names of
+  `templates/company.yaml`, which a new workspace starts with, do not count.
 
 `--pre-commit` also fails when app files are staged without `CHANGELOG.md`.
 
@@ -99,10 +101,15 @@ python -m pip install -r requirements-dev.txt
 python -m pytest
 ```
 
-They take about half a minute and need neither Microsoft Word, Node nor a browser (the mock-up's browser
-tests run only where Node and Microsoft Edge are found, and are skipped elsewhere). Run them whenever you
+On a Mac or Linux, write `.venv/bin/python` for `python` (setup makes that environment; it has no test runner
+until you install `requirements-dev.txt` into it).
+
+Without Node they take about half a minute and need neither Microsoft Word, Node nor a browser. Where Node,
+the Node packages and Microsoft Edge or Google Chrome are found, the mock-up's browser tests run too, and the
+whole run takes a few minutes; elsewhere those tests are skipped. Run them whenever you
 change anything in `tools/` or `templates/`, and add or update a test with the change. On GitHub,
-`.github/workflows/tests.yml` runs them on Linux on every push and pull request.
+`.github/workflows/tests.yml` runs them on Linux on every push and pull request, with the Node packages
+installed so the browser tests run in Google Chrome, and fails if installing them changed `package-lock.json`.
 `.github/workflows/systems.yml` runs them on macOS, on Windows and on Python 3.10, and then does the
 whole path on a Mac with nothing faked: `setup.sh`, the sample's screenshots, its generated document and
 a comment saved through `present.sh`. It runs for each release tag, when you start it from the Actions

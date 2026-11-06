@@ -15,7 +15,8 @@ python -I tools/doctor.py
 | On a Mac: no PDF, and the table of contents is empty | Word for Mac cannot be driven by Blueprint. Open the document in Word, click the table of contents, choose Update Table, then File > Save As and pick PDF |
 | Blueprint's status does not appear when a session starts, or the check before a commit does not run | Both are started through Node.js. Install Node.js LTS and run setup again |
 | Screenshots say neither Microsoft Edge nor Google Chrome could be started | Install one of them. Edge is used when both are there |
-| Screenshots fail, or "playwright-core" is missing | Install Node.js LTS, then run `setup.cmd` again. Screenshots also need Microsoft Edge |
+| Screenshots fail, or "playwright-core" is missing | Install Node.js LTS, then run `setup.cmd` again. Screenshots also need Microsoft Edge or Google Chrome (on Linux, Google Chrome: Chromium is not used). A run that fails keeps the screenshots of the last run that worked |
+| `git pull` says "Your local changes to the following files would be overwritten by merge: package-lock.json" | Setup in Blueprint 1.3.1 and earlier could change that file. In the Blueprint folder run `git checkout package-lock.json`, then `git pull`, then setup again. It does not happen any more after that |
 | `projects/`, `knowledge/` or `inbox/` is missing or not linked | Run `setup.cmd` again. This happens after moving or renaming the app folder, or changing `workspace_dir` |
 | "projects is a real folder with files in it" | Move the files into the workspace's `projects/` folder, delete the empty folder, run `setup.cmd` |
 | The requirements document shows a different font from the design | Run `setup.cmd` to install Geist and Geist Mono, restart Word, and generate again |
