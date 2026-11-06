@@ -24,6 +24,9 @@ See [docs/maintaining.md](docs/maintaining.md).
 - **The check before a commit passes on a new workspace.** It took the placeholder company name that setup
   puts in `company.yaml` for a real one and blocked every commit until the name was changed. It now also
   checks the client names of projects in the new folder layout, which it missed.
+- **Claude Code no longer asks before running seven of Blueprint's tools** (the tour, UAT scripts, change
+  requests, platform fit, review documents, the project overview and the folder layout): they now have the
+  same standing permission as the others, on Windows, macOS and Linux.
 
 ### Changed
 - **Setup downloads about 460 MB less.** The font package Blueprint uses named a web framework (Next.js)

@@ -66,6 +66,15 @@ def test_every_python_permission_has_its_mac_form():
         assert rule.replace("Bash(python -I ", "Bash(.venv/bin/python -I ") in allow, rule
 
 
+def test_every_tool_with_a_command_line_may_run_without_asking():
+    """Seven tools (the tour's among them) had no rule, so Claude Code asked before every run of them."""
+    allow = SETTINGS["permissions"]["allow"]
+    tools = [p.name for p in sorted((support.ROOT / "tools").glob("*.py")) if "__main__" in p.read_text(encoding="utf-8")]
+    for name in tools:
+        for form in ("Bash(python -I", "PowerShell(python -I", "Bash(.venv/bin/python -I"):
+            assert any(rule.startswith(f"{form} tools/{name}") for rule in allow), f"{form} tools/{name} ...)"
+
+
 # ---------------------------------------------------------------------- the machine check
 def test_the_machine_check_runs_on_this_system():
     results = doctor.check()
