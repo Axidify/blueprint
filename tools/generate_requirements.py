@@ -1706,6 +1706,19 @@ def strip_markers(docx_path):
     d.save(str(docx_path))
 
 
+def drop_picture_entry(doc, page, name):
+    """Remove a picture's entry from a page's resources (the picture itself goes when the file is saved)."""
+    holder, path = page.xref, "Resources"
+    kind, value = doc.xref_get_key(holder, path)
+    if kind == "xref":  # the resources are an object of their own
+        holder, path = int(value.split()[0]), ""
+    path = f"{path}/XObject" if path else "XObject"
+    kind, value = doc.xref_get_key(holder, path)
+    if kind == "xref":
+        holder, path = int(value.split()[0]), ""
+    doc.xref_set_key(holder, f"{path}/{name}" if path else name, "null")
+
+
 def sharpen_pdf_pictures(pdf_path, pictures):
     """Put the original pictures back into the PDF, in place of the reduced ones Word exported.
 
@@ -1735,7 +1748,14 @@ def sharpen_pdf_pictures(pdf_path, pictures):
             if same_shape and original.width > pixels:
                 if original.alpha:  # a screenshot has nothing see-through: without it the PDF is smaller
                     original = pymupdf.Pixmap(original, 0)
-                doc[page_no].replace_image(xref, pixmap=original)
+                page = doc[page_no]
+                names_before = {image[7] for image in page.get_images(full=True)}
+                page.replace_image(xref, pixmap=original)
+                # The library adds the new picture to the page under a name of its own and copies it over the
+                # old one, leaving that extra entry behind: every picture would be in the file twice.
+                for image in page.get_images(full=True):
+                    if image[7] not in names_before:
+                        drop_picture_entry(doc, page, image[7])
                 replaced += 1
     if replaced:
         tmp = pdf_path.with_suffix(".sharp.pdf")

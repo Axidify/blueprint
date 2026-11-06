@@ -11,6 +11,11 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+### Fixed
+- **The PDF is no longer twice the size it needs to be.** In 0.8.0, putting the screenshots back into the
+  PDF at full size stored each of them twice. Each is now stored once, which roughly halves the PDF of a
+  document with many screens. Generate the document again to get the smaller file.
+
 ## [0.8.0] - 2026-11-06
 
 ### Added

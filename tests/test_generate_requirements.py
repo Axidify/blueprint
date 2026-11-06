@@ -1451,9 +1451,9 @@ def test_the_pdf_gets_its_pictures_back_at_full_size(tmp_path):
 
     assert generate_requirements.sharpen_pdf_pictures(pdf, originals) == 2
     doc = pymupdf.open(str(pdf))
-    widths = [{img[2] for img in page.get_images(full=True)} for page in doc]
+    widths = [sorted(img[2] for img in page.get_images(full=True)) for page in doc]
     doc.close()
-    assert widths == [{300, 2000}, {2000}], "the figures are full size, the logo is as it was, no reduced picture is left"
+    assert widths == [[300, 2000], [2000]], "the figures are full size, each stored once; the logo is as it was"
 
 
 def test_pictures_that_cannot_be_matched_are_left_alone(tmp_path):
