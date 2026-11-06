@@ -114,6 +114,19 @@ INDEX = """<!doctype html>
 """
 
 
+def theme_css(theme_file, seen=()):
+    """A theme's CSS. A first line '/* extends: <theme> */' puts that theme's CSS in front of it."""
+    css = theme_file.read_text(encoding="utf-8")
+    first = css.split("\n", 1)[0].strip()
+    if first.startswith("/* extends:") and first.endswith("*/"):
+        parent = first[len("/* extends:"):-2].strip()
+        parent_file = ENGINE / "themes" / f"{parent}.css"
+        if parent in seen or not parent_file.exists():
+            sys.exit(f"Theme {theme_file.stem} extends unknown or circular theme '{parent}'")
+        css = theme_css(parent_file, seen + (theme_file.stem,)) + "\n" + css
+    return css
+
+
 def build(project):
     spec = load_spec(project)
     out = Path(project) / "mockup"
@@ -124,7 +137,7 @@ def build(project):
         sys.exit(f"Unknown theme '{theme}'. Available: {[p.stem for p in (ENGINE / 'themes').glob('*.css')]}")
     shutil.copy(ENGINE / "app.js", out / "assets" / "app.js")
     shutil.copy(ENGINE / "base.css", out / "assets" / "base.css")
-    shutil.copy(theme_file, out / "assets" / "theme.css")
+    (out / "assets" / "theme.css").write_text(theme_css(theme_file), encoding="utf-8")
     (out / "spec.js").write_text("window.SPEC = " + json.dumps(spec, indent=1, ensure_ascii=False) + ";\n", encoding="utf-8")
     p = spec["project"]
     (out / "index.html").write_text(INDEX.format(title=f"{p['name']} – Mock-up v{p.get('version', '')}"), encoding="utf-8")

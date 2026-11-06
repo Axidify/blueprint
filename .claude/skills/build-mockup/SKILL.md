@@ -14,8 +14,9 @@ so every decision put into the spec shows up in both. Format: `docs/spec-format.
 - The project folder (create it with the `new-project` skill if it does not exist).
 - Whatever exists: the brief, the SOW, workshop notes or transcripts, a requirements document draft, `register.json`.
 - Ask the user, if not already known:
-  - **Theme:** `joget` (default for Joget projects: shows what Joget delivers without custom UI) or
-    `modern` (custom builds, or clients who expect a branded UI).
+  - **Theme:** `joget` (default for Joget projects: shows what Joget delivers without custom UI),
+    `modern` (custom builds, or clients who expect a branded UI) or `vivid` (bold showcase look for
+    demos and pitches: dark gradient menu, coloured header band, gradient buttons).
   - Brand colour, and the client logo (put it at `spec/client-logo.png`).
 
 ## 2. Write the spec

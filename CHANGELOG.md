@@ -11,6 +11,16 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+### Added
+- A third mock-up look, `vivid`, for demos, pitches and clients who want a bold branded UI: a dark gradient
+  side menu, a coloured header band with the page floating over it, gradient buttons and a glass login
+  screen. Set `theme: vivid` in the spec. All of it follows the project's `primary_color`.
+
+### Changed
+- The `modern` mock-up look is more polished: stat cards with icons and their own accent colours, a menu
+  with icons, a user badge in the top bar, softer shadows, clearer form fields with a focus ring, status
+  chips with a dot, and row highlighting in lists. The `joget` look is unchanged.
+
 ## [0.5.0] - 2026-11-06
 
 ### Added

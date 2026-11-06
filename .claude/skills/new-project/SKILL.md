@@ -10,7 +10,7 @@ description: Set up a new client project in Blueprint, ask the few questions nee
 - **System name**, e.g. "Courier Booking System".
 - **Client name** and short name, e.g. "Acme Logistics Sdn. Bhd." / "Acme".
 - **Platform**: one of the platforms in `workspace/company.yaml`, or another.
-- **Mock-up look**: `joget` (looks like what Joget delivers) or `modern` (custom builds or a branded UI).
+- **Mock-up look**: `joget` (looks like what Joget delivers) , `modern` (custom builds or a branded UI) or `vivid` (a bold showcase look for demos).
 
 Make the folder name (slug) from the system name: lowercase, hyphenated, short (`courier-booking`).
 Check it is not already in `projects/`.

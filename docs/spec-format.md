@@ -8,7 +8,7 @@ One YAML file per project drives both the clickable mock-up (`tools/mockup.py`) 
 
 | Key | Purpose |
 |---|---|
-| `project` | `name`, `short_name` (shown in the logo box), `client`, `client_short`, `version`, `platform`, `theme` (`joget` or `modern`), `primary_color`, `prepared_by`, `reviewed_by`, `approved_by`, `date`, `status` (shown on the cover and in the page header, e.g. "Draft for client review", "Signed off"), `history: [{version, date, author, changes}]` (document version history table) |
+| `project` | `name`, `short_name` (shown in the logo box), `client`, `client_short`, `version`, `platform`, `theme` (`joget`, `modern` or `vivid`), `primary_color`, `prepared_by`, `reviewed_by`, `approved_by`, `date`, `status` (shown on the cover and in the page header, e.g. "Draft for client review", "Signed off"), `history: [{version, date, author, changes}]` (document version history table) |
 | `overview` | List of paragraphs for the start of document section 1.0 |
 | `roles` | `id`, `name`, `description`, `scope` (data scope, e.g. "Own branch only"), `user` (sample person shown in the mock-up header) |
 | `statuses` | `id`, `name`, `meaning`. Becomes the requirements document status table |
