@@ -107,6 +107,8 @@ after the user agrees; describe gaps in general terms, without client content.
   register item and recorded, then a spec change, a decision, a follow-up question or a possible CR.
 - `generate-requirements` – spec + screenshots → requirements document in the company's format, then reviewed with `review-requirements`.
 - `document-format` – change the requirements document look and structure, or learn it from a sample; preview before regenerating.
+- `mockup-design` – the mock-up's look: theme, brand colour, logo, font, corners, menu and top bar, from a request or
+  learnt from the client's screenshots, brand guidelines or website; previewed before and after.
 - `present` – open a mock-up or the page that lists them all; or run a live session, where comments typed
   in the mock-up reach Claude as they are saved and the changes the presenter approves are made on the spot.
 - `platform-fit` – the project's tech stack → each product looked up in its own documentation online → which
@@ -133,7 +135,7 @@ Run Python scripts with `python -I tools/<script>.py` (on macOS and Linux: `.ven
 tools/<script>.py`, the environment `setup.sh` makes; wherever these instructions and the skills write
 `python`, use that, and `./setup.sh` and `./present.sh` for `setup.cmd` and `present.cmd`): `doctor.py` (machine check), `status.py`
 (projects and next steps), `new_project.py`, `extract.py` (documents to text and images), `register.py`
-(register validation and Excel), `mockup.py` (build, serve, screenshot, feedback, live session), `generate_requirements.py`,
+(register validation and Excel), `mockup.py` (build, serve, screenshot, feedback, live session, the mock-up's look and its preview), `generate_requirements.py`,
 `document_format.py` (show, learn, preview the document format), `project.py` (issue, file, archive, find earlier work, match an inbox file to its project, hold a file in the inbox, check, migrate a project to the new folder layout),
 `estimate.py` (rates, project inventory, estimate checks and Excel, weeks for the timeline),
 `workshop.py` (what a workshop has to settle, agenda checks and the two workshop documents),
@@ -159,6 +161,12 @@ change anything in `tools/`, `.claude/`, `templates/`, `examples/`, setup or lau
   `git commit` and blocks the commit if it fails; fix the reason it gives rather than working around it.
 
 Use the `release` skill to publish a version.
+
+## Design
+
+Before designing anything (a mock-up's look, a theme, Blueprint's own pages, a design shown as a picture),
+read `docs/design-language.md`: Apple as the reference, one loud accent, a complementary pair for data,
+greys for the rest, and the sizes for type, spacing, buttons and tables. Change it only after the user agrees.
 
 ## Rules
 

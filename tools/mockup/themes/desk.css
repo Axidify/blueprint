@@ -30,6 +30,9 @@
   /* Status: a dot and a word. */
   --done: #34C759; --done-text: #248A3D; --late: #FF9500; --late-text: #C93400;
   --blocked: #FF3B30; --blocked-text: #D70015; --neutral: #8E8E93; --red: #D70015;
+  /* Data: the complementary pair, the design language's own chart teal and pink (project.data_colors replaces them).
+     Only for data, such as people's initials: never words or buttons. */
+  --data-1: #1597B0; --data-2: #D55181;
   /* Depth: ground, card, raised, dialog. */
   --ring: 0 0 0 1px rgba(0, 0, 0, .05), 0 1px 3px rgba(0, 0, 0, .04);
   --raised: 0 0 0 1px rgba(0, 0, 0, .05), 0 8px 24px rgba(0, 0, 0, .12);
@@ -46,15 +49,15 @@ h3 { font-size: calc(17px * var(--ts)); font-weight: 600; letter-spacing: -.01em
 /* Top bar and side menu: frosted, because they stay above what scrolls. Solid for people who ask for less transparency. */
 .topbar { height: 56px; padding: 0 24px; border-bottom: 1px solid var(--border); -webkit-backdrop-filter: var(--frost); backdrop-filter: var(--frost); }
 .brand { gap: 12px; font-size: calc(15px * var(--ts)); font-weight: 600; letter-spacing: -.01em; }
-.brand-mark { min-width: 28px; height: 28px; padding: 0 6px; border-radius: 7px; font-size: calc(11px * var(--ts)); font-weight: 600; letter-spacing: .02em; }
-.brand-mark.big { min-width: 44px; height: 44px; border-radius: 12px; font-size: calc(15px * var(--ts)); }
+.brand-mark { min-width: 28px; height: 28px; padding: 0 6px; border-radius: calc(7px * var(--rs)); font-size: calc(11px * var(--ts)); font-weight: 600; letter-spacing: .02em; }
+.brand-mark.big { min-width: 44px; height: 44px; border-radius: calc(12px * var(--rs)); font-size: calc(15px * var(--ts)); }
 .topbar-right { gap: 20px; font-size: calc(13px * var(--ts)); color: var(--muted); }
 .topbar-right .user { color: var(--muted); }
 .topbar-right .logout { color: var(--text); opacity: 1; font-weight: 500; }
 .layout { min-height: calc(100vh - 56px); }
 .sidebar { width: 232px; padding: 16px 8px; border-right: 1px solid var(--border); position: sticky; top: 56px; align-self: flex-start;
   height: calc(100vh - 56px); overflow-y: auto; -webkit-backdrop-filter: var(--frost); backdrop-filter: var(--frost); }
-.menu-item { display: flex; align-items: center; min-height: 34px; padding: 6px 12px; margin-bottom: 2px; border-left: 0; border-radius: 7px; font-size: calc(14px * var(--ts)); }
+.menu-item { display: flex; align-items: center; min-height: 34px; padding: 6px 12px; margin-bottom: 2px; border-left: 0; border-radius: calc(7px * var(--rs)); font-size: calc(14px * var(--ts)); }
 .menu-item.active { font-weight: 500; }
 /* At the 1000px of the screenshots the menu and the margins give the page the room its lists need. */
 @media (max-width: 1100px) { .sidebar { width: 200px; } .content { padding: 32px 32px 48px; } }
@@ -66,13 +69,13 @@ h3 { font-size: calc(17px * var(--ts)); font-weight: 600; letter-spacing: -.01em
 .page-head p { margin-top: 4px; font-size: calc(15px * var(--ts)); }
 
 /* Figures: equal tiles, one number each. */
-.stats { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px; margin-bottom: 24px; }
-.stat { border: 0; border-radius: var(--radius); box-shadow: var(--ring); padding: 20px 24px; }
+.stats { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 24px; margin-bottom: 24px; }  /* the gap between every card */
+.stat { border: 0; border-radius: calc(var(--radius) * var(--rs)); box-shadow: var(--ring); padding: 20px 24px; }
 .stat-value { font-size: calc(28px * var(--ts)); font-weight: 600; letter-spacing: -.02em; line-height: 1.15; font-variant-numeric: tabular-nums; }
 .stat-label { font-size: calc(13px * var(--ts)); margin-top: 4px; }
 
 /* A list is one card: its toolbar row, the rows, and the count at its foot. */
-.list-block { background: var(--card); border-radius: var(--radius); box-shadow: var(--ring); margin-bottom: 24px; }
+.list-block { background: var(--card); border-radius: calc(var(--radius) * var(--rs)); box-shadow: var(--ring); margin-bottom: 24px; }
 .list-tools { padding: 16px 20px; margin: 0; border-bottom: 1px solid var(--border); align-items: flex-end; }
 .filters { gap: 12px; }
 .filter label { font-size: calc(12px * var(--ts)); font-weight: 500; color: var(--muted); margin-bottom: 4px; }
@@ -80,18 +83,18 @@ h3 { font-size: calc(17px * var(--ts)); font-weight: 600; letter-spacing: -.01em
 .filter[data-el^="search:"] .f-input { background: var(--field); border-color: var(--field); }
 .toolbar { gap: 8px; margin-left: auto; }
 .table-wrap { background: transparent; border: 0; border-radius: 0; }
-table.datalist { font-size: calc(14px * var(--ts)); }
-.datalist th { padding: 10px 12px; background: transparent; color: var(--th-text); font-size: calc(12px * var(--ts)); font-weight: 500; border-bottom: 1px solid var(--border); }
+table.datalist { font-size: calc(15px * var(--ts)); }  /* body size, as every other row of text */
+.datalist th { padding: 10px 8px; background: transparent; color: var(--th-text); font-size: calc(12px * var(--ts)); font-weight: 500; border-bottom: 1px solid var(--border); }
 /* Rows at least 48px, with separators that start where the text starts. */
-#app .datalist td { padding: 13px 12px; border-bottom: 0; vertical-align: middle;
+#app .datalist td { padding: 13px 8px; border-bottom: 0; vertical-align: middle;
   --sep: linear-gradient(var(--border), var(--border)) 0 0 / 100% 1px no-repeat; background: var(--sep), var(--row-bg, transparent); }
 #app .datalist { --inset: 20px; }
 #app .form-section .datalist { --inset: 0px; }  /* inside a card of its own the rows start where its heading starts */
 #app .datalist th:first-child, #app .datalist td:first-child { padding-left: var(--inset); }
 #app .datalist th:last-child, #app .datalist td:last-child { padding-right: var(--inset); }
 #app .datalist td:first-child { --sep: linear-gradient(var(--border), var(--border)) var(--inset) 0 / calc(100% - var(--inset)) 1px no-repeat; }
-/* A short value without spaces (a reference, a date) is not broken at its hyphens. */
-#app .datalist td.nb { white-space: nowrap; }
+/* A short value (a reference, a date, a two-word type such as Annual leave) stays on one line. */
+#app .datalist td.nb, #app .datalist td.nb2 { white-space: nowrap; }  /* two words only while the list fits (fitLists) */
 #app .datalist tbody tr:first-child td { --sep: linear-gradient(transparent, transparent); }
 #app .datalist tbody tr[data-row]:hover td { --row-bg: var(--hover-row); }
 .datalist td.actions .link { margin-right: 16px; font-weight: 500; }
@@ -103,7 +106,7 @@ table.datalist { font-size: calc(14px * var(--ts)); }
 
 /* Status: a dot and a word. The spec's colours: green done, amber needs attention, red refused or failed,
    grey neutral; a status without a colour whose words say it waits or is in progress takes the accent. */
-.chip { display: inline-flex; align-items: center; gap: 6px; padding: 0; border-radius: 0; background: none; font-size: calc(14px * var(--ts)); font-weight: 400; white-space: nowrap; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 0; border-radius: 0; background: none; font-size: calc(15px * var(--ts)); font-weight: 400; white-space: nowrap; }
 .chip::before { content: ""; flex: 0 0 8px; height: 8px; border-radius: 50%; background: var(--neutral); }
 .chip.ok { background: none; color: var(--done-text); } .chip.ok::before { background: var(--done); }
 .chip.warn { background: none; color: var(--late-text); } .chip.warn::before { background: var(--late); }
@@ -121,13 +124,13 @@ table.datalist { font-size: calc(14px * var(--ts)); }
 .tab.missing::after { content: ""; display: inline-block; width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: var(--blocked); vertical-align: 2px; }
 
 /* Cards of fields, labels above them. */
-.form-section { border: 0; border-radius: var(--radius); box-shadow: var(--ring); padding: 24px; margin-bottom: 24px; }
+.form-section { border: 0; border-radius: calc(var(--radius) * var(--rs)); box-shadow: var(--ring); padding: 24px; margin-bottom: 24px; }
 .form-section .note { color: var(--muted); margin: -8px 0 16px; font-size: calc(13px * var(--ts)); }
 .f-grid { gap: 20px 24px; }
 .f-row { grid-template-columns: 1fr; gap: 6px; align-content: start; }
 .f-label { padding-top: 0; font-size: calc(13px * var(--ts)); font-weight: 500; color: var(--label); }
 .req { color: var(--muted); margin-left: 2px; }
-.f-input { min-height: 36px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 9px; background: #fff; color: var(--text); font-size: calc(15px * var(--ts));
+.f-input { min-height: 36px; padding: 6px 12px; border: 1px solid var(--line); border-radius: calc(9px * var(--rs)); background: #fff; color: var(--text); font-size: calc(15px * var(--ts));
   transition: border-color .12s var(--ease), box-shadow .12s var(--ease); }
 select.f-input { padding-right: 32px; -webkit-appearance: none; appearance: none; cursor: pointer;
   background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236E6E73' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") right 10px center / 16px no-repeat; }
@@ -140,19 +143,21 @@ textarea.f-input { padding: 8px 12px; line-height: 1.45; resize: vertical; }
 .f-row.invalid .f-input, .f-row.invalid .file-drop, .f-row.invalid .signature { border-color: var(--blocked-text); }
 .choices { gap: 8px 20px; padding-top: 6px; }
 .choices input { accent-color: var(--primary); width: 16px; height: 16px; vertical-align: -3px; margin: 0 6px 0 0; }
-.file-drop { border: 1px dashed var(--line); border-radius: 12px; padding: 16px; background: #FAFAFC; color: var(--muted); font-size: calc(14px * var(--ts)); }
+.file-drop { border: 1px dashed var(--line); border-radius: calc(12px * var(--rs)); padding: 16px; background: #FAFAFC; color: var(--muted); font-size: calc(14px * var(--ts)); }
 .file-drop .link { font-weight: 500; }
 .file-name { font-weight: 500; }
-.signature { height: 96px; border: 1px dashed var(--line); border-radius: 12px; background: #FAFAFC; color: var(--muted); font-size: calc(14px * var(--ts)); }
+.signature { height: 96px; border: 1px dashed var(--line); border-radius: calc(12px * var(--rs)); background: #FAFAFC; color: var(--muted); font-size: calc(14px * var(--ts)); }
 .sig-ink { color: var(--text); }
 
 /* Buttons: primary, secondary, quiet. Hover and pressed go one and two shades darker. */
 .form-buttons { gap: 8px; margin-top: 24px; }
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 16px; border-radius: 9px; border: 1px solid var(--line);
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 16px; border-radius: calc(9px * var(--rs)); border: 1px solid var(--line);
   background: transparent; color: var(--text); font-size: calc(14px * var(--ts)); font-weight: 500; white-space: nowrap; }
 .btn:hover { filter: none; background: rgba(0, 0, 0, .04); }
 .btn:active { background: rgba(0, 0, 0, .08); }
-.form-buttons .btn { height: 40px; padding: 0 20px; }
+/* The row of buttons a screen ends with: 44px together (Apple's smallest comfortable target), so the main
+   action and its alternatives stay level. Buttons in a list's toolbar keep 36px. */
+.form-buttons .btn { height: 44px; padding: 0 20px; font-size: calc(15px * var(--ts)); }
 .btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
 .btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 .btn.primary:active { background: var(--accent-press); border-color: var(--accent-press); }
@@ -180,13 +185,13 @@ textarea.f-input { padding: 8px 12px; line-height: 1.45; resize: vertical; }
 /* A detail screen: the record's status under its title, the progress as a card of rows, a related list. */
 .related-list { margin-top: 8px; }
 .related-list > h3 { margin: 0 0 12px; }
-.notice { position: relative; background: var(--card); border: 0; border-radius: 12px; box-shadow: var(--ring); color: var(--text);
+.notice { position: relative; background: var(--card); border: 0; border-radius: calc(12px * var(--rs)); box-shadow: var(--ring); color: var(--text);
   padding: 14px 16px 14px 36px; margin-bottom: 24px; font-size: calc(14px * var(--ts)); }
 .notice::before { content: ""; position: absolute; left: 16px; top: calc(14px + .45em); width: 8px; height: 8px; border-radius: 50%; background: var(--blocked); }
 
 /* Sign-in: one card on the grey ground. */
 .login-wrap { background: var(--login-bg); padding: 40px 16px; }
-.login-card { width: 400px; max-width: 100%; border-radius: var(--radius); padding: 32px; box-shadow: var(--raised); }
+.login-card { width: 400px; max-width: 100%; border-radius: calc(var(--radius) * var(--rs)); padding: 32px; box-shadow: var(--raised); }
 .login-brand { margin-bottom: 8px; }
 .login-brand h1 { font-size: calc(22px * var(--ts)); font-weight: 600; letter-spacing: -.015em; margin: 16px 0 2px; }
 .login-brand p { font-size: calc(14px * var(--ts)); }
@@ -197,9 +202,9 @@ textarea.f-input { padding: 8px 12px; line-height: 1.45; resize: vertical; }
 
 /* The client's dialogs: 20px corners over a dimmed page; the title says the consequence, then Cancel and the action. */
 .modal-back { background: rgba(0, 0, 0, .32); }
-.modal { width: 520px; border-radius: 20px; box-shadow: var(--dialog); }
+.modal { width: 520px; border-radius: calc(20px * var(--rs)); box-shadow: var(--dialog); }
 .modal-head { padding: 24px 24px 8px; border-bottom: 0; font-size: calc(17px * var(--ts)); font-weight: 600; letter-spacing: -.01em; align-items: center; }
-.modal-x { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 7px; font-size: calc(20px * var(--ts)); }
+.modal-x { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: calc(7px * var(--rs)); font-size: calc(20px * var(--ts)); }
 .modal-x:hover { background: rgba(0, 0, 0, .05); }
 .modal-body { padding: 8px 24px 16px; }
 .modal-body > p { margin: 0 0 16px; color: var(--muted); }
@@ -213,7 +218,7 @@ textarea.f-input { padding: 8px 12px; line-height: 1.45; resize: vertical; }
 .flow { padding: 32px 40px; background: var(--bg); }
 .flow h2 { margin-bottom: 24px; }
 .flow-row { gap: 8px; }
-.flow-step { border: 0; border-radius: var(--radius); background: var(--card); box-shadow: var(--ring); padding: 16px 12px; }
+.flow-step { border: 0; border-radius: calc(var(--radius) * var(--rs)); background: var(--card); box-shadow: var(--ring); padding: 16px 12px; }
 .flow-step.optional { background: var(--card); box-shadow: inset 0 0 0 1px var(--line); border: 0; outline: 1px dashed var(--line); outline-offset: -1px; }
 .flow-num { width: 26px; height: 26px; line-height: 26px; margin-bottom: 8px; background: var(--tint); color: var(--tint-text); font-weight: 600; }
 .flow-name { font-weight: 600; font-size: calc(14px * var(--ts)); }
@@ -224,3 +229,11 @@ textarea.f-input { padding: 8px 12px; line-height: 1.45; resize: vertical; }
 .flow-reject { color: var(--blocked-text); font-weight: 500; font-size: calc(14px * var(--ts)); }
 .flow-reject-line { border-top-color: var(--blocked); }
 .flow-notes { color: var(--muted); font-size: calc(13px * var(--ts)); }
+
+/* People: initials on a soft tint of one data colour, the same one for the same person everywhere. */
+.person { display: inline-flex; align-items: center; gap: 8px; }
+.person::before { content: attr(data-initials); flex: 0 0 auto; width: calc(24px * var(--ts)); height: calc(24px * var(--ts)); border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center; font-size: calc(10px * var(--ts)); font-weight: 600; letter-spacing: .02em;
+  background: color-mix(in srgb, var(--data-1) 16%, #fff); color: color-mix(in srgb, var(--data-1) 75%, #000); }
+.person[data-tone="2"]::before { background: color-mix(in srgb, var(--data-2) 16%, #fff); color: color-mix(in srgb, var(--data-2) 75%, #000); }
+.topbar .person::before { width: 26px; height: 26px; }

@@ -9,7 +9,7 @@ It is `_blueprint/spec/app.yaml` in the project folder (`spec/app.yaml` in a pro
 
 | Key | Purpose |
 |---|---|
-| `project` | `name`, `short_name` (shown in the logo box), `client`, `client_short`, `version`, `platform`, `stack` (the other products the system is built with: a database, a directory, a cloud service), `theme` (see [Themes](#themes)), `primary_color`, `text_size` (`normal`, `large` or `larger`: the text of the client's screens, in the mock-up and so in the document's pictures), `prepared_by`, `reviewed_by`, `approved_by`, `date`, `status` (shown on the cover and in the page header, e.g. "Draft for client review", "Signed off"), `history: [{version, date, author, changes}]` (document version history table) |
+| `project` | `name`, `short_name` (shown in the logo box), `client`, `client_short`, `version`, `platform`, `stack` (the other products the system is built with: a database, a directory, a cloud service), `theme` (see [Themes](#themes)), `primary_color`, `text_size` (`normal`, `large` or `larger`: the text of the client's screens, in the mock-up and so in the document's pictures), `data_colors`, `logo`, `font`, `font_file`, `corners`, `menu`, `header` (see [The client's look](#the-clients-look)), `prepared_by`, `reviewed_by`, `approved_by`, `date`, `status` (shown on the cover and in the page header, e.g. "Draft for client review", "Signed off"), `history: [{version, date, author, changes}]` (document version history table) |
 | `overview` | List of paragraphs for the start of document section 1.0 |
 | `roles` | `id`, `name`, `description`, `scope` (data scope, e.g. "Own branch only"), `user` (sample person shown in the mock-up header) |
 | `scope` | `{in_scope: [...], out_of_scope: [...], assumptions: [...]}`, each a list of sentences. Becomes the chapter "Scope and assumptions"; left out when the spec has none. Write what the client might otherwise expect to get under `out_of_scope` |
@@ -28,7 +28,7 @@ It is `_blueprint/spec/app.yaml` in the project folder (`spec/app.yaml` in a pro
 | `timeline` | The project timeline chapter (below) |
 | `extra_sections` | Free-form document sections after the NFRs: `{title, appendix, content: [{heading} \| {text} \| {bullets} \| {table: {header, rows}} \| {image, caption}]}`. `appendix: true` puts it after sign-off as Appendix A, B… Text may use `{client}` and `{system}`. In a table, an unquoted `No` or `Yes` is printed as that word (a first column headed `No` is the narrow numbering column); quote `"On"`, `"Off"`, `"True"` and `"False"` to keep those exact words |
 
-Optional files next to `app.yaml`: `client-logo.png` (document cover) and `process-flow.png` (document section 1.3).
+Optional files next to `app.yaml`: `client-logo.png` (document cover, and the mock-up's logo when `logo` names it) and `process-flow.png` (document section 1.3).
 
 ## Themes
 
@@ -51,6 +51,39 @@ Approval progress) already are. Status colours there: `green` is done, `amber` n
 progress (Pending, Submitted, In Review) takes the accent. Of several `primary` buttons on a screen the first
 is drawn solid and the others as the secondary tier; a `danger` button is red words in an outlined button
 (solid red only in its dialog), and one that refuses (Reject, Decline, Return, Send back) is a plain one.
+
+## The client's look
+
+On top of the theme, a project can take on the client's own look. Every setting is optional: one that is
+left out is drawn as the theme draws it, so a spec without them looks as it always did. The `mockup-design`
+skill sets them, from a request or from the client's screenshots, brand guidelines or website.
+
+| Setting | Values | Draws |
+|---|---|---|
+| `data_colors` | two colours, e.g. `["#1597B0", "#D55181"]` | The complementary pair for data: in `desk`, people's initials (anyone a role signs in as or a progress step names, and every name in a list column that holds one of them), each person always in the same one. `desk` uses teal and pink when none are set. Never words or buttons |
+| `logo` | a file in `spec/` (`.png`, `.jpg`, `.svg`, `.gif`, `.webp`) | The client's logo in place of the letters of `short_name`, in the top bar and on the sign-in page |
+| `font` | a font's name, e.g. `Lato` | The text of the client's screens, with the theme's font where it is missing |
+| `font_file` | a file in `spec/` (`.woff2`, `.woff`, `.ttf`, `.otf`) | Carries `font` in the mock-up, so it shows on every laptop; without it the font shows only where it is installed |
+| `corners` | `square`, `small`, `normal`, `round` | Corners of cards, fields, buttons and dialogs: none, half, as the theme draws them, or rounder |
+| `menu` | `light`, `dark` | The side menu |
+| `header` | `light`, `dark`, `brand` | The top bar; `brand` is the project's `primary_color` with white words |
+
+```yaml
+project:
+  theme: desk
+  primary_color: "#0B3D91"
+  logo: client-logo.png
+  menu: dark
+  corners: small
+```
+
+The mock-up carries the fonts it uses: Geist and Geist Mono (the `desk` theme's) come with Blueprint, and a
+`font_file` comes with the project, so a client opening the mock-up on their own laptop sees the same type.
+Colours follow the `desk` design language: `primary_color` is the one loud accent, `data_colors` the
+complementary pair for data, everything else grey; neither is ever green, orange or red (status) or violet
+and indigo. The build checks the values and that the files exist. A new logo, font or setting makes the screenshots out
+of date like any change to a screen. `python -I tools/mockup.py look <project>` shows the look in effect,
+and `--try key=value ...` previews a change without touching the project (see [Tools](tools.md)).
 
 ## Status rules
 

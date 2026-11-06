@@ -23,6 +23,7 @@ Start with **[Getting started](getting-started.md)** if you are new.
 | [Workspace and company profile](workspace.md) | App vs workspace, company profile, branding, sharing a workspace with a team |
 | [Spec format](spec-format.md) | The project spec that drives the mock-up and the generated requirements document |
 | [Document format](document-format.md) | How generated requirements documents look and are structured, and how to change it |
+| [Design language](design-language.md) | How mock-ups and Blueprint's own pages look: colours, type, spacing, buttons, tables, words |
 | [Tools](tools.md) | Command-line scripts, for when you want to run a step yourself |
 
 ## Maintaining Blueprint

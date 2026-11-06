@@ -11,6 +11,42 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+### Added
+- **Make the mock-up look like the client's own systems.** Say "use their logo", "dark menu", "squarer
+  corners" or "make it look like their intranet": the new `mockup-design` skill sets the look, or learns it
+  from screenshots of the client's systems, their brand guidelines or their website. It shows the main screens
+  before and after (`python -I tools/mockup.py look <project> --try ...`) and changes the project only once
+  you are happy. It warns when white words are hard to read on the brand colour, and when the look is custom
+  work on a Joget platform.
+- **Guidelines for phones and tablets** in the design language and the design skill: which device each role
+  uses (asked, never guessed), how a web system changes on a phone (one column, lists as rows, filters and
+  dialogs as sheets from the bottom), how a mobile app's screens are drawn (Apple's own apps as the
+  reference: tab bar, large titles, the main action within thumb reach, 44px targets, the sync state), and
+  the questions a phone raises for the register.
+- **Blueprint's design language is written down** in `docs/design-language.md`: Apple as the reference,
+  the colours, type sizes, spacing, corners, buttons, tables and words that mock-ups and Blueprint's own pages
+  follow. The design skill reads it before every change of look.
+- **The `desk` mock-up follows Apple's sizes more closely:** the row of buttons a screen ends with is 44px
+  and level (Back, Reject and Approve together), dashboard figures sit 24px apart like every other card, and
+  lists use the same 15px text as the rest of the screen, with short values kept on one line while the list
+  fits, so every list still fits the 1000px screenshots.
+- **A colour system for mock-ups:** one loud accent for what to press, a complementary pair for data, and
+  greys for everything else. In `desk` the pair (teal and pink unless the spec sets `data_colors`) draws
+  people's initials beside their names, the same colour for the same person everywhere. The design skill
+  picks a client's colours by the same rules, and `look` warns when an accent or data colour could be read
+  as a status, or is violet or indigo.
+- **The client's logo, font, corners, side menu and top bar** can be set in the spec (`logo`, `font`,
+  `font_file`, `corners`, `menu`, `header`) and work with every theme. A project that sets none of them
+  looks exactly as before, and a logo kept only for the document's cover stays off the mock-up until the
+  spec names it.
+
+### Fixed
+- **The overview tests pass on a fresh checkout.** They expected the sample's estimate Excel file, which is
+  not kept in git, so they failed wherever the sample's estimate had not been rendered (as on GitHub). The tests
+  now render it themselves. The overview page itself was right all along.
+- **The `desk` mock-up now looks the same on every laptop.** It carries its font (Geist) with it, so a client
+  opening the mock-up on their own laptop, or over the network, no longer sees it in a fallback font.
+
 ## [1.0.0] - 2026-11-07
 
 ### Added

@@ -114,7 +114,18 @@ python -I tools/mockup.py build       projects/<slug>
 python -I tools/mockup.py serve       projects/<slug> [--port 8765] [--lan]
 python -I tools/mockup.py screenshots projects/<slug>
 python -I tools/mockup.py feedback    projects/<slug>
+python -I tools/mockup.py look        projects/<slug> [--try key=value ...]
 ```
+`look` prints the look of the client's screens (theme, colour, data colours, text size, font, corners, side menu, top bar,
+logo and the project's own CSS), says when the current version was issued, and notes white words that are
+hard to read on the project's colour (below 4.5 to 1), a font the mock-up does not carry, an accent or data colour in `desk` that
+is close to a status colour or is violet or indigo, and a look that is custom work on a Joget platform.
+`--try data_colors=#1597B0,#D55181` tries a pair. With `--try` (for example `--try menu=dark corners=square
+logo=client-logo.png`; `key=none` takes a setting out) it builds a scratch copy as the project is now and one
+with the settings tried, and saves the sign-in page and the first dashboard, list and form of each to
+`_blueprint/mockup/look-preview/` as `<screen>-now.png` and `<screen>-try.png`. The project is not changed, and the
+preview is never kept with a mock-up version. See [The client's look](spec-format.md#the-clients-look).
+
 `serve` without a project opens a page that lists every mock-up on this machine, one click from each and
 from its earlier versions (a version kept at the start of a live session reads "v1.4 as presented 6 Nov
 19:00"); it is only shown on this computer, and `--lan` needs a project, so one client never sees

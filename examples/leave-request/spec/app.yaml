@@ -8,7 +8,7 @@ project:
   client_short: SAMPLE
   version: "0.1"
   platform: Joget DX
-  theme: joget            # joget | modern
+  theme: joget            # desk | joget | modern | vivid: the platform is Joget, so joget (docs/spec-format.md, Themes)
   primary_color: "#1f6fb2"
   prepared_by: Business Analyst
   reviewed_by: Project Lead

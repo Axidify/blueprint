@@ -72,8 +72,22 @@ Writes or extends the project spec (roles, statuses, screens, fields, sample dat
 builds the clickable mock-up. Undecided points become register questions instead of guesses. Whatever the
 spec cannot describe is built in the project's own mock-up code rather than left out, and what is custom
 work on the platform is tagged "Custom development" while presenting. New mock-ups get the calm `desk` look
-in the project's colour (`joget` on a Joget platform); existing ones keep theirs.
+in the project's colour (`joget` on a Joget platform); existing ones keep theirs. The client's logo, font,
+corners, menu and top bar are set with `mockup-design`.
 **Output:** the mock-up in `_blueprint/mockup/` (open with **Open the mock-up** or `present.cmd`), screenshots in `4 Mock-up screenshots`, register questions.
+
+### mockup-design
+
+**Ask:** "use the client's logo", "make the mock-up look like their intranet", "dark menu", "squarer corners"
+Changes how a project's mock-up looks: theme, colours, logo, font, corners, side menu and top bar. Colours
+follow one rule: a loud accent for what to press, a complementary pair for data, greys for the rest. It
+works from a plain request, or learns the client's look from screenshots of their own systems, their brand
+guidelines or their website and proposes it in plain words. It shows each screen before and after, warns
+when white words are hard to read on the brand colour or when the look is custom work on the platform, and
+changes the spec only once you are happy.
+**Output:** the look settings in the project's spec, before-and-after pictures in
+the project's `_blueprint/mockup/look-preview/`, and the rebuilt mock-up and screenshots. See
+[The client's look](spec-format.md#the-clients-look).
 
 ### present
 

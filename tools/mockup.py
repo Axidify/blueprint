@@ -5,6 +5,7 @@ Usage:
     python -I tools/mockup.py serve        [<project_dir>] [--port 8765] [--lan]
     python -I tools/mockup.py screenshots  <project_dir>
     python -I tools/mockup.py feedback     <project_dir>
+    python -I tools/mockup.py look         <project_dir> [--try key=value ...]
     python -I tools/mockup.py live <start|list|take|done|mark|undo|end|wait|checkpoint> <project_dir> ...
 
 <project_dir> is projects/<slug> (or examples/<name>). It must contain the spec, spec/app.yaml (in its
@@ -26,6 +27,11 @@ screenshots  builds, then captures every screen (and extra shots from the spec) 
              <project_dir>/mockup/screenshots/ ("4 Mock-up screenshots" in the new layout), listed in shots.json. It notes which screens they show, so the
              document generator can warn when the spec's screens have changed since.
 feedback     prints the saved comments, grouped by screen.
+look         shows the look of the client's screens (theme, colour, font, corners, menu, top bar, logo), and notes
+             white words that are hard to read on the project's colour or a look the platform does not give.
+             --try key=value ... builds a scratch copy with those settings and captures the sign-in page and the
+             first dashboard, list and form as they are now and as tried, into <project_dir>/mockup/look-preview/.
+             The project is not changed. A value of none takes a setting out.
 live         a live session with the client: comments reach the assistant as they are saved (see "a live
              session" further down, and the present skill).
 """
@@ -64,6 +70,95 @@ def default_theme(platform):
     """The theme a new project's spec starts with: joget when the platform is Joget (it shows what Joget gives
     without custom UI work), otherwise desk, a calm modern look in the project's colour."""
     return "joget" if "joget" in str(platform or "").lower() else "desk"
+
+
+# The client's own look on top of the theme (tools/mockup/look.css; docs/spec-format.md, The client's look).
+# All optional: a spec that sets none of them is drawn exactly as its theme draws it.
+LOOK_CHOICES = {"corners": ("square", "small", "normal", "round"), "menu": ("light", "dark"), "header": ("light", "dark", "brand")}
+LOOK_FILES = {"logo": (".png", ".jpg", ".jpeg", ".svg", ".gif", ".webp"), "font_file": (".woff2", ".woff", ".ttf", ".otf")}
+# The settings of `project` that change how the client's screens look (what `look` shows and --try accepts).
+LOOK_KEYS = ("theme", "primary_color", "data_colors", "text_size", "font", "font_file", "corners", "menu", "header", "logo")
+# The desk theme's colours, from its design language: Cobalt is the one accent, and the design language's own
+# chart teal and pink are the complementary pair for data. Hues (degrees) that mean status there, and the
+# violet and indigo it retired: an accent or data colour in them is noted by `look`.
+DESK_ACCENT = "#1F5FBF"
+DESK_DATA = ("#1597B0", "#D55181")
+STATUS_HUES = {"green": (90, 170), "orange": (20, 50), "red": (345, 15)}
+RETIRED_HUES = (245, 290)
+FONT_FORMATS = {".woff2": "woff2", ".woff": "woff", ".ttf": "truetype", ".otf": "opentype"}
+# Fonts Blueprint carries (the geist package, which setup installs): put into every mock-up whose theme or spec
+# uses them, so it looks the same on a laptop that does not have them installed, a client's included.
+FONT_PACKAGE = ROOT / "node_modules" / "geist" / "dist" / "fonts"
+BUNDLED_FONTS = {"Geist": "geist-sans/Geist-Variable.woff2", "Geist Mono": "geist-mono/GeistMono-Variable.woff2"}
+LOOK_PREVIEW = "look-preview"  # in mockup/: the pictures `look --try` takes, never kept with a version
+
+
+def look_file(project, spec, key):
+    """The file a look setting (`logo`, `font_file`) names, in the project's spec/ folder, or None if unset."""
+    name = ((spec or {}).get("project") or {}).get(key)
+    return (layout.spec_dir(project) / str(name)) if project is not None and name not in (None, "") else None
+
+
+def look_errors(spec, project=None):
+    """The mistakes in the client's look settings, as sentences. With `project`, the files they name must exist."""
+    p = spec.get("project") if isinstance(spec.get("project"), dict) else {}
+    errors = []
+    for key, choices in LOOK_CHOICES.items():
+        if p.get(key) is not None and str(p[key]).lower() not in choices:
+            errors.append(f"project: {key} '{p[key]}' must be one of {', '.join(choices)}")
+    if p.get("font") is not None and (not isinstance(p["font"], str) or not p["font"].strip() or any(c in p["font"] for c in "\"';{}<>")):
+        errors.append(f"project: font '{p['font']}' must be the font's name, as written in Word (e.g. Roboto)")
+    colours = p.get("data_colors")
+    if colours is not None and (not isinstance(colours, list) or len(colours) != 2
+                                or not all(isinstance(c, str) and len(c.strip().lstrip("#")) == 6 and c.strip().startswith("#")
+                                           and all(x in "0123456789abcdefABCDEF" for x in c.strip()[1:]) for c in colours)):
+        errors.append(f"project: data_colors {colours!r} must be two colours as six hex digits in quotes, "
+                      'e.g. ["#1597B0", "#D55181"]')
+    if p.get("font_file") not in (None, "") and p.get("font") in (None, ""):
+        errors.append("project: font_file needs font, the name of the font in that file")
+    for key, kinds in LOOK_FILES.items():
+        name = p.get(key)
+        if name in (None, ""):
+            continue
+        name = str(name)
+        if Path(name).is_absolute() or ".." in Path(name).parts or Path(name).suffix.lower() not in kinds:
+            errors.append(f"project: {key} '{name}' must be a file in the project's spec folder ending {', '.join(kinds)}")
+        elif project is not None and not look_file(project, spec, key).is_file():
+            errors.append(f"project: {key} '{name}' is not in {layout.spec_dir(project)}: put the file there, or take the setting out")
+    return errors
+
+
+def look_css(spec, project, theme_text):
+    """The @font-face rules for the fonts the mock-up carries: the bundled fonts its theme or spec names, and
+    the spec's own font file. Written into the CSS itself, since a browser refuses a separate font file to a
+    page opened from a folder (as the shared folder's shortcut and the screenshots open it)."""
+    import base64
+
+    p = spec.get("project") or {}
+    faces, missing = [], []
+    for family, rel in BUNDLED_FONTS.items():
+        if f'"{family}"' not in theme_text and str(p.get("font") or "").strip().lower() != family.lower():
+            continue
+        if p.get("font_file") and str(p.get("font") or "").strip().lower() == family.lower():
+            continue  # the spec brings its own file of this font
+        f = FONT_PACKAGE / rel
+        if not f.is_file():
+            missing.append(family)
+            continue
+        faces.append((family, f))
+    own = look_file(project, spec, "font_file")
+    if own is not None:
+        faces.append((str(p["font"]).strip(), own))
+    css = []
+    for family, f in faces:
+        # A variable font holds every weight; a single-weight file is declared as regular, so bold is drawn from it.
+        weights = "100 900" if f.parent.parent == FONT_PACKAGE or "variable" in f.name.lower() or "[wght" in f.name.lower() else "400"
+        data = base64.b64encode(f.read_bytes()).decode("ascii")
+        fmt = FONT_FORMATS[f.suffix.lower()]
+        mime = {"truetype": "ttf", "opentype": "otf"}.get(fmt, fmt)
+        css.append(f'@font-face {{ font-family: "{family}"; src: url(data:font/{mime};base64,{data}) format("{fmt}"); '
+                   f'font-weight: {weights}; font-style: normal; font-display: block; }}')
+    return "\n".join(css) + ("\n" if css else ""), missing
 # Parts of a spec that are internal: never written into the mock-up, which anyone in the room can read.
 INTERNAL_SPEC = ("platform_fit",)
 # A project's own mock-up code, for what the spec cannot describe: in spec/, and in the built mock-up's assets/.
@@ -435,7 +530,7 @@ def load_spec(project):
     if not path.exists():
         sys.exit(f"No spec at {path}")
     spec = yaml.safe_load(path.read_text(encoding="utf-8"))
-    errors = validate(spec)
+    errors = validate(spec) or look_errors(spec, project)  # then the files the look names, which only a project has
     if errors:
         print("Spec errors:\n  " + "\n  ".join(errors))
         sys.exit(1)
@@ -464,6 +559,7 @@ def validate(spec, warnings=None):
     size = (spec["project"] or {}).get("text_size") if isinstance(spec["project"], dict) else None
     if size is not None and str(size).lower() not in TEXT_SIZES:
         errors.append(f"project: text_size '{size}' must be one of {', '.join(TEXT_SIZES)}")
+    errors += look_errors(spec)
     roles = {r["id"] for r in spec["roles"]}
     screens = {s["id"]: s for s in spec["screens"]}
     dialogs = {d["id"] for d in spec.get("dialogs", [])}
@@ -794,7 +890,7 @@ def spec_warnings(spec):
 INDEX = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
-<link rel="stylesheet" href="assets/base.css"><link rel="stylesheet" href="assets/theme.css">{project_css}
+<link rel="stylesheet" href="assets/base.css">{fonts_css}<link rel="stylesheet" href="assets/theme.css"><link rel="stylesheet" href="assets/look.css">{project_css}
 </head><body><div id="app"></div>
 <script src="spec.js"></script><script src="build.js"></script><script src="assets/app.js"></script>{project_js}
 </body></html>
@@ -869,8 +965,11 @@ def build_inputs(project):
     Blueprint's mock-up engine. Compared by content, not by file times, which on Windows move in steps of
     about 15 milliseconds: a change saved in the same step as a build would otherwise be missed."""
     project = Path(project)
-    files = [layout.spec_file(project), *sorted(project_code(project).values()), Path(__file__).resolve(),
-             ENGINE / "app.js", ENGINE / "base.css", *sorted((ENGINE / "themes").glob("*.css"))]
+    # The logo and font files the look may name are counted before the spec is read: every one in the spec folder.
+    kinds = {kind for kinds in LOOK_FILES.values() for kind in kinds}
+    look = sorted(f for f in layout.spec_dir(project).glob("*") if f.is_file() and f.suffix.lower() in kinds)
+    files = [layout.spec_file(project), *sorted(project_code(project).values()), *look, Path(__file__).resolve(),
+             ENGINE / "app.js", ENGINE / "base.css", ENGINE / "look.css", *sorted((ENGINE / "themes").glob("*.css"))]
     value = hashlib.sha256()
     for f in files:
         value.update(f.name.encode() + b"\0" + f.read_bytes() + b"\0")
@@ -888,13 +987,26 @@ def build(project):
         sys.exit(f"Unknown theme '{theme}'. Available: {[p.stem for p in (ENGINE / 'themes').glob('*.css')]}")
     shutil.copy(ENGINE / "app.js", out / "assets" / "app.js")
     shutil.copy(ENGINE / "base.css", out / "assets" / "base.css")
-    (out / "assets" / "theme.css").write_text(theme_css(theme_file), encoding="utf-8")
+    shutil.copy(ENGINE / "look.css", out / "assets" / "look.css")
+    theme_text = theme_css(theme_file)
+    (out / "assets" / "theme.css").write_text(theme_text, encoding="utf-8")
+    fonts, fonts_missing = look_css(spec, project, theme_text)
+    if fonts:
+        (out / "assets" / "fonts.css").write_text(fonts, encoding="utf-8")
+    elif (out / "assets" / "fonts.css").exists():
+        (out / "assets" / "fonts.css").unlink()
+    for old in (out / "assets").glob("logo.*"):
+        old.unlink()  # a logo taken out or changed since the last build
+    logo = look_file(project, spec, "logo")
+    if logo is not None:
+        shutil.copy(logo, out / "assets" / f"logo{logo.suffix.lower()}")
     shown = {k: v for k, v in spec.items() if k not in INTERNAL_SPEC}
     creating = new_records(spec)
     custom = custom_work(spec, project)
     # What the build worked out for the engine: the buttons that add a record, and what to tag as custom work.
     made = {"theme": theme, "creates": [{k: n[k] for k in ("screen", "label", "dialog", "confirm", "data", "status")} for n in creating],
-            "custom": custom["tags"], "custom_code": custom["code"]}
+            "custom": custom["tags"], "custom_code": custom["code"],
+            "logo": f"assets/logo{logo.suffix.lower()}" if logo is not None else None}
     (out / "spec.js").write_text("window.SPEC = " + json.dumps(shown, indent=1, ensure_ascii=False) + ";\n", encoding="utf-8")
     (out / "build.js").write_text("window.MOCKUP_BUILD = " + json.dumps(made, indent=1, ensure_ascii=False) + ";\n", encoding="utf-8")
     own = project_code(project)
@@ -906,12 +1018,16 @@ def build(project):
     p = spec["project"]
     (out / "index.html").write_text(INDEX.format(
         title=f"{p['name']} – Mock-up v{p.get('version', '')}",
+        fonts_css='<link rel="stylesheet" href="assets/fonts.css">' if fonts else "",
         project_css='<link rel="stylesheet" href="assets/project.css">' if "mockup.css" in own else "",
         project_js='<script src="assets/project.js"></script>' if "mockup.js" in own else ""), encoding="utf-8")
     (out / BUILT_FROM).write_text(inputs, encoding="utf-8")
     snapshot(project, spec)
     print(f"Built {out / 'index.html'} ({len(spec['screens'])} screens, theme {theme}"
           + ("" if spec["project"].get("theme") else ": the spec sets no theme, so it keeps joget") + ")")
+    if fonts_missing:
+        print(f"{' and '.join(fonts_missing)} could not be put into the mock-up (node_modules/geist is missing: run setup again): "
+              "it shows in that font only on computers that have it installed.")
     for n in creating:
         print(f"New records: {n['label']} on {n['title']} adds a record to the {n['data']} list"
               + (f" (when {n['confirm']} in its dialog is pressed)" if n["dialog"] else "") + (f", as {n['status']}" if n["status"] else "")
@@ -956,7 +1072,7 @@ def snapshot(project, spec):
         return
     if dest.exists():
         shutil.rmtree(dest)
-    shutil.copytree(out, dest, ignore=lambda d, names: ["versions"] if Path(d) == out else [])
+    shutil.copytree(out, dest, ignore=lambda d, names: ["versions", LOOK_PREVIEW] if Path(d) == out else [])
 
 
 class MockupServer(http.server.ThreadingHTTPServer):
@@ -1791,7 +1907,7 @@ def live_start(project):
     kept = layout.versions_dir(project) / f"v{version}-presented-{dt.datetime.now():%Y%m%d-%H%M}"
     mock = layout.mockup_dir(project)
     if not kept.exists():
-        shutil.copytree(mock, kept, ignore=lambda d, names: ["versions"] if Path(d) == mock else [])
+        shutil.copytree(mock, kept, ignore=lambda d, names: ["versions", LOOK_PREVIEW] if Path(d) == mock else [])
     live_write(project, {"started": dt.datetime.now().isoformat(timespec="seconds"), "version": version, "kept": kept.name,
                          "heartbeat": time.time(), "changes": []})
     print(f"Live session open for {spec['project'].get('name', project.name)}, version {version}.")
@@ -2119,6 +2235,9 @@ def drawn(spec):
     part = {"project": {k: p.get(k) for k in DRAWN_PROJECT}, "data": spec.get("data")}
     if str(p.get("text_size") or "normal").lower() != "normal":  # only when set: a spec without it keeps its fingerprint
         part["project"]["text_size"] = str(p["text_size"]).lower()
+    for key in ("font", "font_file", "logo", "data_colors", *LOOK_CHOICES):  # the client's look: likewise only when set
+        if p.get(key) not in (None, ""):
+            part["project"][key] = str(p[key]).lower() if key in LOOK_CHOICES else p[key] if key == "data_colors" else str(p[key])
     for key in ("roles", "statuses", "screens", "dialogs", "process_flow"):  # this order is part of the fingerprint
         part[key] = strip(spec.get(key))
     # A status's rules (who may edit, cancel or delete, and where it moves next) are for the document only.
@@ -2138,6 +2257,9 @@ def fingerprint(spec, project=None):
     own = project_code(project)
     if own:  # only when there is some: a project without its own code keeps the value it always had
         part["project_code"] = hashlib.sha256(b"".join(name.encode() + own[name].read_bytes() for name in sorted(own))).hexdigest()
+    files = [f for f in (look_file(project, spec, key) for key in LOOK_FILES) if f is not None and f.is_file()]
+    if files:  # a new logo or font file changes the pictures too
+        part["look_files"] = hashlib.sha256(b"".join(f.name.encode() + f.read_bytes() for f in files)).hexdigest()
     return hashlib.sha256(json.dumps(part, ensure_ascii=False, default=str).encode("utf-8")).hexdigest()
 
 
@@ -2210,15 +2332,16 @@ def browser_errors(address):
         return []
 
 
-def run_shots(command):
-    """Run the screenshot script, showing each picture as it is taken. Returns (exit code, what it said on
-    its error output, the names of the pictures taken)."""
+def run_shots(command, quiet=False):
+    """Run the screenshot script, showing each picture as it is taken (unless `quiet`). Returns (exit code,
+    what it said on its error output, the names of the pictures taken)."""
     taken, said = [], []
     proc = subprocess.Popen(command, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
     reader = threading.Thread(target=lambda: said.append(proc.stderr.read()), daemon=True)  # read alongside, so neither pipe fills up
     reader.start()
     for line in proc.stdout:
-        print(line, end="", flush=True)
+        if not quiet:
+            print(line, end="", flush=True)
         if ".png" in line:
             taken.append(line.strip().split(".png")[0])
     proc.wait()
@@ -2274,6 +2397,208 @@ def screenshots(project):
     print(f"Wrote {len(shots)} screenshots to {out}")
 
 
+# ------------------------------------------------------------------ the client's look
+THEME_LOOKS = {"desk": "calm and ordered: true greys, white cards, one accent colour",
+               "joget": "what Joget DX gives without custom UI work",
+               "modern": "a light, branded custom build with icons and soft shadows",
+               "vivid": "a bold showcase: dark gradient menu, coloured header band"}
+
+
+def contrast_with_white(color):
+    """How well white words read on `color` (#rrggbb), as the contrast ratio (1 to 21), or None if not a colour."""
+    hex_ = str(color or "").strip().lstrip("#")
+    if len(hex_) == 3:
+        hex_ = "".join(c * 2 for c in hex_)
+    if len(hex_) != 6 or any(c not in "0123456789abcdefABCDEF" for c in hex_):
+        return None
+    channels = [int(hex_[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+    lum = sum(w * (c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4) for w, c in zip((0.2126, 0.7152, 0.0722), channels))
+    return 1.05 / (lum + 0.05)
+
+
+def hue_of(colour):
+    """The hue of #rrggbb in degrees, or None (also for a grey, which has none)."""
+    import colorsys
+
+    hex_ = str(colour or "").strip().lstrip("#")
+    if len(hex_) == 3:
+        hex_ = "".join(c * 2 for c in hex_)
+    if len(hex_) != 6 or any(c not in "0123456789abcdefABCDEF" for c in hex_):
+        return None
+    h, light, sat = colorsys.rgb_to_hls(*(int(hex_[i:i + 2], 16) / 255 for i in (0, 2, 4)))
+    return None if sat < 0.15 or light < 0.08 or light > 0.95 else h * 360
+
+
+def colour_clash(colour):
+    """Why a colour breaks the desk design language's rules for an accent or a data colour, in words, or None."""
+    hue = hue_of(colour)
+    if hue is None:
+        return None
+    for name, (low, high) in STATUS_HUES.items():
+        if (low <= hue <= high) if low < high else (hue >= low or hue <= high):
+            return f"close to the {name} that means status"
+    if RETIRED_HUES[0] <= hue <= RETIRED_HUES[1]:
+        return "violet or indigo"
+    return None
+
+
+def look_notes(spec):
+    """What to tell the user about a look before it reaches the client: white words that are hard to read on the
+    project's colour, and a look the platform does not give as standard."""
+    p = spec.get("project") or {}
+    notes = []
+    ratio = contrast_with_white(p.get("primary_color"))
+    if ratio is not None and ratio < 4.5:
+        notes.append(f"White words on {p['primary_color']} (the main button{', the top bar' if str(p.get('header')).lower() == 'brand' else ''}) "
+                     f"are hard to read: contrast {ratio:.1f} to 1, where text needs at least 4.5 to 1. A darker shade of the brand colour reads better.")
+    theme = p.get("theme") or UNSET_THEME
+    if theme == "desk":
+        for what, colour in [("The accent", p.get("primary_color"))] + [("A data colour", c) for c in (p.get("data_colors") or [])]:
+            clash = colour_clash(colour)
+            if clash:
+                notes.append(f"{what} {colour} is {clash}. The desk design language keeps green, orange and red for status and "
+                             "leaves out violet and indigo: pick from its accents (Cobalt, Petrol, Ocean, Spruce, Deep teal, Steel, Ink, "
+                             "Apple blue, Plum, Graphite) or its chart colours.")
+    font = str(p.get("font") or "").strip()
+    if font and not p.get("font_file") and font.lower() not in (f.lower() for f in BUNDLED_FONTS):
+        notes.append(f"{font} is not carried in the mock-up: it shows only on computers that have it installed, and elsewhere in the "
+                     "theme's own font. Put the font file (.woff2, .ttf) in the spec folder and set font_file to carry it.")
+    own = [k for k in ("font", "corners", "menu", "header", "logo") if p.get(k) not in (None, "")]
+    if "joget" in str(p.get("platform") or "").lower() and (theme != "joget" or own):
+        notes.append("The platform is Joget DX, whose own screens look like the joget theme: "
+                     + (f"the {theme} theme" if theme != "joget" else "this look") + (f" (with {', '.join(own)})" if own and theme != "joget" else "")
+                     + " is custom theme work there. Record it with platform-fit, or tell the room it is the branded version.")
+    return notes
+
+
+def look_lines(spec, project):
+    """The look in effect, setting by setting, in plain words."""
+    p = spec["project"]
+    theme = p.get("theme") or UNSET_THEME
+    theme_text = theme_css(ENGINE / "themes" / f"{theme}.css") if (ENGINE / "themes" / f"{theme}.css").exists() else ""
+    import re
+
+    theme_font = (re.findall(r'--font:\s*"?([^",;]+)', theme_text) or ["the browser's"])[-1].strip()
+    theme_colour = DESK_ACCENT if theme == "desk" else "#1f6fb2"
+    spec_dir = layout.spec_dir(project)
+    logos = sorted(f.name for f in spec_dir.glob("*") if f.suffix.lower() in LOOK_FILES["logo"] and f.name != "process-flow.png")
+    own = project_code(project)
+    lines = [
+        ("Theme", f"{theme} ({THEME_LOOKS.get(theme, 'a theme of its own')})" + ("" if p.get("theme") else ", because the spec sets none")),
+        ("Colour", p.get("primary_color") or f"{theme_colour}, the theme's own"),
+        ("Data colours", " and ".join(p["data_colors"]) if p.get("data_colors") else
+         (f"{DESK_DATA[0]} and {DESK_DATA[1]}, the theme's own (people's initials)" if theme == "desk" else "not used by this theme")),
+        ("Text size", str(p.get("text_size") or "normal")),
+        ("Font", (f"{p['font']}" + (f", carried in {p['font_file']}" if p.get("font_file") else ", where it is installed")) if p.get("font")
+         else f"{theme_font}, the theme's own"),
+        ("Corners", str(p.get("corners") or "as the theme draws them")),
+        ("Side menu", str(p.get("menu") or "as the theme draws it")),
+        ("Top bar", str(p.get("header") or "as the theme draws it")),
+        ("Logo", f"{p['logo']}" if p.get("logo") else f"the letters {p.get('short_name') or str(p.get('name', '?'))[:1]}"
+         + (f" ({', '.join(logos)} {'is' if len(logos) == 1 else 'are'} in the spec folder: set logo to show one)" if logos else "")),
+        ("Own mock-up CSS", f"spec/mockup.css ({len(own['mockup.css'].read_text(encoding='utf-8').splitlines())} lines)" if "mockup.css" in own else "none"),
+    ]
+    return lines
+
+
+def show_look(project):
+    import project as project_tool
+
+    spec = load_spec(project)
+    p = spec["project"]
+    print(f"The look of {p['name']}'s mock-up (v{p.get('version', '')}):")
+    for name, value in look_lines(spec, project):
+        print(f"  {name + ':':17} {value}")
+    issued = project_tool.is_issued(Path(project), str(p.get("version", "")))
+    if issued:
+        print(f"\nv{p.get('version')} was issued to {issued['to']} on {issued['date']}: change project.version in the spec before changing the look.")
+    for note in look_notes(spec):
+        print("\nNote: " + note)
+
+
+def parse_tries(tries):
+    """`key=value` settings for --try: {key: value or None (take the setting out)}."""
+    changes = {}
+    for item in tries:
+        key, sep, value = item.partition("=")
+        key = key.strip()
+        if not sep or key not in LOOK_KEYS:
+            sys.exit(f"--try takes settings as key=value, where key is one of {', '.join(LOOK_KEYS)}: '{item}' is not one")
+        value = value.strip()
+        changes[key] = None if value.lower() in ("", "none", "default") else [c.strip() for c in value.split(",")] if key == "data_colors" else value
+    return changes
+
+
+def preview_shots(spec):
+    """The screens a look preview captures: the sign-in page, and the first dashboard, list and form."""
+    types = {s["id"]: s.get("type") for s in spec["screens"]}
+    picked, seen = [], set()
+    for shot in shot_list(spec):
+        kind = types.get(shot["screen"])
+        if kind in ("login", "dashboard", "list", "form") and kind not in seen and not shot.get("dialog") and not shot.get("record"):
+            seen.add(kind)
+            picked.append(shot)
+    return picked or shot_list(spec)[:4]
+
+
+def try_look(project, tries):
+    """Build a scratch copy of the project as it is and one with the settings tried, and capture the same few
+    screens of each into mockup/look-preview/: <screen>-now.png and <screen>-try.png. The project is not changed."""
+    import tempfile
+
+    project = Path(project)
+    load_spec(project)  # the spec as it is must build
+    changes = parse_tries(tries)
+    raw = yaml.safe_load(layout.spec_file(project).read_text(encoding="utf-8"))
+    tried = json.loads(json.dumps(raw, default=str))
+    for key, value in changes.items():
+        if value is None:
+            tried["project"].pop(key, None)
+        else:
+            tried["project"][key] = value
+    errors = validate(tried)
+    errors += [e for e in look_errors(tried, project) if e not in errors]
+    theme = tried["project"].get("theme") or UNSET_THEME
+    if not (ENGINE / "themes" / f"{theme}.css").exists():
+        errors.append(f"theme '{theme}' is not one of {', '.join(sorted(p.stem for p in (ENGINE / 'themes').glob('*.css')))}")
+    if errors:
+        sys.exit("The settings tried do not build:\n  " + "\n  ".join(errors))
+    out = layout.mockup_dir(project) / LOOK_PREVIEW
+    if out.exists():
+        shutil.rmtree(out)
+    out.mkdir(parents=True)
+    script = ROOT / "tools" / "screenshot.mjs"
+    taken_files = []
+    with tempfile.TemporaryDirectory() as tmp:
+        for label in ("now", "try"):
+            scratch = Path(tmp) / label
+            shutil.copytree(layout.spec_dir(project), scratch / "spec")  # a scratch project in the plain layout
+            if label == "try":
+                layout.spec_file(scratch).write_text(yaml.safe_dump(tried, sort_keys=False, allow_unicode=True), encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                spec = build(scratch)
+            mock = layout.mockup_dir(scratch).resolve()
+            shots = preview_shots(spec)
+            plan = mock / "shots.json"
+            plan.write_text(json.dumps(shots, indent=2), encoding="utf-8")
+            code, said, taken = run_shots(["node", str(script), str(mock / "index.html"), str(plan), str(mock / "screenshots")], quiet=True)
+            if code:
+                sys.exit(screenshot_failure(code, said, [s for s in shots if s["name"] not in taken], mock))
+            for shot in shots:
+                target = out / f"{shot['name']}-{label}.png"
+                shutil.copy(mock / "screenshots" / f"{shot['name']}.png", target)
+                taken_files.append(target)
+    words = ", ".join(f"{k} {v}" if v is not None else f"{k} as the theme has it" for k, v in changes.items())
+    print(f"Look preview ({words or 'nothing changed'}): the same screens now and as tried, in {out}")
+    for f in taken_files:
+        print(f"  {f.name}")
+    print("Nothing in the project changed. To keep the look, set these in the spec's project section, then build and take the screenshots again:")
+    for key, value in changes.items():
+        print(f"  {key}: {json.dumps(value) if value is not None else '(take it out)'}")
+    for note in look_notes(tried):
+        print("Note: " + note)
+
+
 def show_feedback(project):
     fb = layout.feedback_file(project)
     items = standing(json.loads(fb.read_text(encoding="utf-8"))) if fb.exists() else []  # taken back in the mock-up: left out
@@ -2297,15 +2622,17 @@ def main():
     if sys.argv[1:2] == ["live"]:
         return live_main(sys.argv[2:])
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["build", "serve", "screenshots", "feedback"])
+    ap.add_argument("command", choices=["build", "serve", "screenshots", "feedback", "look"])
     ap.add_argument("project", nargs="?", help="projects/<slug>; `serve` without it lists every mock-up")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--lan", action="store_true")
     ap.add_argument("--version", help="serve a saved mock-up version, e.g. 0.2")
+    ap.add_argument("--try", dest="tries", nargs="+", metavar="KEY=VALUE",
+                    help=f"look: preview these settings ({', '.join(LOOK_KEYS)}) without changing the project")
     a = ap.parse_args()
     if not a.project and a.command != "serve":
         ap.error(f"{a.command} needs a project folder, for example projects/courier-booking")
-    if a.project and a.command in ("build", "screenshots", "serve") and not a.version:
+    if a.project and a.command in ("build", "screenshots", "serve", "look") and not a.version:
         folder = Path(a.project)
         if not folder.is_dir():
             sys.exit(f"No project at {folder}. The projects on this machine are listed by: python -I tools/status.py")
@@ -2322,6 +2649,10 @@ def main():
     elif a.command == "screenshots":
         screenshots(a.project)
         refresh_overview(a.project)
+    elif a.command == "look" and a.tries:
+        try_look(a.project, a.tries)
+    elif a.command == "look":
+        show_look(a.project)
     else:
         show_feedback(a.project)
 
