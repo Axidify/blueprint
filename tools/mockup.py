@@ -88,7 +88,7 @@ KNOWN_KEYS = {
     "column": {"field", "label", "chip"},
     "section": {"title", "page", "page_title", "note", "fields"},
     "field": {"id", "label", "type", "required", "readonly", "default", "length", "options", "options_from", "placeholder", "help",
-              "source", "validation"},
+              "source", "validation", "roles"},
     "button": {"label", "style", "to", "toast", "dialog", "roles", "when", "example", "access", "set_status", "also_move", "creates"},
     "dialog": {"id", "title", "message", "fields", "list", "doc_table", "srs_table", "confirm"},
     "figure": {"label", "value", "count", "formula"},
@@ -370,7 +370,7 @@ def tied_list(spec, screen, button=None):
 def first_status(spec, name, label):
     """The status a new record starts in when its button does not say (`set_status`): the first status of the
     spec, or the one after it when that is a draft and the button is not about a draft (Submit is not Save as
-    Draft). Without statuses: a waiting status of the sample records. None when the records have no status."""
+    Draft): the draft's first `next`, or, when it lists none, the next status of the list. Without statuses: a waiting status of the sample records. None when the records have no status."""
     rows_ = [r for r in (spec.get("data") or {}).get(name) or [] if isinstance(r, dict)]
     if rows_ and not any("status" in r for r in rows_):
         return None
@@ -378,8 +378,10 @@ def first_status(spec, name, label):
     if statuses:
         first = statuses[0]
         is_draft = "draft" in f"{first.get('id')} {first.get('name')}".lower()
-        if is_draft and "draft" not in str(label).lower() and isinstance(first.get("next"), list) and first["next"]:
-            first = find_status(spec, first["next"][0]) or first
+        if is_draft and "draft" not in str(label).lower():
+            # Its first next step; a draft that lists none is followed by the next status of the list.
+            nxt = first.get("next") if isinstance(first.get("next"), list) and first["next"] else None
+            first = (find_status(spec, nxt[0]) if nxt else None) or (statuses[1] if len(statuses) > 1 else first)
         return str(first.get("name") or first.get("id"))
     seen = [str(r["status"]) for r in rows_ if r.get("status") not in (None, "")]
     return next((s for s in seen if any(w in s.lower() for w in WAITING_WORDS)), seen[0] if seen else None)
@@ -518,6 +520,13 @@ def validate(spec, warnings=None):
                               + (f" (did you mean '{close[0]}'?)" if close else ""))
             source = f.get("options_from")
             here = f"{where}, field {f.get('id', '?')}"
+            if f.get("roles") is not None:  # a user field offers the people of these roles
+                wanted = f["roles"] if isinstance(f["roles"], list) else [f["roles"]]
+                if f.get("type") != "user":
+                    errors.append(f"{here}: roles is for a user field (type: user), to say whose people it offers")
+                for rid in wanted:
+                    if rid not in roles:
+                        errors.append(f"{here}: roles names '{rid}', which is not a role of the spec")
             if isinstance(source, dict):  # {list, field, where}: the choices are the records the filter lets through
                 misspelt(f"{here}, options_from", "options_from", source)
                 name, field = source.get("list"), source.get("field")

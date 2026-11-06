@@ -248,6 +248,12 @@ See [docs/maintaining.md](docs/maintaining.md).
   of it.
 
 ### Fixed
+- **A user field in the mock-up offers people.** The approval steps of a form showed empty drop-downs; a
+  `user` field now offers the people of its `roles` (or everyone the spec names).
+- **Submit on a new form starts the request after its draft status** even when the draft lists no `next`; it
+  used to add the request as a draft.
+- **Going on with required fields empty says so.** The second press of a form's main button still goes on, so
+  a session is never stuck, but the mock-up now says that the real system would not send the form.
 - **Filters are kept when you open a record and come back.** The list used to show every row again.
 - **The Feedback button no longer covers the last buttons of a page**, such as Export or Approve.
 - **The outline in feedback mode is no longer cut off** on a column heading or anything else inside a table.
