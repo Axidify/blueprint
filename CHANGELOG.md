@@ -11,6 +11,17 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+### Fixed
+- **A box drawn for something new stays in its place** when the Feedback or What changed panel opens or
+  closes, or the window changes size: it keeps its place across the area it was drawn in, and its distance
+  from the nearest thing on the screen (a box drawn under a centred sign-in card stays under it).
+- **The page makes room for the What changed panel** as it does for Feedback, so the panel no longer covers
+  the right of the screen; visiting a comment drawn as a box outlines the box.
+
+### Changed
+- **The README** describes the mock-up design skill, comments drawn as a box, What changed and the comments
+  workbook, and the release skill now brings the README up to date with every release.
+
 ## [1.3.0] - 2026-11-07
 
 ### Added

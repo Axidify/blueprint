@@ -1238,6 +1238,7 @@
           const b = this.boxRect(c);
           const frame = document.createElement("div");
           frame.className = unsent ? "fb-box unsent" : "fb-box";
+          if (c.id) frame.dataset.fbId = c.id;
           frame.title = pin.title;
           frame.onclick = pin.onclick;
           Object.assign(frame.style, { left: `${b.x}px`, top: `${b.y}px`, width: `${b.w}px`, height: `${b.h}px` });
@@ -1258,7 +1259,9 @@
     renderPanel() {
       const panel = document.getElementById("fb-panel");
       // While the panel is open the page makes room for it on a wide screen, so it never covers the last columns.
-      document.body.classList.toggle("fb-panel-open", this.active);
+      // The page makes room while either panel is open (Feedback, or What changed).
+      document.body.classList.toggle("fb-panel-open", this.active || changes.shown);
+      requestAnimationFrame(() => this.renderPins());  // the page made room or took it back: boxes follow
       if (!this.active) { panel.hidden = true; return; }
       panel.hidden = false;
       const list = this.forScreen();
@@ -1333,15 +1336,34 @@
       }).filter((el, i, all) => !all.some((other) => other !== el && other.contains(el)));  // a part inside another counts once
       const elements = [...new Set(inside.map((el) => el.dataset.el))];
       if (elements.length) return this.captureMany(drawn, rect, inside, elements);
-      const cx = rect.x + rect.w / 2 - window.scrollX, cy = rect.y + rect.h / 2 - window.scrollY;
-      drawn.style.visibility = "hidden";
-      const under = document.elementFromPoint(cx, cy);
-      drawn.style.visibility = "";
-      const anchor = under && under.closest("#app [data-el]");
+      // Kept in proportion to the smallest element it lies wholly inside, so it stays in its place when the
+      // layout changes: a panel opening beside the page, a narrower window, a centred card moving.
+      const holders = [...document.querySelectorAll("#app [data-el]")].filter((el) => {
+        const a = el.getBoundingClientRect();
+        const x = a.left + window.scrollX, y = a.top + window.scrollY;
+        return a.width && a.height && x <= rect.x + 1 && y <= rect.y + 1 && x + a.width >= rect.x + rect.w - 1 && y + a.height >= rect.y + rect.h - 1;
+      });
+      let anchor = holders.sort((a, b) => a.getBoundingClientRect().width * a.getBoundingClientRect().height
+        - b.getBoundingClientRect().width * b.getBoundingClientRect().height)[0];
+      if (!anchor) {  // over the edge of everything: the thing under its middle
+        drawn.style.visibility = "hidden";
+        const under = document.elementFromPoint(rect.x + rect.w / 2 - window.scrollX, rect.y + rect.h / 2 - window.scrollY);
+        drawn.style.visibility = "";
+        anchor = under && under.closest("#app [data-el]");
+      }
       const element = anchor ? anchor.dataset.el : "";
       const at = anchor ? anchor.getBoundingClientRect() : null;
+      const share = (n) => Math.round(n * 10000) / 10000;
+      // Up and down it keeps its distance from the nearest thing on the screen (14px under the sign-in card stays
+      // 14px under it), since a page reflows sideways but grows downwards.
+      const page = (el) => { const a = el.getBoundingClientRect(); return { x: a.left + window.scrollX, y: a.top + window.scrollY, w: a.width, h: a.height }; };
+      const gap = (a) => Math.max(0, a.x - (rect.x + rect.w), rect.x - (a.x + a.w)) + Math.max(0, a.y - (rect.y + rect.h), rect.y - (a.y + a.h));
+      const near = [...document.querySelectorAll("#app [data-el]")].filter((el) => !el.contains(anchor) && !holders.includes(el))
+        .map((el) => ({ el, a: page(el) })).filter((x) => x.a.w && x.a.h).sort((p, q) => gap(p.a) - gap(q.a))[0];
       const box = { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.w), h: Math.round(rect.h),
-        ...(at ? { dx: Math.round(rect.x - (at.left + window.scrollX)), dy: Math.round(rect.y - (at.top + window.scrollY)) } : {}) };
+        ...(at && at.width && at.height ? { fx: share((rect.x - (at.left + window.scrollX)) / at.width), fy: share((rect.y - (at.top + window.scrollY)) / at.height),
+          fw: share(rect.w / at.width), fh: share(rect.h / at.height) } : {}),
+        ...(near ? { ref: near.el.dataset.el, ry: Math.round(rect.y - near.a.y) } : {}) };
       const r = route();
       const named = element && element !== "region:page background";  // the empty page is no place worth naming
       this.openBox({ title: `Something new${named ? ` in ${nameOf(element)}` : " here"}`, ask: "What should go here?", author: true }).then((text) => {
@@ -1380,8 +1402,14 @@
         const right = Math.max(...rects.map((r) => r.right)), bottom = Math.max(...rects.map((r) => r.bottom));
         return { x: left + window.scrollX - 6, y: top + window.scrollY - 6, w: right - left + 12, h: bottom - top + 12 };
       }
-      const target = c.element && b.dx != null ? document.querySelector(`#app [data-el="${CSS.escape(c.element)}"]`) : null;
-      if (target) {
+      const target = c.element && (b.fx != null || b.dx != null) ? document.querySelector(`#app [data-el="${CSS.escape(c.element)}"]`) : null;
+      if (target && b.fx != null) {  // sideways in proportion to its element; up and down at its distance from the nearest thing
+        const at = target.getBoundingClientRect();
+        const ref = b.ref ? document.querySelector(`#app [data-el="${CSS.escape(b.ref)}"]`) : null;
+        const top = ref ? ref.getBoundingClientRect().top + window.scrollY + b.ry : at.top + window.scrollY + b.fy * at.height;
+        return { x: at.left + window.scrollX + b.fx * at.width, y: top, w: b.fw * at.width, h: b.h };
+      }
+      if (target) {  // drawn before boxes kept their proportion: a fixed distance from its element
         const at = target.getBoundingClientRect();
         return { x: at.left + window.scrollX + b.dx, y: at.top + window.scrollY + b.dy, w: b.w, h: b.h };
       }
@@ -1894,7 +1922,7 @@
         const said = { id: c.id, state: c.state };
         const on = list.find((x) => x.screen === c.screen);
         if (on) (on.comments = on.comments || []).push(said);
-        else list.push({ text: `“${c.text}”`, screen: c.screen, element: c.element, role: c.role, comments: [said] });
+        else list.push({ text: `“${c.text}”`, screen: c.screen, element: c.element, role: c.role, comments: [said], ...(c.box ? { boxOf: c.id } : {}) });
       }
       this.list = list;
       this.from = before.version;
@@ -1915,6 +1943,7 @@
       const panel = document.getElementById("fb-changes");
       panel.hidden = !this.shown;
       document.body.classList.toggle("fb-panel-open", this.shown || feedback.active);
+      requestAnimationFrame(() => feedback.renderPins());  // the page made room or took it back: boxes follow
       document.getElementById("fb-changes-btn").classList.toggle("on", this.shown);
       if (!this.shown) return;
       const n = this.list.length;
@@ -1949,7 +1978,9 @@
         : target && now.role && !canSee(target, now.role) ? (target.roles || [])[0] : now.role;
       go(c.screen, { ...(role ? { role } : {}), ...(c.dialog ? { dialog: c.dialog } : {}) });
       setTimeout(() => {
-        const el = c.element ? document.querySelector(`#app [data-el="${CSS.escape(c.element)}"]`) : null;
+        // A comment drawn as a box is shown by its box; anything else by its element.
+        const box = c.boxOf ? document.querySelector(`.fb-box[data-fb-id="${CSS.escape(c.boxOf)}"]`) : null;
+        const el = box || (c.element ? document.querySelector(`#app [data-el="${CSS.escape(c.element)}"]`) : null);
         const shown = el || (c.dialog ? document.querySelector(".modal") : null);
         if (!shown) return;
         shown.scrollIntoView({ block: "center", behavior: "smooth" });

@@ -2786,3 +2786,25 @@ def test_the_room_gets_a_comments_box_and_its_things_back():
     room = mockup.for_the_room(saved)[0]
     assert room["box"] == {"x": 1, "y": 2, "w": 3, "h": 4} and room["elements"] == ["field:a", "field:b"]
     assert "note" not in room and "owner" not in room
+
+
+def test_a_box_for_something_new_keeps_its_place_when_the_layout_changes(tmp_path):
+    """Drawn under the centred sign-in card with the Feedback panel open (the page narrower), it stays centred
+    under the card, at the same distance, with the panel closed and in a narrower window."""
+    node = shutil.which("node")
+    if not node or not (support.ROOT / "node_modules" / "playwright-core").is_dir():
+        pytest.skip("needs Node.js and the Node packages (run setup.cmd or `npm install`)")
+    project = tmp_path / "box"
+    spec = sample()
+    spec["project"]["theme"] = "desk"
+    support.write_spec(project, spec)
+    quiet_build(project)
+    run = subprocess.run([node, str(support.ROOT / "tests" / "mockup_box.mjs"), str(project / "mockup" / "index.html")],
+                         cwd=support.ROOT, capture_output=True, text=True, encoding="utf-8", timeout=120)
+    if run.returncode == 77:
+        pytest.skip(f"Microsoft Edge could not be started: {run.stderr.strip()[:200]}")
+    assert run.returncode == 0, run.stderr
+    seen = json.loads(run.stdout.strip().splitlines()[-1])
+    assert seen["errors"] == [] and seen["title"].startswith("Something new")
+    for state in ("panelOpen", "panelClosed", "narrower"):
+        assert abs(seen[state]["offCentre"]) <= 2 and abs(seen[state]["gapUnderCard"] - 14) <= 2, (state, seen[state])
