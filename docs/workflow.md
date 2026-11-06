@@ -13,6 +13,7 @@ catches gaps earlier.
 | 3b. Before sign-off | The lead dev sizes what the requirements became | "Estimate this project" | A narrower range from the spec, compared line by line with the scope of work while scope that grew can still be raised, and the weeks for the timeline |
 | 4. Sign-off | The requirements document goes to the client | "Generate the requirements document" | Word and PDF in the company's layout, with screenshots, an access matrix built from the screens, and an Open Issues section from the register |
 | 4a. Any requirements document | Drafts from anyone, including the client | "Review this requirements document" | A review report (also as a Word file) and the Excel register for the BA |
+| 4b. Handover to the developers | The team plans the build from what was signed | "Write the backlog" | Epics and user stories with acceptance criteria and story points from the estimate, a traceability sheet for the client, import files for Project Desk, Jira and Azure DevOps, and the gaps the stories show in the register |
 | 5. Delivery | Development, UAT, CRs, go-live | "Close the project" with actual effort and the CR list | Estimate vs actual, CRs mapped to gap patterns, a stronger knowledge base |
 
 **Not sure what comes next?** Blueprint works out each project's stage from what is in its folder and

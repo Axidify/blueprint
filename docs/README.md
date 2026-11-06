@@ -12,6 +12,7 @@ Start with **[Getting started](getting-started.md)** if you are new.
 | [The register](register.md) | The project register: fields, statuses, the Excel file for the BA |
 | [Estimates](estimates.md) | Manday estimates: ranges, confidence, the Excel file for the lead developer |
 | [Change requests](change-requests.md) | Requests during development and UAT: in scope, ambiguous or new, the CR log and the client's note |
+| [Development backlog](backlog.md) | User stories from what was signed, story points from the estimate, traceability for the client, imports for Project Desk, Jira and Azure DevOps |
 | [UAT scripts](uat.md) | User acceptance test scripts from what was signed: the testers' workbook, the client's document, results |
 | [Knowledge base](knowledge.md) | Gap patterns, estimating building blocks, the requirements standard, project actuals |
 | [Troubleshooting](troubleshooting.md) | Common problems and their fixes |
@@ -31,3 +32,4 @@ Start with **[Getting started](getting-started.md)** if you are new.
 |---|---|
 | [Maintaining](maintaining.md) | Keeping documentation and the changelog current, the docs check, the tests, releases |
 | [Changelog](../CHANGELOG.md) | What changed in each version |
+| [Roadmap](roadmap.md) | What could come next across the project lifecycle, in phases (draft for agreement) |

@@ -262,6 +262,8 @@ def gather(project):
         m["estimates"] = sorted(est_dir.glob("*.json"), key=estimate_tool.newest_first_key, reverse=True)
     else:
         m["estimates"] = []
+    backlog_dir = p / "backlog"
+    m["backlogs"] = sorted(backlog_dir.glob("*.json"), key=lambda f: (file_day(f), f.name), reverse=True) if backlog_dir.is_dir() else []
     return m
 
 
@@ -493,6 +495,29 @@ def stage_estimate(m):
     else:
         state = ("neutral", "From the brief")
     return {"step": "LD", "title": "Estimate", "state": state, "rows": rows}
+
+
+def stage_backlog(m):
+    """The newest development backlog and the files made from it; nothing at all before there is one."""
+    if not m["backlogs"]:
+        return None
+    p, f = m["project"], m["backlogs"][0]
+    data = read_json(f, {})
+    stories = [s for s in (data.get("stories") or [] if isinstance(data, dict) else []) if isinstance(s, dict)]
+    base = f.with_suffix("")
+    files = [(f.with_suffix(".xlsx"), "sheet", f"Backlog for the team: {len(stories)} stories, with how their story points were "
+              "worked out. Never send it to the client", "internal"),
+             (Path(f"{base} - traceability.xlsx"), "sheet", "Each requirement with its screens, user stories, UAT scenarios "
+              "and change requests", "for-client"),
+             (Path(f"{base} - Project Desk import.xlsx"), "sheet", "Import it in Project Desk: Schedule, Import / export, "
+              "Import from file", "internal"),
+             (Path(f"{base} - Jira import.csv"), "sheet", "For Jira's CSV import", "internal"),
+             (Path(f"{base} - Azure DevOps import.csv"), "sheet", "For Azure DevOps: Boards, Queries, Import work items", "internal")]
+    rows = [row(icon, capital(stem(path)), [sub], tag, file_day(path), link(p, path)) for path, icon, sub, tag in files if path.exists()]
+    if not rows:
+        rows.append(row("sheet", capital(stem(f)), says("Not made into its files yet: say 'render the backlog'"), "internal", file_day(f)))
+    state = ("late", "Older than the spec") if m["s"].get("spec_mtime") and m["s"]["spec_mtime"] > f.stat().st_mtime else ("done", "Up to date with the spec")
+    return {"step": "6", "title": "Development backlog", "state": state, "rows": rows}
 
 
 def focus(m, stages):
@@ -846,6 +871,7 @@ def build(project, moment=None):
     render_reviews(p)
     m = gather(p)
     stages = [stage_documents(m), stage_review(m), stage_workshops(m), stage_mockup(m), stage_document(m), stage_estimate(m)]
+    stages += [st for st in (stage_backlog(m),) if st]
     out = p / PAGE
     write_if_changed(out, page(m, stages, moment), ignore=STAMP)
     write_shortcuts(p)

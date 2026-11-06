@@ -50,6 +50,8 @@ Never write a company or client name into the app's files. Company details come 
 - `mockup/versions/v<version>/` – every mock-up version is kept and can be shown again.
 - `workshops/` – dated workshop agendas (`.json` source) and the two documents rendered from each: the
   agenda for the client and the facilitator notes, which are internal.
+- `backlog/` – the dated development backlog (`.json` source), the team's workbook, the client's
+  traceability sheet, and the Project Desk, Jira and Azure DevOps import files.
 - `uat/` – dated UAT scripts (`.json` source), the testers' workbook `.xlsx` and the client's `.docx`.
 - `changes/` – the change request log (`crs.json`), its internal Excel file and the client's CR notes.
 - `Project overview.html` – every document in process order, who it is for and the next step; rebuilt by
@@ -94,6 +96,9 @@ after the user agrees; describe gaps in general terms, without client content.
 - `estimate` – brief, scope of work or spec → manday ranges in building blocks, with assumptions, confidence,
   a line-by-line comparison with the SOW and the questions that narrow the range. Rates and shares come
   from the knowledge base or the lead developer, never invented; the timeline is drafted from the estimate.
+- `backlog` – the signed spec → epics and user stories with acceptance criteria, story points from the
+  estimate and the lead developer's scale; a traceability sheet for the client and import files for Project
+  Desk, Jira and Azure DevOps; the gaps it finds go into the register.
 - `uat-scripts` – the signed spec → UAT scenarios (main process as each role, status rules and what is not
   allowed, field checks, access, notifications, integrations), every requirement covered; a workbook for the
   client's testers and a Word document.
@@ -118,6 +123,7 @@ tools/<script>.py`, the environment `setup.sh` makes; wherever these instruction
 `platform_fit.py` (a spec against what its platform gives, and the platform sheets),
 `overview.py` (each project's overview page and mock-up shortcut), `review_doc.py` (a review as a Word file),
 `uat.py` (UAT draft from the spec, checks, workbook and document, results of a filled-in workbook),
+`backlog.py` (backlog draft from the spec, checks, story points, the team's workbook, traceability and import files),
 `change_request.py` (scope check against the signed version, CR log, sizing, client CR note),
 `tour.py` (the tour's scratch copy), `check_docs.py`.
 

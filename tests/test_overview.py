@@ -44,12 +44,22 @@ def fake_output(p):
     shutil.copy(p / "spec" / "app.yaml", out / "spec-v0.1.yaml")
 
 
+def build_estimate(p):
+    """The estimate's Excel file as `estimate.py render` writes it, with the app's starter knowledge base."""
+    for f in (p / "estimates").glob("*.json"):
+        est = json.loads(f.read_text(encoding="utf-8"))
+        res, _ = estimate.compute(est, p, support.ROOT / "templates" / "knowledge")
+        estimate.render_xlsx(est, res, f.with_suffix(".xlsx"))
+
+
 def sample_copy(p):
-    """The sample project as a fresh checkout makes it, built here: its mock-up and output are git-ignored."""
-    shutil.copytree(support.EXAMPLE, p, ignore=shutil.ignore_patterns("mockup", "output"))
+    """The sample project as a fresh checkout makes it, built here: its mock-up, output and the estimate's
+    Excel file are git-ignored."""
+    shutil.copytree(support.EXAMPLE, p, ignore=shutil.ignore_patterns("mockup", "output", "*.xlsx"))
     build_mockup(p)
     support.fake_screenshots(p)
     fake_output(p)
+    build_estimate(p)
 
 
 MOMENT = dt.datetime(2026, 11, 6, 21, 40)
