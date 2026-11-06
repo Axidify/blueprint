@@ -21,6 +21,10 @@ See [docs/maintaining.md](docs/maintaining.md).
   with icons, a user badge in the top bar, softer shadows, clearer form fields with a focus ring, status
   chips with a dot, and row highlighting in lists. The `joget` look is unchanged.
 
+### Fixed
+- In the `modern` and `vivid` mock-up looks, long stat card values (for example "RM 48,920") are no longer
+  hidden behind the card's icon.
+
 ## [0.5.0] - 2026-11-06
 
 ### Added
