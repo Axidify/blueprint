@@ -36,12 +36,17 @@ Type it in your own words, for example:
 - "Generate the requirements document"
 - "Estimate the mandays for this project"
 - "Make our documents look like our house style" (colours, fonts, table headers, chapter order)
+- "Make the mock-up look like the client's intranet" (their logo, colours, font; or learnt from screenshots
+  of their systems, shown before and after)
 - "Process my inbox"
 
 To present a mock-up in a meeting, double-click **`present.cmd`** (on a Mac: **`present.command`**) and pick
 the project. Press **Feedback**
-on the dark bar in the bottom-right corner, click anything on the screen and type a comment. Comments are saved
-automatically. Submitting a form or approving a request plays out on screen, and the walk-through is kept
+on the dark bar in the bottom-right corner, click anything on the screen and type a comment, or drag a box:
+around several things for one comment about all of them, or where there is nothing yet for something new
+("an Export button here"). Comments are saved automatically, and every comment with what became of it is
+listed in the project's `2 Reviews/Mock-up comments.xlsx`. When the mock-up is changed, **Update ready**
+appears; press it and **What changed** lists each change, so you can go through them with the room. Submitting a form or approving a request plays out on screen, and the walk-through is kept
 (and shared with everyone in the room) until you press **Reset sample data**.
 
 ## Where things are
@@ -74,7 +79,8 @@ The workspace is never committed to git: it holds client documents.
 Full documentation is in **[docs/](docs/README.md)**: [getting started](docs/getting-started.md),
 [workflow](docs/workflow.md), [skills](docs/skills.md), [the register](docs/register.md),
 [workspace and company profile](docs/workspace.md), [spec format](docs/spec-format.md),
-[document format](docs/document-format.md), [estimates](docs/estimates.md), [tools](docs/tools.md),
+[document format](docs/document-format.md), [design language](docs/design-language.md),
+[estimates](docs/estimates.md), [tools](docs/tools.md),
 [troubleshooting](docs/troubleshooting.md). What changed in each version is in the
 **[changelog](CHANGELOG.md)**.
 

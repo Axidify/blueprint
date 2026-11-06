@@ -33,6 +33,9 @@ the user (AskUserQuestion, recommended first).
   `[x.y.z]: https://github.com/<owner>/<repo>/compare/v<previous>...vx.y.z` (take owner/repo from
   `git remote get-url origin`).
 - `VERSION`: `x.y.z`.
+- `README.md`: read it against the version's changelog entries and bring it up to date with what is new for
+  people (what they can ask for, presenting a mock-up, where things are, the documentation list). Plain words,
+  no version numbers.
 - `python -I tools/check_docs.py` must pass.
 
 ## 4. Commit and tag
