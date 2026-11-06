@@ -11,6 +11,8 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-06
+
 ### Added
 - **Blueprint runs on a Mac.** Run `./setup.sh` (or double-click `setup.command`) to set up, and
   `./present.sh <project>` (or `present.command`) to present a mock-up. Setup keeps Blueprint's Python
@@ -398,7 +400,8 @@ First release.
 - One-step setup (`setup.cmd`) with a machine check, `present.cmd` for sessions, shared Claude Code
   permissions and a start-up status greeting.
 
-[Unreleased]: https://github.com/Axidify/blueprint/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/Axidify/blueprint/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/Axidify/blueprint/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Axidify/blueprint/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Axidify/blueprint/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Axidify/blueprint/compare/v0.4.1...v0.5.0
