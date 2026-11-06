@@ -11,6 +11,8 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-06
+
 ### Added
 - **Status colours you choose.** A status in the spec can now say which colour it is shown in:
   `color: green`, `amber`, `red` or `grey`. The mock-up uses it wherever that status appears, and a spec
@@ -288,7 +290,8 @@ First release.
 - One-step setup (`setup.cmd`) with a machine check, `present.cmd` for sessions, shared Claude Code
   permissions and a start-up status greeting.
 
-[Unreleased]: https://github.com/Axidify/blueprint/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/Axidify/blueprint/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/Axidify/blueprint/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Axidify/blueprint/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Axidify/blueprint/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/Axidify/blueprint/compare/v0.4.0...v0.4.1
