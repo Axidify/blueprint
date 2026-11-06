@@ -1322,8 +1322,9 @@
     },
     // A box drawn on the screen (dragging in feedback mode). Drawn around things that are there (fields,
     // buttons, columns …) it is one comment about all of them; drawn where there is nothing, it is for
-    // something new: a button, a field, a column. It is kept relative to the element it was drawn on, so it
-    // stays in place when the window changes size, and that element is named as where it goes.
+    // something new: a button, a field, a column. It is kept beside the nearest thing on the screen, so it
+    // stays in place when the window changes size or a panel opens, and the area it is in is named as where
+    // it goes. A box never picks the page background: only a click comments on that.
     captureBox(drawn, rect) {
       // The things wholly inside the box: the smallest named parts, not the areas around them.
       const PARTS = /^(field|button|column|stat|menu|action|search|filter|cell|tab|title|header|chip|link):/;
@@ -1336,34 +1337,47 @@
       }).filter((el, i, all) => !all.some((other) => other !== el && other.contains(el)));  // a part inside another counts once
       const elements = [...new Set(inside.map((el) => el.dataset.el))];
       if (elements.length) return this.captureMany(drawn, rect, inside, elements);
-      // Kept in proportion to the smallest element it lies wholly inside, so it stays in its place when the
-      // layout changes: a panel opening beside the page, a narrower window, a centred card moving.
-      const holders = [...document.querySelectorAll("#app [data-el]")].filter((el) => {
-        const a = el.getBoundingClientRect();
-        const x = a.left + window.scrollX, y = a.top + window.scrollY;
-        return a.width && a.height && x <= rect.x + 1 && y <= rect.y + 1 && x + a.width >= rect.x + rect.w - 1 && y + a.height >= rect.y + rect.h - 1;
+      // The area it is in names where the new thing goes: the smallest one it lies wholly inside, never the page itself.
+      const BACKGROUND = "region:page background";
+      const page = (el) => { const a = el.getBoundingClientRect(); return { x: a.left + window.scrollX, y: a.top + window.scrollY, w: a.width, h: a.height }; };
+      const all = [...document.querySelectorAll("#app [data-el]")];
+      const holders = all.filter((el) => {
+        const a = page(el);
+        return a.w && a.h && a.x <= rect.x + 1 && a.y <= rect.y + 1 && a.x + a.w >= rect.x + rect.w - 1 && a.y + a.h >= rect.y + rect.h - 1;
       });
-      let anchor = holders.sort((a, b) => a.getBoundingClientRect().width * a.getBoundingClientRect().height
-        - b.getBoundingClientRect().width * b.getBoundingClientRect().height)[0];
+      let anchor = holders.filter((el) => el.dataset.el !== BACKGROUND).sort((a, b) => page(a).w * page(a).h - page(b).w * page(b).h)[0];
       if (!anchor) {  // over the edge of everything: the thing under its middle
         drawn.style.visibility = "hidden";
         const under = document.elementFromPoint(rect.x + rect.w / 2 - window.scrollX, rect.y + rect.h / 2 - window.scrollY);
         drawn.style.visibility = "";
         anchor = under && under.closest("#app [data-el]");
+        if (anchor && anchor.dataset.el === BACKGROUND) anchor = null;
       }
       const element = anchor ? anchor.dataset.el : "";
       const at = anchor ? anchor.getBoundingClientRect() : null;
       const share = (n) => Math.round(n * 10000) / 10000;
-      // Up and down it keeps its distance from the nearest thing on the screen (14px under the sign-in card stays
-      // 14px under it), since a page reflows sideways but grows downwards.
-      const page = (el) => { const a = el.getBoundingClientRect(); return { x: a.left + window.scrollX, y: a.top + window.scrollY, w: a.width, h: a.height }; };
+      // Where it stays: beside a thing in the same row (14px left of the New button stays 14px left of it, wherever
+      // the toolbar wraps to), else in the same column (14px under the sign-in card stays under it), else the
+      // nearest thing; a button, field or column rather than the area around it.
       const gap = (a) => Math.max(0, a.x - (rect.x + rect.w), rect.x - (a.x + a.w)) + Math.max(0, a.y - (rect.y + rect.h), rect.y - (a.y + a.h));
-      const near = [...document.querySelectorAll("#app [data-el]")].filter((el) => !el.contains(anchor) && !holders.includes(el))
-        .map((el) => ({ el, a: page(el) })).filter((x) => x.a.w && x.a.h).sort((p, q) => gap(p.a) - gap(q.a))[0];
+      const overlap = (lo, len, a0, alen) => Math.min(lo + len, a0 + alen) - Math.max(lo, a0);
+      const BESIDE = /^(field|button|column|stat|menu|action|search|filter|tab|title|header|chip|link):/;
+      const near = all.filter((el) => !holders.includes(el) && el.dataset.el !== BACKGROUND)
+        .map((el) => ({ el, a: page(el) })).filter((x) => x.a.w && x.a.h).sort((p, q) => gap(p.a) - gap(q.a));
+      const best = (list) => {
+        const part = list.find((x) => BESIDE.test(x.el.dataset.el));
+        return list[0] && part && gap(part.a) <= gap(list[0].a) + 48 ? part : list[0];
+      };
+      const row = near.filter((x) => overlap(rect.y, rect.h, x.a.y, x.a.h) >= Math.min(rect.h, x.a.h) / 2 && gap(x.a) <= 240);
+      const column = near.filter((x) => overlap(rect.x, rect.w, x.a.x, x.a.w) >= Math.min(rect.w, x.a.w) / 2 && gap(x.a) <= 240);
+      const by = best(row) || best(column) || near[0];
+      const side = (lo, len, a0, alen) => lo >= a0 + alen ? ["after", Math.round(lo - (a0 + alen))]
+        : lo + len <= a0 ? ["before", Math.round(a0 - (lo + len))] : ["from", Math.round(lo - a0)];
       const box = { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.w), h: Math.round(rect.h),
         ...(at && at.width && at.height ? { fx: share((rect.x - (at.left + window.scrollX)) / at.width), fy: share((rect.y - (at.top + window.scrollY)) / at.height),
           fw: share(rect.w / at.width), fh: share(rect.h / at.height) } : {}),
-        ...(near ? { ref: near.el.dataset.el, ry: Math.round(rect.y - near.a.y) } : {}) };
+        ...(by ? { near: by.el.dataset.el, nearAt: all.filter((el) => el.dataset.el === by.el.dataset.el).indexOf(by.el),
+          sx: side(rect.x, rect.w, by.a.x, by.a.w), sy: side(rect.y, rect.h, by.a.y, by.a.h) } : {}) };
       const r = route();
       const named = element && element !== "region:page background";  // the empty page is no place worth naming
       this.openBox({ title: `Something new${named ? ` in ${nameOf(element)}` : " here"}`, ask: "What should go here?", author: true }).then((text) => {
@@ -1402,8 +1416,15 @@
         const right = Math.max(...rects.map((r) => r.right)), bottom = Math.max(...rects.map((r) => r.bottom));
         return { x: left + window.scrollX - 6, y: top + window.scrollY - 6, w: right - left + 12, h: bottom - top + 12 };
       }
+      // A box for something new stays beside the thing it was drawn next to, at the same distance.
+      const by = b.near ? [...document.querySelectorAll(`#app [data-el="${CSS.escape(b.near)}"]`)][b.nearAt || 0] : null;
+      if (by && Array.isArray(b.sx) && Array.isArray(b.sy)) {
+        const a = by.getBoundingClientRect();
+        const place = ([how, off], a0, alen, len) => how === "after" ? a0 + alen + off : how === "before" ? a0 - off - len : a0 + off;
+        return { x: place(b.sx, a.left + window.scrollX, a.width, b.w), y: place(b.sy, a.top + window.scrollY, a.height, b.h), w: b.w, h: b.h };
+      }
       const target = c.element && (b.fx != null || b.dx != null) ? document.querySelector(`#app [data-el="${CSS.escape(c.element)}"]`) : null;
-      if (target && b.fx != null) {  // sideways in proportion to its element; up and down at its distance from the nearest thing
+      if (target && b.fx != null) {  // drawn in 1.3.1: sideways in proportion to its area; up and down at its distance from the nearest thing
         const at = target.getBoundingClientRect();
         const ref = b.ref ? document.querySelector(`#app [data-el="${CSS.escape(b.ref)}"]`) : null;
         const top = ref ? ref.getBoundingClientRect().top + window.scrollY + b.ry : at.top + window.scrollY + b.fy * at.height;
@@ -1465,12 +1486,14 @@
       drawing.el = document.createElement("div");
       drawing.el.className = "fb-box drawing";
       document.body.appendChild(drawing.el);
+      document.body.classList.add("fb-drawing");  // nothing under the pointer is marked while a box is drawn
     }
     Object.assign(drawing.el.style, { left: `${Math.min(e.pageX, drawing.x)}px`, top: `${Math.min(e.pageY, drawing.y)}px`, width: `${w}px`, height: `${h}px` });
   }, true);
   document.addEventListener("mouseup", (e) => {
     const d = drawing;
     drawing = null;
+    document.body.classList.remove("fb-drawing");
     if (!d || !d.el) return;
     feedback.drew = true;  // the click that follows ends the drawing; it is not a comment on what is under it
     setTimeout(() => { feedback.drew = false; }, 0);

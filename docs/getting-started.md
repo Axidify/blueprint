@@ -102,7 +102,8 @@ to one small button when it is in the way, and while the Feedback panel is open 
 it. Click anything on the screen and type the
 client's comment. Or drag a box: around several things for one comment about all of them ("make these one
 date range"), or where there is nothing yet for something new ("an Export button here"); the box stays drawn
-on the screen with its number. Comments are saved to the project automatically. Afterwards, say
+on the screen with its number, beside what it was drawn next to, whatever the width of the window. A box
+never picks the page itself: to comment on the whole screen, click an empty part of it. Comments are saved to the project automatically. Afterwards, say
 **"apply the feedback"**.
 
 Buttons such as Approve or Reject move the sample record to its next status when the mock-up was built

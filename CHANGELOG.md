@@ -11,6 +11,16 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+### Fixed
+- **A box drawn for something new stays beside what it was drawn next to.** A box drawn just left of a
+  button stays just left of that button when the Feedback or What changed panel opens or closes, or the
+  window changes width, even where the toolbar moves from under the filters to beside them. Before, it could
+  end up a row lower and further left. It keeps its distance from a thing in the same row, else from one in
+  the same column (a box under the sign-in card stays under it).
+- **Dragging a box never picks the page background.** While a box is drawn nothing on the screen is marked,
+  and a box over an empty part of the page is "something new here" rather than a comment on the background.
+  Clicking still comments on the page itself.
+
 ## [1.3.2] - 2026-11-07
 
 ### Fixed
