@@ -36,6 +36,9 @@ See [docs/maintaining.md](docs/maintaining.md).
   spec names it.
 
 ### Fixed
+- **The overview tests pass on a fresh checkout.** They expected the sample's estimate Excel file, which is
+  not kept in git, so they failed wherever the sample's estimate had not been rendered (as on GitHub). The tests
+  now render it themselves. The overview page itself was right all along.
 - **The `desk` mock-up now looks the same on every laptop.** It carries its font (Geist) with it, so a client
   opening the mock-up on their own laptop, or over the network, no longer sees it in a fallback font.
 
@@ -334,9 +337,6 @@ See [docs/maintaining.md](docs/maintaining.md).
 - **The start-up summary writes workshop dates for people** ("13 Nov 2026").
 - **A read-only field no longer shows the required star.**
 - **The empty corner beside the open Feedback panel no longer blocks clicks** on the page underneath.
-- **The overview tests pass on a fresh checkout.** They expected the sample's estimate Excel file, which is
-  not kept in git, so they failed wherever the sample's estimate had not been rendered (as on GitHub). The tests
-  now render it themselves. The overview page itself was right all along.
 
 ## [0.10.0] - 2026-11-06
 
