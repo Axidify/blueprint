@@ -6,7 +6,7 @@
  *
  * Feedback mode: press "Feedback" (or F2), click any element, type a comment. Comments are saved to the
  * mock-up server (tools/mockup.py serve) when the page is served over http, otherwise to localStorage
- * with an Export button.
+ * with an Export button. A comment the server does not take is kept in localStorage and sent again later.
  */
 (function () {
   "use strict";
@@ -63,11 +63,20 @@
     }
     return [];
   }
+  // A status chip takes the `color` of the status with that name (or id) in spec.statuses. Without one
+  // the colour is guessed from the wording, the negative words first: "Inactive" must not match "active".
+  const CHIP = { green: "ok", amber: "warn", red: "bad", grey: "neutral", gray: "neutral" };
+  const statusColor = {};
+  (S.statuses || []).forEach((st) => {
+    const cls = CHIP[String(st.color || "").toLowerCase()];
+    if (cls) [st.name, st.id].forEach((k) => { if (k != null) statusColor[String(k).trim().toLowerCase()] = cls; });
+  });
   function statusClass(v) {
-    const s = String(v).toLowerCase();
-    if (/(approved|completed|done|active|available)/.test(s)) return "ok";
-    if (/(reject|cancel|overdue|fail|inactive)/.test(s)) return "bad";
+    const s = String(v).trim().toLowerCase();
+    if (statusColor[s]) return statusColor[s];
+    if (/(reject|cancel|overdue|fail|declin|expire|inactive|unavailable|incomplete|disapprov|\bnot (approved|completed|done|active|available))/.test(s)) return "bad";
     if (/(pending|waiting|due|submitted|progress)/.test(s)) return "warn";
+    if (/(approved|completed|done|active|available)/.test(s)) return "ok";
     return "neutral";
   }
 
@@ -181,10 +190,11 @@
     return tabs + body;
   }
 
-  function button(b, r, rec) {
+  // `attrs` is extra HTML attributes: a dialog's confirm button gets data-close, so it always closes it.
+  function button(b, r, rec, attrs) {
     if (b.roles && !b.roles.includes(r.role)) return "";
     if (b.when && !matches(b.when, rec || {})) return "";
-    return `<button class="btn ${b.style || ""} ${b.example ? "fb-hide" : ""}" data-el="button:${esc(b.label)}" ${b.to ? `data-go="${b.to}"` : ""} ${b.toast ? `data-toast="${esc(b.toast)}"` : ""} ${b.dialog ? `data-dialog="${b.dialog}"` : ""}>${esc(b.label)}</button>`;
+    return `<button class="btn ${b.style || ""} ${b.example ? "fb-hide" : ""}" data-el="button:${esc(b.label)}" ${b.to ? `data-go="${b.to}"` : ""} ${b.toast ? `data-toast="${esc(b.toast)}"` : ""} ${b.dialog ? `data-dialog="${b.dialog}"` : ""} ${attrs || ""}>${esc(b.label)}</button>`;
   }
   const buttons = (list, r, rec) => (list && list.length ? `<div class="form-buttons">${list.map((b) => button(b, r, rec)).join("")}</div>` : "");
 
@@ -244,7 +254,7 @@
     return `<div class="modal-back"><div class="modal" data-el="dialog:${esc(d.title)}">
       <div class="modal-head">${esc(d.title)}<a href="#" class="modal-x" data-close>&times;</a></div>
       <div class="modal-body">${d.message ? `<p>${esc(d.message)}</p>` : ""}${(d.fields || []).map((f) => field(f, "", false)).join("")}${d.list ? renderList(d.list, route()) : ""}</div>
-      <div class="modal-foot"><button class="btn" data-close>Cancel</button>${button(d.confirm || { label: "OK" }, route())}</div>
+      <div class="modal-foot"><button class="btn" data-close>Cancel</button>${button(d.confirm || { label: "OK" }, route(), null, "data-close")}</div>
     </div></div>`;
   }
 
@@ -270,12 +280,12 @@
     feedback.renderPins();
   }
 
-  function toast(msg) {
+  function toast(msg, error) {
     const t = document.createElement("div");
-    t.className = "toast";
+    t.className = error ? "toast error" : "toast";
     t.textContent = msg;
     document.body.appendChild(t);
-    setTimeout(() => t.remove(), 2600);
+    setTimeout(() => t.remove(), error ? 9000 : 2600);
   }
 
   document.addEventListener("click", (e) => {
@@ -289,8 +299,9 @@
     if (el.dataset.toast) toast(el.dataset.toast);
     if (el.dataset.page) return go(r.screen, { page: el.dataset.page, ...(r.q.record ? { record: r.q.record } : {}) });
     if (el.dataset.dialog) return go(r.screen, { dialog: el.dataset.dialog, ...(r.q.record ? { record: r.q.record } : {}) });
-    if (el.dataset.close !== undefined) return go(r.screen, r.q.record ? { record: r.q.record } : {});
+    // A dialog's confirm button has both: it goes where it says, and only closes when it goes nowhere.
     if (el.dataset.go) return go(el.dataset.go, el.dataset.record ? { record: el.dataset.record } : {});
+    if (el.dataset.close !== undefined) return go(r.screen, r.q.record ? { record: r.q.record } : {});
   });
   document.addEventListener("change", (e) => {
     if (e.target.classList.contains("role-switch")) {
@@ -305,27 +316,64 @@
     items: [],
     remote: location.protocol.startsWith("http"),
     key: `mock-feedback:${P.name}`,
+    // Comments the server did not take (it was closed, or the network dropped). They stay in this browser,
+    // also across a reload, and are sent again with the next comment, on the next load or with "Try again".
+    unsent: [],
+    unsentKey: `mock-feedback-unsent:${P.name}`,
+    stored(key) {
+      try { return JSON.parse(localStorage.getItem(key) || "[]"); } catch (e) { return []; }
+    },
+    store(key, list) {
+      try { localStorage.setItem(key, JSON.stringify(list)); } catch (e) { /* storage full or switched off */ }
+    },
     async load() {
       if (this.remote) {
-        try { this.items = await (await fetch("api/feedback")).json(); } catch (e) { this.remote = false; }
+        try {
+          const res = await fetch("api/feedback");
+          if (!res.ok) throw new Error(res.status);
+          this.items = await res.json();
+        } catch (e) { this.remote = false; }
       }
-      if (!this.remote) this.items = JSON.parse(localStorage.getItem(this.key) || "[]");
+      if (!this.remote) { this.items = this.stored(this.key); return; }
+      this.unsent = this.stored(this.unsentKey);
+      this.items = this.items.concat(this.unsent);
+      if (this.unsent.length) await this.resend();
+    },
+    // Send the unsent comments, oldest first. True when none are left.
+    async resend() {
+      while (this.unsent.length) {
+        try {
+          const res = await fetch("api/feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(this.unsent[0]) });
+          if (!res.ok) throw new Error(res.status);
+        } catch (e) { break; }
+        this.unsent.shift();
+        this.store(this.unsentKey, this.unsent);
+      }
+      return !this.unsent.length;
     },
     async save(item) {
       this.items.push(item);
       if (this.remote) {
-        await fetch("api/feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item) });
+        this.unsent.push(item);
+        this.store(this.unsentKey, this.unsent);
+        if (!(await this.resend())) toast("Comment NOT saved to the project: the mock-up server is not answering. It is kept in this browser. Open Feedback to try again or export it.", true);
       } else {
-        localStorage.setItem(this.key, JSON.stringify(this.items));
+        this.store(this.key, this.items);
       }
+      this.refresh();
+    },
+    refresh() {
+      const n = this.unsent.length;
+      const btn = document.getElementById("fb-toggle");
+      btn.textContent = (this.active ? "Feedback: ON (click an element)" : "Feedback") + (n ? ` · ${n} not saved` : "");
+      btn.classList.toggle("fb-unsent", !!n);
       this.renderPins();
       this.renderPanel();
     },
     toggle() {
       this.active = !this.active;
       document.body.classList.toggle("fb-active", this.active);
-      document.getElementById("fb-toggle").textContent = this.active ? "Feedback: ON (click an element)" : "Feedback";
-      this.renderPanel();
+      this.refresh();
     },
     forScreen() {
       const screen = app.dataset.screen;
@@ -337,9 +385,10 @@
       this.forScreen().forEach((c) => {
         const target = c.element ? document.querySelector(`[data-el="${CSS.escape(c.element)}"]`) : null;
         const pin = document.createElement("div");
-        pin.className = "fb-pin";
+        const unsent = this.unsent.includes(c);
+        pin.className = unsent ? "fb-pin unsent" : "fb-pin";
         pin.textContent = this.items.indexOf(c) + 1;
-        pin.title = c.text;
+        pin.title = (unsent ? "NOT SAVED YET: " : "") + c.text;
         const rect = target ? target.getBoundingClientRect() : { right: c.x, top: c.y };
         pin.style.left = `${rect.right + window.scrollX - 12}px`;
         pin.style.top = `${rect.top + window.scrollY - 8}px`;
@@ -353,13 +402,23 @@
       const list = this.forScreen();
       panel.innerHTML = `<div class="fb-panel-head">Feedback on this screen (${list.length})</div>
         ${list.map((c) => `<div class="fb-item"><b>#${this.items.indexOf(c) + 1}</b> <span class="fb-el">${esc(c.element || "screen")}</span><div>${esc(c.text)}</div><div class="fb-meta">${esc(c.author || "")} ${esc(c.role || "")} · ${esc(c.time.slice(0, 16).replace("T", " "))}</div></div>`).join("") || "<p>No feedback yet. Click any element to add a comment.</p>"}
-        ${this.remote ? `<p class="fb-meta">Saved to the project folder.</p>` : `<button class="btn small" id="fb-export">Export feedback (${this.items.length})</button>`}`;
+        ${!this.remote ? `<button class="btn small" id="fb-export">Export feedback (${this.items.length})</button>`
+          : !this.unsent.length ? `<p class="fb-meta">Saved to the project folder.</p>`
+          : `<div class="fb-warn"><b>${this.unsent.length} comment${this.unsent.length > 1 ? "s" : ""} not saved to the project yet.</b> The mock-up server is not answering. Check that the window that started the mock-up is still open, then try again. The comments are kept in this browser until then.</div>
+             <div class="fb-warn-buttons"><button class="btn small primary" id="fb-retry">Try again</button><button class="btn small" id="fb-export">Export unsaved (${this.unsent.length})</button></div>`}`;
       const exp = document.getElementById("fb-export");
       if (exp) exp.onclick = () => {
         const a = document.createElement("a");
-        a.href = URL.createObjectURL(new Blob([JSON.stringify(this.items, null, 2)], { type: "application/json" }));
+        a.href = URL.createObjectURL(new Blob([JSON.stringify(this.remote ? this.unsent : this.items, null, 2)], { type: "application/json" }));
         a.download = `feedback-${new Date().toISOString().slice(0, 10)}.json`;
         a.click();
+      };
+      const retry = document.getElementById("fb-retry");
+      if (retry) retry.onclick = async () => {
+        retry.disabled = true;
+        const ok = await this.resend();
+        this.refresh();
+        toast(ok ? "All comments are now saved to the project." : "Still not saved: the mock-up server is not answering.", !ok);
       };
     },
     capture(e) {
@@ -400,5 +459,5 @@
   document.body.appendChild(tools);
   document.getElementById("fb-toggle").onclick = () => feedback.toggle();
 
-  feedback.load().then(render);
+  feedback.load().then(() => { render(); feedback.refresh(); });
 })();

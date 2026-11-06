@@ -69,7 +69,8 @@ python -m pip install -r requirements-dev.txt
 python -m pytest
 ```
 
-They take about half a minute and need neither Microsoft Word, Node nor a browser. Run them whenever you
+They take about half a minute and need neither Microsoft Word, Node nor a browser (the mock-up's browser
+tests run only where Node and Microsoft Edge are found, and are skipped elsewhere). Run them whenever you
 change anything in `tools/` or `templates/`, and add or update a test with the change. On GitHub,
 `.github/workflows/tests.yml` runs them on Linux on every push and pull request.
 
@@ -85,13 +86,15 @@ way: never put a real company, client or project into `tests/`.
 | `tests/test_register.py` | Register validation (missing fields, unknown stage and other values, duplicates) and the Excel file, including that internal items never reach the client sheet |
 | `tests/test_project.py` | Issuing and locking a version, filing documents under dated names, archiving and restoring, and the layout check |
 | `tests/test_estimate.py` | Estimates, each with a knowledge base of its own in a temp folder: rates read per platform (a single figure widened by its confidence, ranges, `TBD`), provisional rates, shares and totals, open questions widening the high end only, the comparison with the scope of work, the confidence rules, the checks on the estimate file, and the `blocks`, `inventory`, `render` and `weeks` commands, including that the Excel file is marked internal and that nothing of an estimate reaches the requirements document. |
+| `tests/test_mockup.py`, `tests/mockup_browser.mjs` | The mock-up tool: the build, the spec check for status colours, the comment server (a comment saved with an id, anything else refused with an answer, only the mock-up folder served) and that a second server cannot take a port in use. Where Node, the Node packages and Microsoft Edge are installed, the mock-up is also clicked through in Edge: status colours, dialogs closing, and a comment the server does not take being kept, flagged and saved by **Try again**. Elsewhere, as on GitHub, those browser tests are skipped |
 | `tests/test_check_docs.py` | The commit hook acts only on `git commit`, and the documentation check itself, on a small made-up repository |
 | `tests/conftest.py`, `tests/support.py` | The temp workspace and the helpers for making projects and reading documents |
 
 **Not covered.** How pages look (fonts, spacing, page breaks, where tables split), the table of contents
 and page numbers, and the PDF: Word makes all of these, so check them by eye on a generated document
-before a release. Also not covered: the mock-up engine and its screenshots, `extract.py`, `status.py`,
-`new_project.py`, `document_format.py`, `doctor.py` and setup.
+before a release. Also not covered: most of the mock-up engine (how each screen type is drawn, the themes,
+navigation between screens) and its screenshots, `extract.py`, `status.py`, `new_project.py`,
+`document_format.py`, `doctor.py` and setup.
 
 One test does use Word, and is skipped unless you ask for it. On a Windows machine with Word, this
 generates the fixture project for real and checks that the PDF exists and has a signing field for each

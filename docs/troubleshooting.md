@@ -20,6 +20,9 @@ python -I tools/doctor.py
 | I need to show the client an earlier mock-up | `present.cmd <project> --version 0.2` (every mock-up version is kept in `mockup/versions/`) |
 | `present.cmd` says no mock-up spec found | The project has no `spec/app.yaml` yet. Ask Blueprint to "build a mock-up" first |
 | Feedback comments are not saved | The mock-up was opened as a file instead of through `present.cmd`. Comments are kept in the browser: press **Export feedback** and drop the file in `inbox/` |
+| A red message says a comment was NOT saved, or the Feedback button says "1 not saved" | The window that started the mock-up was closed, or the network dropped. The comment is kept in that browser. Start `present.cmd` for the project again, then press **Feedback** → **Try again**. If that is not possible, press **Export unsaved** and drop the file in `inbox/` |
+| `present.cmd` says the port is already in use | Another mock-up is still open. Close its window and start again, or run both at once with a different port for the second: `present.cmd <project> --port 8766` |
+| A status has the wrong colour in the mock-up | Give that status a `color` (`green`, `amber`, `red` or `grey`) in the spec's `statuses`, or ask Blueprint to. Then rebuild |
 | Others in the room cannot open the mock-up | Start it with `present.cmd <project> --lan`, allow it through Windows Firewall, and share your machine's address |
 | Claude Code keeps asking permission for Blueprint's scripts | Open Claude Code in the app folder itself, so `.claude/settings.json` applies |
 | Two people's changes clash in a shared workspace | Agree who works on which project; synced folders cannot merge simultaneous edits to the same file |

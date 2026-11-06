@@ -32,18 +32,23 @@ statuses:
   - id: draft
     name: Draft
     meaning: Saved by the employee but not submitted. Only the employee can see, edit or delete it.
+    color: grey
   - id: pending
     name: Pending Approval
     meaning: Submitted and waiting for the line manager.
+    color: amber
   - id: approved
     name: Approved
     meaning: Approved by the line manager.
+    color: green
   - id: rejected
     name: Rejected
     meaning: Rejected by the line manager with a reason; the employee may edit and resubmit.
+    color: red
   - id: cancelled
     name: Cancelled
     meaning: Cancelled by the employee before the leave started.
+    color: red
 
 data:
   applications:

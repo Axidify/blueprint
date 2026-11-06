@@ -20,3 +20,5 @@ echo.
 echo Opening the mock-up. Press Feedback in the bottom-right corner to collect comments.
 echo Keep this window open during the session; close it when you are done.
 python -I tools\mockup.py serve "projects\%PROJECT%" %2 %3 %4
+rem Keep the window open when it could not start (for example the port is in use), so the reason can be read.
+if errorlevel 1 pause

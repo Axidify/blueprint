@@ -58,6 +58,11 @@ Builds the mock-up from the spec (self-contained: `mockup/index.html` opens with
 with feedback capture, captures screenshots with Edge, or lists saved feedback by screen.
 `present.cmd` runs `serve`. See [Spec format](spec-format.md).
 
+`serve` takes its port for itself: when the port is already in use (another mock-up is still open) it
+stops and says so; close the other one or add `--port 8766`. A comment the server cannot save is kept in
+the browser that made it, shown as not saved, and sent again with the next comment or with **Try again**
+in the Feedback panel.
+
 ### screenshot.mjs
 
 Called by `mockup.py screenshots`; you don't run it directly. Drives the installed Microsoft Edge through

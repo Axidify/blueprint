@@ -13,6 +13,8 @@ build        validates the spec and writes <project_dir>/mockup/ (self-contained
 serve        serves the mock-up on http://localhost:<port>; feedback comments are saved to
              <project_dir>/feedback/feedback.json. --lan lets others on the network open it and comment.
              --version 0.2 serves a saved earlier version (every build keeps one in mockup/versions/).
+             It stops with a message when the port is already taken (another mock-up is still open):
+             close that one, or pick another port with --port.
 screenshots  builds, then captures every screen (and extra shots from the spec) with Microsoft Edge into
              <project_dir>/mockup/screenshots/, listed in shots.json.
 feedback     prints the saved comments, grouped by screen.
@@ -22,6 +24,7 @@ import datetime as dt
 import http.server
 import json
 import shutil
+import socket
 import subprocess
 import sys
 import threading
@@ -33,6 +36,7 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 ENGINE = ROOT / "tools" / "mockup"
 SCREEN_TYPES = {"login", "dashboard", "list", "form", "detail", "custom"}
+STATUS_COLORS = ("green", "amber", "red", "grey")  # "gray" is accepted too
 
 
 # ------------------------------------------------------------------ spec
@@ -93,6 +97,9 @@ def validate(spec):
         ids = [f["id"] for sec in s.get("sections", []) for f in sec.get("fields", [])]
         if len(ids) != len(set(ids)):
             errors.append(f"{w}: duplicate field ids")
+    for st in spec.get("statuses", []) or []:
+        if st.get("color") and str(st["color"]).lower() not in STATUS_COLORS + ("gray",):
+            errors.append(f"status {st.get('id') or st.get('name')}: color '{st['color']}' must be one of {', '.join(STATUS_COLORS)}")
     for d in spec.get("dialogs", []):
         if d.get("confirm"):
             check_target(f"dialog {d['id']}", d["confirm"])
@@ -157,18 +164,25 @@ def snapshot(project, spec):
     shutil.copytree(out, dest, ignore=lambda d, names: ["versions"] if Path(d) == out else [])
 
 
-def serve(project, port, lan, version=None):
-    if not version:
-        build(project)
-    mock = (Path(project) / "mockup").resolve()
-    if version:
-        mock = mock / "versions" / f"v{version.lstrip('v')}"
-        if not mock.exists():
-            have = sorted(p.name for p in (Path(project) / "mockup" / "versions").glob("v*"))
-            sys.exit(f"No mock-up v{version.lstrip('v')}. Available: {', '.join(have) or 'none'}")
-        print(f"Showing the saved mock-up {mock.name} (comments are still saved to the project).")
-    fb_file = (Path(project) / "feedback" / "feedback.json").resolve()
-    fb_file.parent.mkdir(exist_ok=True)
+class MockupServer(http.server.ThreadingHTTPServer):
+    """A web server that takes its port for itself alone.
+
+    Windows lets a second program listen on a port the first one opened the usual way, with no error. Two
+    mock-ups would then share the port, and a comment could be saved to either project. Taking the port
+    exclusively makes the second one fail to start, as it already does on other systems."""
+    allow_reuse_address = not hasattr(socket, "SO_EXCLUSIVEADDRUSE")
+
+    def server_bind(self):
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
+def make_server(mock, fb_file, host, port):
+    """The server for the built mock-up in `mock`, saving comments to `fb_file`. Raises OSError when the
+    port is taken. Port 0 picks a free one (see server.server_address)."""
+    mock, fb_file = Path(mock).resolve(), Path(fb_file).resolve()
+    fb_file.parent.mkdir(parents=True, exist_ok=True)
     lock = threading.Lock()
 
     def read():
@@ -197,18 +211,45 @@ def serve(project, port, lan, version=None):
         def do_POST(self):
             if not self.path.startswith("/api/feedback"):
                 return self._json({"error": "not found"}, 404)
-            item = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+            try:
+                item = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+            except ValueError:
+                item = None
+            if not isinstance(item, dict) or not str(item.get("text") or "").strip():
+                # Answer, so the mock-up can tell the comment was not saved and keep it in the browser.
+                return self._json({"error": "a comment is a JSON object with a 'text'"}, 400)
             with lock:
                 items = read()
                 item["id"] = f"FB-{len(items) + 1:03d}"
                 item["received"] = dt.datetime.now().isoformat(timespec="seconds")
                 items.append(item)
                 fb_file.write_text(json.dumps(items, indent=2, ensure_ascii=False), encoding="utf-8")
-            print(f"  feedback {item['id']} on {item.get('screen')} / {item.get('element') or 'screen'}: {item.get('text')}")
+            try:
+                print(f"  feedback {item['id']} on {item.get('screen')} / {item.get('element') or 'screen'}: {item.get('text')}")
+            except Exception:  # a console that cannot show the characters must not turn a saved comment into an error
+                print(f"  feedback {item['id']} saved")
             return self._json(item)
 
-    host = "0.0.0.0" if lan else "127.0.0.1"
-    server = http.server.ThreadingHTTPServer((host, port), Handler)
+    return MockupServer((host, port), Handler)
+
+
+def serve(project, port, lan, version=None):
+    if not version:
+        build(project)
+    mock = (Path(project) / "mockup").resolve()
+    if version:
+        mock = mock / "versions" / f"v{version.lstrip('v')}"
+        if not mock.exists():
+            have = sorted(p.name for p in (Path(project) / "mockup" / "versions").glob("v*"))
+            sys.exit(f"No mock-up v{version.lstrip('v')}. Available: {', '.join(have) or 'none'}")
+        print(f"Showing the saved mock-up {mock.name} (comments are still saved to the project).")
+    fb_file = (Path(project) / "feedback" / "feedback.json").resolve()
+    try:
+        server = make_server(mock, fb_file, "0.0.0.0" if lan else "127.0.0.1", port)
+    except OSError as e:
+        sys.exit(f"Cannot start the mock-up on port {port}: it is already in use, most likely by another mock-up "
+                 f"that is still open.\nClose that window and start again, or use another port by adding "
+                 f"--port {port + 1}.\n(The system said: {e})")
     url = f"http://localhost:{port}/"
     print(f"Serving {mock} at {url}{' (also on your network)' if lan else ''}")
     print(f"Feedback is saved to {fb_file}. Press Ctrl+C to stop.")

@@ -23,7 +23,8 @@ so every decision put into the spec shows up in both. Format: `docs/spec-format.
 
 1. Roles first, each with a data scope. Ask yourself the GP-01 question: who only needs to *see* the data?
 2. Statuses for every record that moves through a workflow, including the unhappy ones (rejected,
-   cancelled, returned) — see GP-02 and GP-09 in `knowledge/gap-patterns.md`.
+   cancelled, returned) — see GP-02 and GP-09 in `knowledge/gap-patterns.md`. Give each status a `color`
+   (`green`, `amber`, `red` or `grey`) so the mock-up does not have to guess it from the wording.
 3. Screens: one per menu item, plus detail, review and dialog screens for each workflow step. Every list
    gets explicit columns and filters (GP-05). Every KPI on a dashboard gets a `description` stating its
    formula or saying it is still to be defined (GP-03).
@@ -47,7 +48,9 @@ Tell the user:
   Add `--lan` so people in the room can comment from their own laptops. It also opens straight from
   `projects/<slug>/mockup/index.html` without the server (comments are then exported with a button).
 - How feedback works: press **Feedback** (or F2), click any element, type a comment. Comments are saved
-  to `projects/<slug>/feedback/feedback.json`.
+  to `projects/<slug>/feedback/feedback.json`. The window that started the mock-up must stay open: if it
+  is closed, the mock-up says in red that a comment was not saved and keeps it in the browser until the
+  mock-up is started again and **Try again** is pressed in the Feedback panel.
 - The open questions you added to the register, so the BA covers them in the session. For each screen
   and list, the BA should ask "is this element needed?" and "which columns?" (GP-05, GP-06), because a
   document review cannot catch those later.

@@ -11,6 +11,32 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+### Added
+- **Status colours you choose.** A status in the spec can now say which colour it is shown in:
+  `color: green`, `amber`, `red` or `grey`. The mock-up uses it wherever that status appears, and a spec
+  with any other colour is reported as an error. Statuses without one are still coloured from their
+  wording. See [docs/spec-format.md](docs/spec-format.md).
+- Automated tests for the mock-up: the build, the comment server and, on a machine with Node and Microsoft
+  Edge, the mock-up itself clicked through in the browser.
+
+### Fixed
+- **A comment is no longer lost when the mock-up cannot save it.** If the window that started the mock-up
+  was closed, or the network dropped, a comment used to disappear while the mock-up still said "Saved to
+  the project folder". Now a red message says it was not saved, the Feedback button shows how many are
+  waiting, and the comment is kept in the browser, also if the page is reloaded. It is saved with the next
+  comment that gets through, or with **Try again** in the Feedback panel, and **Export unsaved** gives it as
+  a file for `inbox/`.
+- **Two mock-ups can no longer share an address.** Starting a second mock-up on Windows while one was
+  open gave no error, and comments could then be saved to either project. The second one now stops and
+  says the port is in use and how to pick another (`present.cmd <project> --port 8766`), and the
+  `present.cmd` window stays open so the message can be read.
+- **Negative statuses are no longer shown green.** "Inactive", "Not Approved", "Unavailable" and similar
+  were coloured as if they were good news, in the mock-up and so in the screenshots of the requirements
+  document. Rebuild the mock-up and take the screenshots again to correct a project that has them.
+- **Dialogs close when confirmed.** A dialog whose confirm button only shows a message stayed open after
+  the click, and the default OK button did nothing. Both now close the dialog.
+- A comment with characters the Windows console cannot show is saved like any other.
+
 ## [0.6.0] - 2026-11-06
 
 ### Added

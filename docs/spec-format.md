@@ -11,7 +11,7 @@ One YAML file per project drives both the clickable mock-up (`tools/mockup.py`) 
 | `project` | `name`, `short_name` (shown in the logo box), `client`, `client_short`, `version`, `platform`, `theme` (`joget`, `modern` or `vivid`), `primary_color`, `prepared_by`, `reviewed_by`, `approved_by`, `date`, `status` (shown on the cover and in the page header, e.g. "Draft for client review", "Signed off"), `history: [{version, date, author, changes}]` (document version history table) |
 | `overview` | List of paragraphs for the start of document section 1.0 |
 | `roles` | `id`, `name`, `description`, `scope` (data scope, e.g. "Own branch only"), `user` (sample person shown in the mock-up header) |
-| `statuses` | `id`, `name`, `meaning`. Becomes the requirements document status table |
+| `statuses` | `id`, `name`, `meaning`, and optionally `color` (`green`, `amber`, `red` or `grey`): the colour of that status wherever the mock-up shows it (see [Status colours](#status-colours)). Becomes the requirements document status table |
 | `data` | Sample records, by list name. The first key of each record is its identifier |
 | `screens` | The screens (below) |
 | `dialogs` | Pop-ups opened by buttons (below) |
@@ -105,6 +105,27 @@ except `example: true` buttons (demo-only buttons that open a dialog for screens
 `{id, title, message, fields, list, doc_table, confirm: {label, style, toast, to}}`. `doc_table: false` (formerly `srs_table`) leaves its field table out of the requirements document. A button opens it with
 `dialog: <id>`. `list` shows a table inside the dialog (same format as a screen list). Dialog fields
 appear in the requirements document under the screen that opens it.
+
+The confirm button always closes the dialog: it then opens its `to` screen, or stays on the current
+screen when it has none (with its `toast`, if any). A dialog without `confirm` gets an OK button that
+closes it.
+
+## Status colours
+
+Statuses are shown as coloured labels: in list columns with `chip: true`, on detail screens, in the
+approval progress table and in the process flow. Give each status in `statuses` a `color` and the mock-up
+uses it wherever a value equals that status's `name` (or `id`):
+
+```yaml
+statuses:
+  - {id: on-hold, name: On Hold, meaning: Waiting for the requester., color: amber}
+```
+
+`green` is for done or good, `amber` for waiting, `red` for refused or failed, `grey` for neutral. Any other
+colour is a spec error. A value with no colour set (a step status such as "Done", or a status you left
+without one) is coloured from its wording: refusals and negatives ("Rejected", "Inactive", "Not Approved")
+red, waiting words amber, "Approved", "Completed", "Active" green, anything else grey. Set `color` whenever
+the guess would be wrong.
 
 ## Mock-up URLs
 
