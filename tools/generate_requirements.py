@@ -1708,6 +1708,10 @@ def finish_in_word(docx_path):
     (or without PowerShell), or what went wrong in words the person generating can act on."""
     import subprocess
 
+    if sys.platform != "win32":
+        # Word is driven through Windows PowerShell and COM. A Mac may well have PowerShell installed, but
+        # it has no COM there, and Word for Mac cannot be driven this way.
+        return False, NO_WORD
     pdf = docx_path.with_suffix(".pdf")
     quoted = lambda path: "'" + str(path.resolve()).replace("'", "''") + "'"  # an apostrophe in a name is doubled
     script = (

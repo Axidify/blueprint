@@ -22,6 +22,7 @@ feedback     prints the saved comments, grouped by screen.
 """
 import argparse
 import datetime as dt
+import difflib
 import hashlib
 import http.server
 import json
@@ -36,9 +37,24 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "tools"))  # the sibling tools: `python -I` does not put this folder on the path
 ENGINE = ROOT / "tools" / "mockup"
 SCREEN_TYPES = {"login", "dashboard", "list", "form", "detail", "custom"}
 STATUS_COLORS = ("green", "amber", "red", "grey")  # "gray" is accepted too
+FIELD_TYPES = {"text", "textarea", "select", "radio", "checkbox", "date", "datetime", "number", "file", "signature", "user"}
+# The keys the spec format knows, by where they are written. A key that is not one of these but nearly spells
+# one ("colums") is reported; any other unknown key is left alone, so a team may keep notes of its own.
+KNOWN_KEYS = {
+    "screen": {"id", "type", "title", "subtitle", "menu", "roles", "description", "caption", "screenshot_role", "screenshot_pages",
+               "stats", "list", "buttons", "sections", "data", "record", "fields_from", "timeline", "html"},
+    "list": {"data", "where", "columns", "filters", "actions", "toolbar", "search", "sort", "empty"},
+    "column": {"field", "label", "chip"},
+    "section": {"title", "page", "page_title", "note", "fields"},
+    "field": {"id", "label", "type", "required", "readonly", "default", "length", "options", "options_from", "placeholder", "help",
+              "source", "validation"},
+    "button": {"label", "style", "to", "toast", "dialog", "roles", "when", "example", "access"},
+    "dialog": {"id", "title", "message", "fields", "list", "doc_table", "srs_table", "confirm"},
+}
 
 
 # ------------------------------------------------------------------ spec
@@ -68,6 +84,78 @@ def validate(spec):
     if len(screens) != len(spec["screens"]):
         errors.append("duplicate screen ids")
 
+    def misspelt(where, kind, item):
+        """A key that nearly spells a known one is a typo: the mock-up would silently ignore it."""
+        for key in item if isinstance(item, dict) else []:
+            if key not in KNOWN_KEYS[kind]:
+                close = difflib.get_close_matches(str(key), sorted(KNOWN_KEYS[kind]), 1, 0.75)
+                if close:
+                    errors.append(f"{where}: '{key}' is not a {kind} setting (did you mean '{close[0]}'?)")
+
+    def as_written(value):
+        """A field name as the mock-up sees it. YAML reads an unquoted `no` or `yes` as false or true, and in
+        the mock-up's data both the record's key and the column's field become the word "false" or "true"."""
+        return json.dumps(value) if isinstance(value, bool) else str(value)
+
+    def fields_of(name):
+        """Every field name used by the records of a data list (None when the list is empty or missing)."""
+        rows_ = data.get(name) or []
+        return {as_written(k) for row in rows_ if isinstance(row, dict) for k in row} or None
+
+    def in_data(where, name, what, field):
+        known = fields_of(name)
+        if known is not None and as_written(field) not in known:
+            close = difflib.get_close_matches(str(field), sorted(map(str, known)), 1, 0.6)
+            errors.append(f"{where}: {what} '{field}' is not a field of the '{name}' data"
+                          + (f" (did you mean '{close[0]}'?)" if close else f" (it has {', '.join(sorted(map(str, known)))})"))
+
+    def has_record(where, name, record):
+        rows_ = [row for row in data.get(name) or [] if isinstance(row, dict) and row]
+        if rows_ and str(record) not in {str(next(iter(row.values()))) for row in rows_}:
+            errors.append(f"{where}: record '{record}' is not in the '{name}' data (a record is found by its first value)")
+
+    def check_fields(where, fields):
+        for f in fields or []:
+            misspelt(f"{where}, field {f.get('id', '?')}", "field", f)
+            if f.get("type") and f["type"] not in FIELD_TYPES:
+                close = difflib.get_close_matches(str(f["type"]), sorted(FIELD_TYPES), 1, 0.6)
+                errors.append(f"{where}, field {f.get('id', '?')}: type '{f['type']}' is not one of {', '.join(sorted(FIELD_TYPES))}"
+                              + (f" (did you mean '{close[0]}'?)" if close else ""))
+            source = f.get("options_from")
+            if source:
+                name, _, field = str(source).partition(".")
+                if name not in data or not field:
+                    errors.append(f"{where}, field {f.get('id', '?')}: options_from '{source}' must be <data list>.<field>, with a list from data")
+                else:
+                    in_data(f"{where}, field {f.get('id', '?')}", name, "options_from", field)
+
+    def check_list(where, lst):
+        misspelt(where, "list", lst)
+        name = lst.get("data")
+        if name not in data:
+            errors.append(f"{where}: list data '{name}' not in data")
+            return
+        for c in lst.get("columns") or []:
+            misspelt(f"{where}, a column", "column", c)
+            if c.get("field") is not None:
+                in_data(where, name, "column", c["field"])
+        for key in ("filters", "search"):
+            for field in lst.get(key) or []:
+                in_data(where, name, f"{key[:-1] if key == 'filters' else key} field", field)
+        for field in lst.get("where") or {}:
+            in_data(where, name, "'where'", field)
+        for a in (lst.get("actions") or []) + (lst.get("toolbar") or []):
+            misspelt(f"{where}, button {a.get('label', '?')}", "button", a)
+            check_target(where, a)
+        for a in lst.get("actions") or []:
+            for field in a.get("when") or {}:
+                in_data(f"{where}, action {a.get('label', '?')}", name, "'when'", field)
+
+    for kind, items in (("role", spec["roles"]), ("dialog", spec.get("dialogs") or [])):
+        ids = [x.get("id") for x in items]
+        for dup in sorted({str(i) for i in ids if ids.count(i) > 1}):
+            errors.append(f"{kind} id '{dup}' is used more than once")
+
     def check_target(where, item):
         if item.get("to") and item["to"] not in screens:
             errors.append(f"{where}: unknown screen '{item['to']}'")
@@ -84,16 +172,31 @@ def validate(spec):
         for r in s.get("roles", []) or []:
             if r not in roles:
                 errors.append(f"{w}: unknown role '{r}'")
+        misspelt(w, "screen", s)
+        if s.get("screenshot_role") and s["screenshot_role"] not in roles:
+            errors.append(f"{w}: screenshot_role '{s['screenshot_role']}' is not a role")
         lst = s.get("list")
         if lst:
-            if lst.get("data") not in data:
-                errors.append(f"{w}: list data '{lst.get('data')}' not in data")
-            for a in lst.get("actions", []) + lst.get("toolbar", []):
-                check_target(w, a)
+            check_list(w, lst)
+            for stat in s.get("stats") or []:
+                if isinstance(stat.get("count"), dict) and lst.get("data") in data:
+                    for field in stat["count"]:
+                        in_data(f"{w}, figure {stat.get('label', '?')}", lst["data"], "'count'", field)
         for b in s.get("buttons", []) or []:
+            misspelt(f"{w}, button {b.get('label', '?')}", "button", b)
             check_target(w, b)
+            if s.get("data") in data:
+                for field in b.get("when") or {}:
+                    in_data(f"{w}, button {b.get('label', '?')}", s["data"], "'when'", field)
         if s.get("type") == "detail" and s.get("data") not in data:
             errors.append(f"{w}: detail data '{s.get('data')}' not in data")
+        elif s.get("data") and s["data"] not in data:
+            errors.append(f"{w}: data '{s['data']}' not in data")
+        elif s.get("data") and s.get("record") is not None:
+            has_record(w, s["data"], s["record"])
+        for sec in s.get("sections") or []:
+            misspelt(f"{w}, section {sec.get('title', '?')}", "section", sec)
+            check_fields(w, sec.get("fields"))
         if s.get("fields_from") and s["fields_from"] not in screens:
             errors.append(f"{w}: fields_from '{s['fields_from']}' is not a screen")
         ids = [f["id"] for sec in s.get("sections", []) for f in sec.get("fields", [])]
@@ -103,12 +206,23 @@ def validate(spec):
         if st.get("color") and str(st["color"]).lower() not in STATUS_COLORS + ("gray",):
             errors.append(f"status {st.get('id') or st.get('name')}: color '{st['color']}' must be one of {', '.join(STATUS_COLORS)}")
     for d in spec.get("dialogs", []):
+        misspelt(f"dialog {d['id']}", "dialog", d)
+        check_fields(f"dialog {d['id']}", d.get("fields"))
+        if d.get("list"):
+            check_list(f"dialog {d['id']}", d["list"])
         if d.get("confirm"):
             check_target(f"dialog {d['id']}", d["confirm"])
     for shot in spec.get("screenshots", []) or []:
+        where = f"screenshot {shot.get('name') or shot.get('screen')}"
         if shot.get("screen") not in screens:
             errors.append(f"screenshot {shot}: unknown screen")
-        check_target(f"screenshot {shot.get('name')}", shot)
+            continue
+        check_target(where, shot)
+        if shot.get("role") and shot["role"] not in roles:
+            errors.append(f"{where}: unknown role '{shot['role']}'")
+        target = screens[shot["screen"]]
+        if shot.get("record") is not None and target.get("data") in data:
+            has_record(where, target["data"], shot["record"])
     return errors
 
 
@@ -157,10 +271,18 @@ def build(project):
 
 # ------------------------------------------------------------------ serve
 def snapshot(project, spec):
-    """Keep a copy of this mock-up version in mockup/versions/v<version>/, so it can be shown again later."""
+    """Keep a copy of this mock-up version in mockup/versions/v<version>/, so it can be shown again later.
+    The copy of a version that was issued to the client is never replaced: it stays what the client saw."""
+    import project as project_tool
+
     out = Path(project) / "mockup"
     version = str(spec["project"].get("version", "draft"))
     dest = out / "versions" / f"v{version}"
+    issued = project_tool.is_issued(Path(project), version)
+    if issued and dest.exists():
+        print(f"v{version} was issued to {issued['to']} on {issued['date']}: the saved mock-up of that version is kept as it was. "
+              "What you just built is the working mock-up only; bump project.version in the spec to keep it as a version.")
+        return
     if dest.exists():
         shutil.rmtree(dest)
     shutil.copytree(out, dest, ignore=lambda d, names: ["versions"] if Path(d) == out else [])
@@ -318,10 +440,15 @@ def drawn(spec):
 
     p = spec.get("project") or {}
     part = {"project": {k: p.get(k) for k in DRAWN_PROJECT}, "data": spec.get("data")}
-    for key in ("roles", "screens", "dialogs", "process_flow"):
+    for key in ("roles", "statuses", "screens", "dialogs", "process_flow"):  # this order is part of the fingerprint
         part[key] = strip(spec.get(key))
-    # Of a status the mock-up draws its name and colour; its meaning and its rules are for the document.
-    part["statuses"] = [{k: s.get(k) for k in ("id", "name", "color")} if isinstance(s, dict) else s for s in spec.get("statuses") or []]
+    # A status's rules (who may edit, cancel or delete, and where it moves next) are for the document only.
+    # Everything else about it stays as it was, so the fingerprint of a spec does not change with an update
+    # of Blueprint: a changed fingerprint makes every project's screenshots look out of date.
+    for status in part["statuses"] or []:
+        if isinstance(status, dict):
+            for key in ("edit", "cancel", "delete", "next"):
+                status.pop(key, None)
     return part
 
 

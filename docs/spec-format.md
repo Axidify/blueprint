@@ -172,6 +172,16 @@ overview, role descriptions and scopes, status meanings, requirements and their 
 descriptions, field rules, notifications, integrations, non-functional requirements, glossary meanings,
 the timeline and extra sections, including the cells of their tables.
 
+## What the mock-up build checks
+
+`mockup.py build` (and so `screenshots`, `serve` and the document generator) stops with a list of errors
+when the spec points at something that does not exist: a screen, dialog, role or data list; a list column,
+filter, search field or `where` / `when` / `count` condition naming a field the sample data does not have;
+an `options_from` that is not `<data list>.<field>`; a field type that is not one of the list above; a
+`record` that is not in the data; a role or dialog id used twice. It also reports a setting that nearly
+spells a real one, such as `colums` or `tittle`, with the name it expects. Settings the format does not know
+at all are left alone, so you can keep notes of your own in the spec.
+
 ## What the generator checks
 
 Before it writes anything, the document generator checks the spec: everything the mock-up needs (unknown

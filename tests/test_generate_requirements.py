@@ -611,6 +611,25 @@ def test_signing_markers_are_written_then_stripped(tmp_path, monkeypatch):
     assert "BPSIG" not in all_text(Document(str(result.path)))
 
 
+@pytest.fixture
+def on_windows(monkeypatch):
+    """Word is driven on Windows only. The tests of that step fake the PowerShell call, so they run on any
+    system by saying they are on Windows."""
+    monkeypatch.setattr(generate_requirements.sys, "platform", "win32")
+
+
+@pytest.mark.parametrize("platform", ["darwin", "linux"])
+def test_word_is_not_tried_on_a_mac_or_linux_even_with_powershell_installed(sandbox, tmp_path, monkeypatch, platform):
+    """GitHub's Mac has PowerShell. The Windows script was run there and its failure reported as a fault."""
+    monkeypatch.setattr(generate_requirements.sys, "platform", platform)
+    run = FakeRun(returncode=1, stderr=b"New-Object: A parameter cannot be found that matches parameter name 'ComObject'.")
+    monkeypatch.setattr(subprocess, "run", run)
+    docx = tmp_path / "doc.docx"
+    Document().save(str(docx))
+    assert sandbox.finish_in_word(docx) == (False, generate_requirements.NO_WORD)
+    assert run.calls == [], "PowerShell is not started at all"
+
+
 class FakeRun:
     """Stands in for subprocess.run: records the call, then fails or succeeds as told."""
 
@@ -640,7 +659,7 @@ FILE_IN_USE_ERROR = (b'Exception calling "Open" with "1" argument(s): "This file
     (FakeRun(returncode=1, stderr=FILE_IN_USE_ERROR), "This file is in use by another application or user."),
     (FakeRun(returncode=1), "PowerShell ended with code 1"),                                    # failed without saying why
 ], ids=["no-powershell", "no-word", "timeout", "no-pdf", "file-in-use", "silent"])
-def test_word_step_says_why_it_failed_instead_of_raising(sandbox, tmp_path, monkeypatch, failure, why):
+def test_word_step_says_why_it_failed_instead_of_raising(sandbox, tmp_path, monkeypatch, failure, why, on_windows):
     monkeypatch.setattr(subprocess, "run", failure)
     docx = tmp_path / "doc.docx"
     Document().save(str(docx))
@@ -650,14 +669,14 @@ def test_word_step_says_why_it_failed_instead_of_raising(sandbox, tmp_path, monk
     assert failure.calls and failure.calls[0][0] == "powershell"
 
 
-def test_word_step_succeeds_when_word_writes_the_pdf(sandbox, tmp_path, monkeypatch):
+def test_word_step_succeeds_when_word_writes_the_pdf(sandbox, tmp_path, monkeypatch, on_windows):
     docx = tmp_path / "doc.docx"
     Document().save(str(docx))
     monkeypatch.setattr(subprocess, "run", FakeRun(write_pdf=docx.with_suffix(".pdf")))
     assert sandbox.finish_in_word(docx) == (True, "")
 
 
-def test_word_step_copes_with_an_apostrophe_in_the_name(sandbox, tmp_path, monkeypatch):
+def test_word_step_copes_with_an_apostrophe_in_the_name(sandbox, tmp_path, monkeypatch, on_windows):
     """The paths go into a PowerShell script in single quotes: an apostrophe used to end the quote early,
     and the broken script was reported as "Word not available"."""
     docx = tmp_path / "Staff's Claims System v0.1.docx"
@@ -670,7 +689,7 @@ def test_word_step_copes_with_an_apostrophe_in_the_name(sandbox, tmp_path, monke
     assert "Staff's" not in script
 
 
-def test_generating_survives_a_missing_word(sandbox, tmp_path, monkeypatch):
+def test_generating_survives_a_missing_word(sandbox, tmp_path, monkeypatch, on_windows):
     """The whole run with the real Word step, on a machine where PowerShell cannot be started."""
     monkeypatch.setattr(generate_requirements, "finish_in_word", sandbox.finish_in_word)
     monkeypatch.setattr(subprocess, "run", FakeRun(error=FileNotFoundError("powershell")))
@@ -681,7 +700,7 @@ def test_generating_survives_a_missing_word(sandbox, tmp_path, monkeypatch):
     assert list(result.project.glob("output/*.pdf")) == []
 
 
-def test_a_failed_word_step_is_not_called_word_not_available(sandbox, tmp_path, monkeypatch):
+def test_a_failed_word_step_is_not_called_word_not_available(sandbox, tmp_path, monkeypatch, on_windows):
     """Word is there but the step failed: the run says so, with the reason, and the document is still complete."""
     monkeypatch.setattr(generate_requirements, "finish_in_word", sandbox.finish_in_word)
     monkeypatch.setattr(subprocess, "run", FakeRun(returncode=1, stderr=FILE_IN_USE_ERROR))
@@ -879,7 +898,7 @@ def test_with_word_writes_a_pdf_with_signing_fields(sandbox, tmp_path, monkeypat
 
 
 # ====================================================================== Word is always closed
-def test_the_word_script_closes_word_whatever_happens(sandbox, tmp_path, monkeypatch):
+def test_the_word_script_closes_word_whatever_happens(sandbox, tmp_path, monkeypatch, on_windows):
     """A failure half-way used to leave Word running hidden with the document open, which locked it for the
     next run. The script now closes the document without saving and quits Word in a finally block, shows no
     alerts (a question nobody can see would hang it) and keeps the document out of the recent files."""
@@ -894,7 +913,7 @@ def test_the_word_script_closes_word_whatever_happens(sandbox, tmp_path, monkeyp
     assert "$w.DisplayAlerts=0" in script and ",$false,$false,$false);" in script
 
 
-def test_word_saying_only_command_failed_is_explained(sandbox, tmp_path, monkeypatch):
+def test_word_saying_only_command_failed_is_explained(sandbox, tmp_path, monkeypatch, on_windows):
     monkeypatch.setattr(subprocess, "run", FakeRun(returncode=1, stderr=b"Command failed\r\nAt line:1 char:300\r\n+ ..."))
     docx = tmp_path / "doc.docx"
     Document().save(str(docx))
@@ -902,7 +921,7 @@ def test_word_saying_only_command_failed_is_explained(sandbox, tmp_path, monkeyp
     assert not done and "could not save the document" in why and "open in another program" in why
 
 
-def test_a_word_that_does_not_answer_says_how_to_close_it(sandbox, tmp_path, monkeypatch):
+def test_a_word_that_does_not_answer_says_how_to_close_it(sandbox, tmp_path, monkeypatch, on_windows):
     monkeypatch.setattr(subprocess, "run", FakeRun(error=subprocess.TimeoutExpired("powershell", 240)))
     docx = tmp_path / "doc.docx"
     Document().save(str(docx))

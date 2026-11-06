@@ -59,6 +59,9 @@ Builds the mock-up from the spec (self-contained: `mockup/index.html` opens with
 with feedback capture, captures screenshots with Edge, or lists saved feedback by screen.
 `present.cmd` runs `serve` (`present.sh` on macOS and Linux). See [Spec format](spec-format.md).
 
+Every build keeps a copy of the mock-up in `mockup/versions/v<version>/`. The copy of a version that
+was issued to the client is never replaced: bump `project.version` to keep a new one.
+
 `screenshots` also notes which screens the pictures show (`mockup/screenshots/taken-from.json`), so the
 document generator can warn when the spec's screens have changed since.
 

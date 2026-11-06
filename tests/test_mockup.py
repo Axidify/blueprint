@@ -262,6 +262,115 @@ def test_screenshot_problems_copes_with_a_damaged_note_or_list(tmp_path):
     assert len(mockup.screenshot_problems(project, spec)) == 1
 
 
+# ---------------------------------------------------------------------- spec typos that used to build without error
+def listing(spec, screen_id="approvals"):
+    return next(s for s in spec["screens"] if s["id"] == screen_id)["list"]
+
+
+@pytest.mark.parametrize("change, said", [
+    (lambda s: listing(s)["columns"][0].update(field="idd"), "screen approvals: column 'idd' is not a field of the 'applications' data (did you mean 'id'?)"),
+    (lambda s: listing(s, "my-applications").update(filters=["statuz"]), "filter field 'statuz' is not a field of the 'applications' data (did you mean 'status'?)"),
+    (lambda s: listing(s).update(search=["nobody"]), "search field 'nobody' is not a field of the 'applications' data (it has "),
+    (lambda s: listing(s).update(where={"state": "Pending Approval"}), "'where' 'state' is not a field of the 'applications' data"),
+    (lambda s: listing(s)["actions"][0].update(when={"stage": "Draft"}), "action Review: 'when' 'stage' is not a field"),
+    (lambda s: next(x for x in s["screens"] if x["id"] == "my-applications")["stats"][0].update(count={"statuss": ["Approved"]}), "'count' 'statuss' is not a field"),
+    (lambda s: form(s)["sections"][0]["fields"][1].update(options_from="leave_types.title"), "options_from 'title' is not a field of the 'leave_types' data"),
+    (lambda s: form(s)["sections"][0]["fields"][1].update(options_from="leavetypes.name"), "options_from 'leavetypes.name' must be <data list>.<field>"),
+    (lambda s: form(s)["sections"][0]["fields"][0].update(type="texarea"), "type 'texarea' is not one of"),
+    (lambda s: listing(s).update(colums=listing(s).pop("columns")), "'colums' is not a list setting (did you mean 'columns'?)"),
+    (lambda s: s["screens"][1].update(tittle="My Leave"), "'tittle' is not a screen setting (did you mean 'title'?)"),
+    (lambda s: form(s)["sections"][0]["fields"][0].update(requierd=True), "'requierd' is not a field setting (did you mean 'required'?)"),
+    (lambda s: next(x for x in s["screens"] if x["id"] == "application-details").update(record="LV-0000"), "record 'LV-0000' is not in the 'applications' data"),
+    (lambda s: s["screenshots"][0].update(record="LV-0000"), "record 'LV-0000' is not in the 'applications' data"),
+    (lambda s: s["screenshots"][0].update(role="boss"), "unknown role 'boss'"),
+    (lambda s: s["screens"][1].update(screenshot_role="boss"), "screenshot_role 'boss' is not a role"),
+    (lambda s: s["roles"].append(dict(s["roles"][0])), "role id 'employee' is used more than once"),
+    (lambda s: s["dialogs"].append(dict(s["dialogs"][0])), "dialog id 'approve-dialog' is used more than once"),
+], ids=["column", "filter", "search", "where", "action-when", "stat-count", "options-field", "options-list", "field-type",
+        "misspelt-list-key", "misspelt-screen-key", "misspelt-field-key", "screen-record", "screenshot-record", "screenshot-role",
+        "screenshot_role", "duplicate-role", "duplicate-dialog"])
+def test_a_typo_in_the_spec_is_reported_instead_of_showing_blanks(change, said):
+    """Each of these used to build: the mock-up showed an empty column, an empty drop-down, the first
+    record in place of the one asked for, or simply ignored the setting."""
+    spec = json.loads(json.dumps(support.load_spec(support.EXAMPLE), default=str))
+    assert mockup.validate(spec) == []
+    change(spec)
+    errors = mockup.validate(spec)
+    assert any(said in e for e in errors), errors
+
+
+def test_the_sample_specs_pass_the_check():
+    for source in (support.EXAMPLE, support.WIDE):
+        spec = json.loads(json.dumps(support.load_spec(source), default=str))
+        assert mockup.validate(spec) == [], source.name
+
+
+def test_keys_the_format_does_not_know_are_left_alone_unless_they_look_like_a_typo():
+    spec = json.loads(json.dumps(support.load_spec(support.EXAMPLE), default=str))
+    spec["screens"][1]["ba_note"] = "ask about the balance"
+    form(spec)["sections"][0]["fields"][0]["ticket"] = "JIRA-12"
+    assert mockup.validate(spec) == []
+
+
+def test_a_column_called_no_is_not_mistaken_for_a_typo():
+    """YAML reads an unquoted `no` as false, as a record's key and as a column's field alike, and the
+    mock-up shows the column all the same."""
+    spec = support.load_spec(support.EXAMPLE)
+    spec["data"]["leave_types"] = [{False: 1, "name": "Annual Leave"}, {False: 2, "name": "Medical Leave"}]
+    listing(spec, "leave-types")["columns"] = [{"field": False, "label": "No"}, {"field": "name", "label": "Leave Type"}]
+    assert mockup.validate(json.loads(json.dumps(spec, default=str))) == []
+
+
+# ---------------------------------------------------------------------- the fingerprint does not move with an update
+def test_the_fingerprint_of_an_unchanged_spec_is_what_0_7_0_computed():
+    """The document generator compares this value with the one noted when the screenshots were taken. If a
+    change to Blueprint alters it, every project's screenshots look out of date after the update, for no
+    reason. If this test fails, undo the change to `drawn`; if the change is truly needed, say in the
+    changelog that screenshots must be taken again."""
+    spec = json.loads(json.dumps(support.load_spec(support.WIDE), default=str))
+    assert mockup.fingerprint(spec) == "7438bfca2a36857e159f1129994b38f59f8bbb11ea8db8a75d342ae96820faf5"
+
+
+# ---------------------------------------------------------------------- an issued version keeps its mock-up
+def test_the_saved_mockup_of_an_issued_version_is_not_replaced(tmp_path, capsys):
+    """Rebuilding used to overwrite mockup/versions/v<version>/ every time, also after that version had
+    gone to the client: showing "what the client saw" then showed something else."""
+    project = tmp_path / "leave-request"
+    spec = mockup_spec()
+    support.write_spec(project, spec)
+    mockup.build(project)
+    kept = project / "mockup" / "versions" / "v0.1" / "spec.js"
+    as_issued = kept.read_text(encoding="utf-8")
+    (project / "output").mkdir()
+    (project / "output" / "issued.json").write_text(json.dumps([{"version": "0.1", "date": "2026-11-10", "to": "SAMPLE", "files": []}]), encoding="utf-8")
+
+    spec["screens"][1]["title"] = "Changed after it was issued"
+    support.write_spec(project, spec)
+    capsys.readouterr()
+    mockup.build(project)
+    out = capsys.readouterr().out
+    assert kept.read_text(encoding="utf-8") == as_issued, "the client's version is untouched"
+    assert "Changed after it was issued" in (project / "mockup" / "spec.js").read_text(encoding="utf-8"), "the working mock-up is rebuilt"
+    assert "v0.1 was issued to SAMPLE on 2026-11-10" in out and "bump project.version" in out
+
+    spec["project"]["version"] = "0.2"
+    support.write_spec(project, spec)
+    mockup.build(project)
+    assert "Changed after it was issued" in (project / "mockup" / "versions" / "v0.2" / "spec.js").read_text(encoding="utf-8")
+    assert kept.read_text(encoding="utf-8") == as_issued
+
+
+def test_a_version_not_yet_issued_is_replaced_on_every_build(tmp_path):
+    project = tmp_path / "leave-request"
+    spec = mockup_spec()
+    support.write_spec(project, spec)
+    mockup.build(project)
+    spec["screens"][1]["title"] = "Second draft"
+    support.write_spec(project, spec)
+    mockup.build(project)
+    assert "Second draft" in (project / "mockup" / "versions" / "v0.1" / "spec.js").read_text(encoding="utf-8")
+
+
 # ---------------------------------------------------------------------- real screenshots
 WIDE_LIST = {"id": "wide-list", "type": "list", "title": "Every Column", "menu": "Every Column", "roles": ["hr"],
              "list": {"data": "applications",

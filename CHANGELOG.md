@@ -33,12 +33,22 @@ See [docs/maintaining.md](docs/maintaining.md).
   register. Internal items and unanswered ones still never reach the document.
 
 ### Changed
+- **Typing mistakes in the spec are reported when the mock-up is built.** A column, filter, search or
+  condition that names a field the sample data does not have, an `options_from` that points nowhere, an
+  unknown field type, a record or role that does not exist, and a setting that nearly spells a real one
+  (`colums`, `tittle`) now stop the build with a message that suggests the right name. They used to build
+  and show an empty column, an empty drop-down or the wrong record. Settings of your own that the format
+  does not know are left alone.
 - **Windows: Node.js is now needed for Blueprint's checks in Claude Code**, not only for screenshots. The
   status shown when a session starts and the check before a commit are started through Node, so the same
   settings work on Windows and on a Mac. Setup already asks for Node.js; run `setup.cmd` if the machine
   check says it is missing.
 
 ### Fixed
+- **The mock-up of an issued version is kept as the client saw it.** Rebuilding replaced the saved copy in
+  `mockup/versions/` every time, also after that version had been issued, so showing "the version the
+  client saw" could show something newer. The saved copy of an issued version is no longer replaced; the
+  build says so and asks you to bump the version.
 - One of the estimate tests failed with the newest version of the test runner, so the test run on GitHub
   had been red since 0.6.0. The test is corrected; nothing in the estimate tool changed.
 

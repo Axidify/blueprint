@@ -31,6 +31,8 @@ python -I tools/doctor.py
 | The generator says it cannot replace the document | The document or its PDF is open in Word or a PDF viewer. Close it and generate again |
 | The file name of the document is not exactly the system name | Windows cannot store `\ / : * ? " < > \|` in a file name, so each becomes a hyphen in the file name. The name inside the document is unchanged |
 | The generator says a version is issued and locked | That version went to the client. Bump `project.version` in the spec (and add a history entry), then generate again |
+| The build says a version was issued and its saved mock-up is kept | That version went to the client, so its saved copy is not replaced. What you built is the working mock-up. Bump `project.version` in the spec (ask Blueprint to) to keep it as a new version |
+| The build lists spec errors such as "column 'x' is not a field of the data" | A name in the spec does not match the sample data, or a setting is misspelt. The message suggests the likely name; ask Blueprint to fix the spec |
 | I need to show the client an earlier mock-up | `present.cmd <project> --version 0.2` (every mock-up version is kept in `mockup/versions/`) |
 | `present.cmd` says no mock-up spec found | The project has no `spec/app.yaml` yet. Ask Blueprint to "build a mock-up" first |
 | Feedback comments are not saved | The mock-up was opened as a file instead of through `present.cmd`. Comments are kept in the browser: press **Export feedback** and drop the file in `inbox/` |

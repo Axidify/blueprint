@@ -77,6 +77,7 @@ def test_the_tools_use_no_syntax_newer_than_python_3_10():
     assert found == {}
 
 
+@pytest.mark.skipif(sys.version_info < (3, 12), reason="an older Python cannot parse the example at all")
 def test_the_backslash_check_finds_one(tmp_path):
     bad = tmp_path / "bad.py"
     bad.write_text('import re\nx = f"{re.findall(r\'\\d+\', \'a1\')}"\n', encoding="utf-8")
