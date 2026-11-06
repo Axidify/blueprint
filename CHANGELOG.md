@@ -11,6 +11,8 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-11-07
+
 ### Fixed
 - **Search boxes in the `desk` mock-up no longer look disabled.** They were filled grey; they are now white with
   an outline like every other field, with a small search icon at the left.
@@ -788,7 +790,8 @@ First release.
 - One-step setup (`setup.cmd`) with a machine check, `present.cmd` for sessions, shared Claude Code
   permissions and a start-up status greeting.
 
-[Unreleased]: https://github.com/Axidify/blueprint/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/Axidify/blueprint/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/Axidify/blueprint/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/Axidify/blueprint/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/Axidify/blueprint/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Axidify/blueprint/compare/v0.10.0...v1.0.0
