@@ -46,6 +46,8 @@ Never write a company or client name into the app's files. Company details come 
   `docs/estimates.md`. Internal: never copy mandays, rates or cost into the spec, the mock-up, the
   requirements document or a client item in the register.
 - `mockup/versions/v<version>/` – every mock-up version is kept and can be shown again.
+- `workshops/` – dated workshop agendas (`.json` source) and the two documents rendered from each: the
+  agenda for the client and the facilitator notes, which are internal.
 - `projects/_archive/<slug>/` – delivered projects, out of the active list (`tools/project.py`).
 
 File new documents with dated names through `tools/project.py file`.
@@ -70,13 +72,15 @@ after the user agrees; describe gaps in general terms, without client content.
 - `apply-feedback` – mock-up comments, BA notes or transcripts → spec changes, register items, new version.
 - `generate-requirements` – spec + screenshots → requirements document in the company's format, then reviewed with `review-requirements`.
 - `document-format` – change the requirements document look and structure, or learn it from a sample; preview before regenerating.
+- `prep-workshop` – open questions, gaps in the spec and gap patterns → a workshop agenda for the client and
+  facilitator notes for the BA, ordered to fit the time.
 - `estimate` – brief, scope of work or spec → manday ranges in building blocks, with assumptions, confidence,
   a line-by-line comparison with the SOW and the questions that narrow the range. Rates and shares come
   from the knowledge base or the lead developer, never invented; the timeline is drafted from the estimate.
 - `close-project` – log actuals and CRs after delivery; feeds gap patterns and building-block rates.
 - `release` – for maintainers: publish a new version of the app (changelog, `VERSION`, tag).
 
-Planned: `prep-workshop`, `price-cr`, a Figma connection.
+Planned: `price-cr`, a Figma connection.
 
 ## Tools
 
@@ -87,6 +91,7 @@ tools/<script>.py`, the environment `setup.sh` makes; wherever these instruction
 (register validation and Excel), `mockup.py` (build, serve, screenshot, feedback), `generate_requirements.py`,
 `document_format.py` (show, learn, preview the document format), `project.py` (issue, file, archive, check),
 `estimate.py` (rates, project inventory, estimate checks and Excel, weeks for the timeline),
+`workshop.py` (what a workshop has to settle, agenda checks and the two workshop documents),
 `check_docs.py`.
 
 ## Documentation and changelog

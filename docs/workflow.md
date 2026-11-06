@@ -7,8 +7,8 @@ catches gaps earlier.
 | Stage | What happens | What to ask Blueprint | You get |
 |---|---|---|---|
 | 1. Brief → SOW | The lead dev scopes the work and estimates mandays | "Start a new project", then share the brief; "estimate this project" | A project folder; the gap patterns worth raising in workshop 1; a first manday range with the questions to ask before pricing |
-| 2. Workshop 1 | The BA gathers requirements | "Build a mock-up from the brief / these notes" | A clickable mock-up and open questions in the register |
-| 3. Mock-up review (workshop 2) | The client walks through the mock-up | Present with `present.cmd`, then "apply the feedback" | A new mock-up version; decisions, questions and possible CRs in the register |
+| 2. Workshop 1 | The BA gathers requirements | "Prepare the workshop" beforehand; afterwards "build a mock-up from the brief / these notes" | A clickable mock-up and open questions in the register |
+| 3. Mock-up review (workshop 2) | The client walks through the mock-up | "Prepare the workshop" for the agenda; present with `present.cmd`, then "apply the feedback" | A new mock-up version; decisions, questions and possible CRs in the register |
 | 3a. Before sign-off | The lead dev sizes what the requirements became | "Estimate this project" | A narrower range from the spec, compared line by line with the scope of work while scope that grew can still be raised, and the weeks for the timeline |
 | 4. Sign-off | The requirements document goes to the client | "Generate the requirements document" | Word and PDF in the company's layout, with screenshots, an access matrix built from the screens, and an Open Issues section from the register |
 | 4a. Any requirements document | Drafts from anyone, including the client | "Review this requirements document" | A review report and the Excel register for the BA |

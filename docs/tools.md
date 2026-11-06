@@ -140,6 +140,21 @@ writes a PDF.
 - **The file name** is `<system> – <document title> v<version>`, with the characters Windows cannot store
   (`\ / : * ? " < > |`) replaced by a hyphen. The name inside the document is as the spec has it.
 
+### workshop.py
+
+```bash
+python -I tools/workshop.py gaps   projects/<slug>
+python -I tools/workshop.py check  projects/<slug> ["<agenda.json>"]
+python -I tools/workshop.py render projects/<slug> ["<agenda.json>"]
+```
+`gaps` lists what a workshop has to settle: the open client questions, what the spec does not say yet and
+the gap patterns with their evidence. `check` checks an agenda file in `projects/<slug>/workshops/`:
+every reference is an open client question, every screen exists, the sections fit the time, and no open
+high-severity question is left out without a reason. `render` checks it and writes two Word documents next
+to it: the agenda for the client, and the facilitator notes for the BA, which add why each question
+matters, your recommendation and what was left for later. The notes are internal; neither document holds
+mandays or cost. The file format is at the top of the script. Used by the `prep-workshop` skill.
+
 ### estimate.py
 
 ```bash

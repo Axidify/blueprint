@@ -41,6 +41,16 @@ Writes or extends the project spec (roles, statuses, screens, fields, sample dat
 builds the clickable mock-up. Undecided points become register questions instead of guesses.
 **Output:** `projects/<name>/mockup/` (open with `present.cmd`), screenshots, register questions.
 
+### prep-workshop
+
+**Ask:** "prepare the workshop", "get ready for the mock-up review", "what should we ask the client next?"
+Builds the agenda for a client session from what is still open: the register's client questions, what the
+spec does not say yet and the gap patterns that apply, with those that already cost mandays first. It asks
+you the date, the length and who attends, groups the questions the way the client thinks, fits them to the
+time and says what it left for later and why.
+**Output:** in `projects/<name>/workshops/`: the agenda for the client and the facilitator notes for the
+BA (internal), both Word documents.
+
 ### apply-feedback
 
 **Ask:** "apply the feedback", "here are the notes from today's session"
@@ -105,5 +115,4 @@ See [Maintaining](maintaining.md).
 
 ## Planned
 
-`prep-workshop` (question bank per module),
 `price-cr` (price a change request from building blocks), a Figma connection.

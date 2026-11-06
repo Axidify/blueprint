@@ -71,6 +71,7 @@ working on which project, especially during a session.
 | `feedback/` | Comments from mock-up sessions | the mock-up's Feedback mode |
 | `output/` | Every generated requirements document (Word and PDF) and the spec that produced it; `issued.json` lists the versions sent to the client | `generate-requirements`, `tools/project.py issue` |
 | `estimates/` | Manday estimates, one dated Excel file (and its `.json` source) per estimate. Internal: never sent to the client | `estimate` |
+| `workshops/` | One dated agenda (`.json` source) per client session, and the two Word documents made from it: the agenda for the client and the facilitator notes, which are internal | `prep-workshop` |
 | `register.json`, `register.xlsx` | The project register | the skills |
 
 Versions sent to the client are **locked**: their files are read-only and the generator refuses to

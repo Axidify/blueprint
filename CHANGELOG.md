@@ -11,6 +11,16 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+### Added
+- **Prepare a workshop.** Say "prepare the workshop" or "what should we ask the client next?" and Blueprint
+  builds the agenda for a requirement workshop, mock-up review or sign-off meeting: the open questions from
+  the register, what the spec does not say yet (status rules, integration details, formulas, scope) and the
+  questions of the gap patterns that apply, ordered so the most costly come first and sized to fit the
+  time. You get two Word documents in the project's new `workshops/` folder. The **agenda** is for the
+  client: the questions, with room to write each decision. The **facilitator notes** are for the BA: the
+  same questions with why each one matters, your recommendation, and what was left for later. An agenda
+  that leaves out an open high-severity question, or does not fit the time, is refused with the reason.
+
 ## [0.8.1] - 2026-11-06
 
 ### Fixed
