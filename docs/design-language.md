@@ -115,6 +115,65 @@ line up. The mock-up carries both fonts, so every laptop shows them.
 - **Inset separators:** a row's line starts where its text starts.
 - **Actions line up:** buttons in a list share one width and one right edge.
 
+## Phones and tablets
+
+Settle the device of each role first: who works at a desk, who on a tablet, who on a phone in the field. When
+the brief does not say, it is a question for the client (a register item), never a guess: it changes screens,
+requirements and the estimate.
+
+### Sizes
+
+| Device | Width | Margins | Navigation |
+|---|---|---|---|
+| Phone | below 640px (drawn at 390 × 844, a current iPhone) | 16px | A tab bar at the bottom, at most five items; more go under "More" |
+| Tablet | 640–1023px | 24px | The side menu as a drawer behind a menu button, or narrowed to icons |
+| Desktop | 1024px and up | 40px (32px below 1100px) | The side menu |
+
+### A web system opened on a phone or tablet (responsive)
+
+- **One column on a phone.** Cards, figures and form sections stack; rows of two become one. Nothing scrolls
+  sideways except a wide table inside its own card, with a soft shadow at the edge that can still scroll.
+- **Lists become rows, not tables:** the main value on the first line, one or two details under it in
+  secondary grey, the status dot and word on the right, a chevron when the row opens something. Rows at least
+  56px with two lines.
+- **Filters collapse into one Filters button** that opens a sheet from the bottom; the search field stays
+  visible at the top of the list.
+- **Dialogs become sheets** that slide up from the bottom, with the action at the bottom of the sheet.
+- **Forms are one field per row,** labels above, and each field asks for the right keyboard (numbers, phone,
+  email) or picker (date, time, a choice). Fields are at least 16px text, so a phone does not zoom in on them.
+- **Text never gets smaller on a phone:** body 15px at least; nothing under 12px.
+
+### A mobile app (native or installed on the phone)
+
+Follow Apple's own apps (Human Interface Guidelines), in the colours and words of this page:
+
+- **Large title** (34px) at the top of a list screen, shrinking into the top bar as the list scrolls;
+  body text 17px, details 13px.
+- **A tab bar at the bottom** for the main places (at most five), always visible; a screen opened from a
+  list has a back button at the top left saying where it goes back to.
+- **The main action within thumb reach:** full width at the bottom of the screen (50px tall, 16px from the
+  edges), or in the top bar's right corner when it is a quick one (Add, Done).
+- **Everything pressed is at least 44 × 44px,** with at least 8px between two targets.
+- **Leave the phone's own areas free:** the status bar at the top and the home indicator at the bottom (34px).
+- **Say what the phone is doing:** offline, syncing or synced as a dot and a word in the top bar, and what was
+  saved on the phone but not yet sent.
+
+### Questions a phone raises
+
+Put the ones the brief does not answer in the register, so they are settled before the requirements are
+signed: which phones and versions (iPhone, Android, both), portrait only or also landscape, working without a
+signal, the camera, location, signatures on the screen, push notifications, use outdoors (sunlight, gloves,
+one hand), and shared or personal devices.
+
+### What the mock-up can show today
+
+The engine draws every screen at desktop width; `desk` only tightens its spacing below 1100px. Phone screens
+are drawn in the project's own mock-up code (`mockup.js` and `mockup.css`): a phone frame 390px wide with the
+tab bar at the bottom, as a mobile project's spec can describe. Write what differs on a phone into the spec's
+requirements too ("On a phone, a technician sees their jobs as a list of rows …"), since the requirements
+document is written from the spec. Screenshots are taken 1000px wide, so a phone screen sits in the middle of
+its picture.
+
 ## Shape, depth and materials
 
 | Corner | Use |
@@ -211,6 +270,8 @@ Sentence case for buttons, titles, labels and menu items. Plain words, verb firs
 
 The `desk` theme follows this page, except for what has not been built yet:
 
+- No phone or tablet layout of its own: phone screens are drawn in the project's own mock-up code (see
+  Phones and tablets).
 - Not drawn yet: icons, the focus card, tabs with counts, a type's colour square, charts, a header card on a
   record's page, empty states that invite.
 

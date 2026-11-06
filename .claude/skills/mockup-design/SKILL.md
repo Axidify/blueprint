@@ -82,7 +82,25 @@ Translate the request into settings:
 4. A logo from the guidelines or website: ask the user to save the file into the spec folder (logos are often only
    given in a brand pack); never draw or recreate one.
 
-## C. Preview, then change
+## C. Phones and tablets
+
+Read "Phones and tablets" in `docs/design-language.md` first.
+
+1. **Settle each role's device:** desk, tablet or phone in the field. If the brief, the SOW or the register
+   does not say, add a register question (`stage: workshop-1`) rather than guess.
+2. **A web system also used on phones:** describe in the spec's requirements what changes on a phone (lists
+   as rows, filters behind one button, dialogs as sheets, one column). The mock-up shows desktop screens only;
+   offer to show one or two key screens at phone size in the project's own mock-up code when the room needs
+   to see them.
+3. **A mobile app:** draw its roles' screens in a phone frame (390px wide) in the project's own mock-up code,
+   with a tab bar at the bottom, a large title, the main action at the bottom within thumb reach, targets at
+   least 44px and the sync state in the top bar. Keep the office roles on desktop screens.
+4. **Raise what a phone brings** that the client has not settled (which phones, offline, camera, location,
+   signatures, notifications, outdoor use, shared devices) as register questions, with the screen they affect.
+5. Preview (D below) before changing the project: phone screens drawn in the project's own mock-up code show
+   in its pictures too, inside their phone frame.
+
+## D. Preview, then change
 
 1. `python -I tools/mockup.py look projects/<slug> --try key=value ...` (for example `--try menu=dark
    corners=square logo=client-logo.png`). It builds a scratch copy and saves the sign-in page and the

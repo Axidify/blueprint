@@ -18,6 +18,11 @@ See [docs/maintaining.md](docs/maintaining.md).
   before and after (`python -I tools/mockup.py look <project> --try ...`) and changes the project only once
   you are happy. It warns when white words are hard to read on the brand colour, and when the look is custom
   work on a Joget platform.
+- **Guidelines for phones and tablets** in the design language and the design skill: which device each role
+  uses (asked, never guessed), how a web system changes on a phone (one column, lists as rows, filters and
+  dialogs as sheets from the bottom), how a mobile app's screens are drawn (Apple's own apps as the
+  reference: tab bar, large titles, the main action within thumb reach, 44px targets, the sync state), and
+  the questions a phone raises for the register.
 - **Blueprint's design language is written down** in `docs/design-language.md`: Apple as the reference,
   the colours, type sizes, spacing, corners, buttons, tables and words that mock-ups and Blueprint's own pages
   follow. The design skill reads it before every change of look.
