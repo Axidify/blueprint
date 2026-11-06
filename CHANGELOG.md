@@ -11,6 +11,8 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-06
+
 ### Added
 - **Estimates.** Say "estimate this project" to get a manday estimate for the lead developer, counted in the
   knowledge base's building blocks from whatever exists: a brief or scope of work early on, the project spec
@@ -196,7 +198,8 @@ First release.
 - One-step setup (`setup.cmd`) with a machine check, `present.cmd` for sessions, shared Claude Code
   permissions and a start-up status greeting.
 
-[Unreleased]: https://github.com/Axidify/blueprint/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/Axidify/blueprint/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/Axidify/blueprint/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Axidify/blueprint/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/Axidify/blueprint/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/Axidify/blueprint/compare/v0.3.0...v0.4.0
