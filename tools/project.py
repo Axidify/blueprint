@@ -10,12 +10,14 @@ Usage:
     python -I tools/project.py match    "<file>" [--text <extracted text.md>] [--json]
     python -I tools/project.py hold     "<file>" --reason "<why it stays in the inbox>"
     python -I tools/project.py check    [<slug>] [--fix]
+    python -I tools/project.py migrate  <slug> | --all [--dry-run] [--undo]
 
 issue    records that the current document version (the spec's project.version) went to the client, and makes
          its files read-only. The generator then refuses to overwrite that version: bump the version first.
 issued   lists the versions issued so far.
-file     moves a document into the project's docs/ with a dated, descriptive name, e.g.
-         "2026-11-12 client comments on v1.3.docx". --copy keeps the original.
+file     moves a document into the project's client documents ("1 Client documents", docs/ in a project
+         not yet migrated) with a dated, descriptive name, e.g. "2026-11-12 client comments on v1.3.docx".
+         --copy keeps the original.
 archive  moves a delivered project to projects/_archive/ (out of the status list); restore brings it back.
 find     lists earlier work on the same or a similar system: active and archived projects, and delivered
          ones in the knowledge base (knowledge/actuals/ and the projects log). Run it before starting a project.
@@ -25,7 +27,18 @@ match    which active project a file (in the inbox, say) belongs to: every proje
          made earlier instead of the file; --json is for the process-inbox skill.
 hold     leaves a file where it is with a note of why (in a hidden .notes.json beside it); filing the file
          later removes the note.
-check   reports projects that don't match the standard layout; --fix creates what is missing.
+check    reports projects that don't match the standard layout, and projects still in the old folder
+         layout (with the command that moves them); --fix creates what is missing.
+migrate  moves a project in the old folder layout (docs/, spec/, mockup/, output/ ... at the top) to the new
+         one: what people open at the top in numbered folders (1 Client documents, 2 Reviews, 3 Workshops,
+         4 Mock-up screenshots, 5 Requirements document, 6 UAT, 7 Change requests, and "Internal – estimates
+         and change requests"), and Blueprint's working files in _blueprint/. --dry-run lists every move and
+         moves nothing. --undo moves a project back to the old layout. --all does every active project.
+         Nothing moves while the project's mock-up is open or a live session runs, while one of its Word,
+         Excel or PDF files is open (here or, through the ~$ lock file, on a teammate's computer), or when a
+         folder of the other layout is already there; it says why. Issued files stay read-only, comments keep
+         their ids, a log of the moves is kept in _blueprint/migration.json, and the overview page and the
+         Open the mock-up shortcuts are made again. Both layouts work with every tool.
 """
 import argparse
 import datetime as dt
@@ -41,7 +54,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PROJECTS = ROOT / "projects"
 ARCHIVE = PROJECTS / "_archive"
-LAYOUT = ("docs", "reviews", "spec", "feedback")
+LAYOUT = ("docs", "reviews", "spec", "feedback")  # the old layout's folders that `check --fix` creates
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import layout  # noqa: E402  (where everything is in a project folder)
 
 
 def project_dir(slug, archived_ok=False):
@@ -89,7 +104,7 @@ def likeness(a, b):
 def project_names(p):
     """The names a project folder goes by: its folder name, the register's project and the spec's name."""
     names = [p.name.replace("-", " ")]
-    reg = p / "register.json"
+    reg = layout.register_json(p)
     try:
         if reg.exists():
             names.append(json.loads(reg.read_text(encoding="utf-8")).get("project") or "")
@@ -155,14 +170,14 @@ def describe(f):
 def spec_project(p):
     import yaml
 
-    spec = p / "spec" / "app.yaml"
+    spec = layout.spec_file(p)
     if not spec.exists():
         return {}
     return (yaml.safe_load(spec.read_text(encoding="utf-8")) or {}).get("project") or {}
 
 
 def issues_file(p):
-    return p / "output" / "issued.json"
+    return layout.issued_file(p)
 
 
 def load_issues(p):
@@ -255,13 +270,13 @@ def profile(p, archived=False):
 
     spec_text = ""
     try:
-        spec_text = (p / "spec" / "app.yaml").read_text(encoding="utf-8")
+        spec_text = layout.spec_file(p).read_text(encoding="utf-8")
         spec = yaml.safe_load(spec_text) or {}
     except Exception:  # a missing or damaged spec still leaves the register and the rest
         spec = {}
     spec = spec if isinstance(spec, dict) else {}
     P = spec.get("project") if isinstance(spec.get("project"), dict) else {}
-    reg = _json(p / "register.json")
+    reg = _json(layout.register_json(p))
     reg = reg if isinstance(reg, dict) else {}
     lst = lambda key: [x for x in spec.get(key) or [] if isinstance(x, dict)] if isinstance(spec.get(key), list) else []
     terms = [("role", r.get("name")) for r in lst("roles")]
@@ -279,7 +294,7 @@ def profile(p, archived=False):
         key = flat(label).strip()
         if len(key) >= 4 and key not in prof["terms"]:
             prof["terms"][key] = (cat, str(label))
-    mock = p / "mockup"
+    mock = layout.mockup_dir(p)
     for folder in [mock] + sorted((mock / "versions").glob("v*")) if (mock / "versions").exists() else [mock]:
         label = folder.name if folder != mock else (f"v{version}" if version else "current")
         if folder != mock:
@@ -294,7 +309,7 @@ def profile(p, archived=False):
     for it in reg.get("items") or []:
         if isinstance(it, dict) and it.get("id"):
             ids[str(it["id"])] = ("register item", " ".join(str(it.get(k) or "") for k in ("title", "question", "finding")))
-    fb = _json(p / "feedback" / "feedback.json")
+    fb = _json(layout.feedback_file(p))
     for c in fb if isinstance(fb, list) else []:
         if isinstance(c, dict) and c.get("id"):
             ids[str(c["id"])] = ("mock-up comment", f"{c.get('element') or ''} {c.get('text') or ''}")
@@ -302,18 +317,18 @@ def profile(p, archived=False):
         if r.get("id"):
             items = " ".join(str(i.get("text") if isinstance(i, dict) else i) for i in r.get("items") or [])
             ids[str(r["id"])] = ("requirement", f"{r.get('title') or ''} {items}")
-    for f in sorted((p / "uat").glob("*.json")) if (p / "uat").exists() else []:
+    for f in sorted(layout.uat_source(p).glob("*.json")) if layout.uat_source(p).exists() else []:
         u = _json(f)
         for c in u.get("cases") or [] if isinstance(u, dict) else []:
             if isinstance(c, dict) and c.get("id"):
                 ids[str(c["id"])] = ("UAT script", str(c.get("title") or ""))
-    crs = _json(p / "changes" / "crs.json")
+    crs = _json(layout.cr_log(p))
     for c in crs.get("crs") or [] if isinstance(crs, dict) else []:
         if isinstance(c, dict) and c.get("id"):
             ids[str(c["id"])] = ("change request", f"{c.get('title') or ''} {c.get('request') or ''}")
     people = [r.get("user") for r in lst("roles")] + [s.get("name") for s in lst("signoff")]
     raw = [spec_text, json.dumps(reg, ensure_ascii=False)]
-    for f in sorted((p / "workshops").glob("*.json")) if (p / "workshops").exists() else []:
+    for f in sorted(layout.workshops_source(p).glob("*.json")) if layout.workshops_source(p).exists() else []:
         w = _json(f)
         if isinstance(w, dict):
             people += [a.get("name") for a in w.get("attendees") or [] if isinstance(a, dict)]
@@ -584,15 +599,15 @@ def cmd_issue(a):
         sys.exit("The project has no spec version to issue.")
     if is_issued(p, version):
         sys.exit(f"v{version} was already issued. Bump project.version in the spec for the next version.")
-    files = sorted(f for f in (p / "output").glob(f"* v{version}.*") if f.suffix in (".docx", ".pdf"))
+    files = sorted(f for f in layout.output_dir(p).glob(f"* v{version}.*") if f.suffix in (".docx", ".pdf"))
     if not files:
-        sys.exit(f"No generated requirements document for v{version} in output/. Generate it first.")
+        sys.exit(f"No generated requirements document for v{version} in {layout.shown(p, layout.output_dir(p))}/. Generate it first.")
     issues = load_issues(p)
     record = {"version": version, "date": a.date or dt.date.today().isoformat(),
               "to": a.to or P.get("client_short") or P.get("client", ""), "files": [f.name for f in files], "note": a.note or ""}
     issues.append(record)
     issues_file(p).write_text(json.dumps(issues, indent=2, ensure_ascii=False), encoding="utf-8")
-    snap = p / "output" / f"spec-v{version}.yaml"
+    snap = layout.snapshot(p, version)
     for f in files + ([snap] if snap.exists() else []):
         read_only(f)
     print(f"Issued v{version} to {record['to']} on {record['date']}: {', '.join(record['files'])}")
@@ -620,15 +635,16 @@ def cmd_file(a):
     date = a.date or dt.date.fromtimestamp(src.stat().st_mtime).isoformat()
     kind = safe_name(a.kind)
     name = f"{date} {kind}" + (f" on v{a.responds_to.lstrip('v')}" if a.responds_to else "") + src.suffix.lower()
-    dest = p / "docs" / name
+    docs = layout.docs_dir(p)
+    dest = docs / name
     n = 2
     while dest.exists():
-        dest = p / "docs" / f"{Path(name).stem} ({n}){src.suffix.lower()}"
+        dest = docs / f"{Path(name).stem} ({n}){src.suffix.lower()}"
         n += 1
     dest.parent.mkdir(exist_ok=True)
     (shutil.copy2 if a.copy else shutil.move)(str(src), str(dest))
     drop_note(src)  # a file left in the inbox with a note of why: filed now, so the note goes
-    print(f"Filed {src.name} as docs/{dest.name}")
+    print(f"Filed {src.name} as {layout.shown(p, dest)}")
     try:  # the project's overview page follows what was just written; it never stops this command
         sys.path.insert(0, str(Path(__file__).resolve().parent)); import overview; overview.refresh(p)
     except Exception:
@@ -719,15 +735,27 @@ def cmd_hold(a):
 
 def check_one(slug, fix):
     p = PROJECTS / slug
-    problems, fixed = [], []
-    for d in LAYOUT:
-        if not (p / d).is_dir():
+    problems, fixed, notes = [], [], []
+    new = layout.is_new(p)
+    if new:
+        needed = [(layout.spec_dir(p), f"{layout.MACHINE}/spec/"), (layout.feedback_dir(p), f"{layout.MACHINE}/feedback/"),
+                  (layout.docs_dir(p), f"{layout.DOCS}/")]
+    else:
+        needed = [(p / d, f"{d}/") for d in LAYOUT]
+    for folder, label in needed:
+        if not folder.is_dir():
             if fix:
-                (p / d).mkdir()
-                fixed.append(f"created {d}/")
+                folder.mkdir(parents=True)
+                fixed.append(f"created {label}")
             else:
-                problems.append(f"no {d}/ folder")
-    reg = p / "register.json"
+                problems.append(f"no {label} folder")
+    if new and not (p / layout.MACHINE / layout.README).exists():
+        if fix:
+            layout.write_readme(p)
+            fixed.append(f"wrote {layout.MACHINE}/{layout.README}")
+        else:
+            problems.append(f"no {layout.MACHINE}/{layout.README}")
+    reg = layout.register_json(p)
     if not reg.exists():
         if fix:
             P = spec_project(p)
@@ -735,7 +763,7 @@ def check_one(slug, fix):
                                        "client": P.get("client", ""), "items": []}, indent=2), encoding="utf-8")
             fixed.append("created an empty register")
         else:
-            problems.append("no register.json")
+            problems.append(f"no {layout.shown(p, reg)}")
     else:
         r = json.loads(reg.read_text(encoding="utf-8"))
         if r.get("project", "").lower() == slug and fix:
@@ -744,16 +772,20 @@ def check_one(slug, fix):
                 r["project"] = P["name"]
                 reg.write_text(json.dumps(r, indent=2, ensure_ascii=False), encoding="utf-8")
                 fixed.append("set the register's project name from the spec")
+    if not new:
+        notes.append(f"in the old folder layout: to move it to the new one, say 'migrate the folders' "
+                     f"(python -I tools/project.py migrate {slug} --dry-run lists the moves first). Both layouts work")
     P = spec_project(p)
     version = str(P.get("version") or "")
     issued = {str(i["version"]) for i in load_issues(p)}
-    generated = sorted({m.group(1) for f in (p / "output").glob("*.docx") if (m := re.search(r" v([\d.]+)\.docx$", f.name))}) if (p / "output").exists() else []
-    notes = []
+    out = layout.output_dir(p)
+    generated = sorted({m.group(1) for f in out.glob("*.docx") if (m := re.search(r" v([\d.]+)\.docx$", f.name))}) if out.exists() else []
     if version and version in issued:
         notes.append(f"v{version} is issued: bump project.version before changing the spec")
-    loose = [f.name for f in (p / "docs").glob("*") if f.is_file() and not re.match(r"\d{4}-\d{2}-\d{2} ", f.name)] if (p / "docs").exists() else []
+    docs = layout.docs_dir(p)
+    loose = [f.name for f in docs.glob("*") if f.is_file() and not re.match(r"\d{4}-\d{2}-\d{2} ", f.name)] if docs.exists() else []
     if loose:
-        notes.append(f"{len(loose)} document(s) in docs/ without a date in the name (fine for originals; new files are filed with dates)")
+        notes.append(f"{len(loose)} document(s) in {layout.shown(p, docs)}/ without a date in the name (fine for originals; new files are filed with dates)")
     if generated and not issued:
         notes.append(f"document versions generated ({', '.join('v' + g for g in generated)}) but none recorded as issued")
     return problems, fixed, notes
@@ -781,6 +813,55 @@ def cmd_check(a):
         print("\nRun with --fix to create what is missing.")
 
 
+def migrate_one(p, dry_run, back):
+    """Move one project between the layouts, or list the moves. Returns True when it moved (or would)."""
+    result = (layout.undo if back else layout.migrate)(p, dry_run=dry_run)
+    where = "the old layout" if back else "the new layout"
+    if result["refusals"]:
+        print(f"{p.name}: not moved to {where}, because")
+        for r in result["refusals"]:
+            print(f"  - {r}")
+        return False
+    print(f"{p.name}: {'would move' if dry_run else 'moved'} to {where}" + (" (dry run: nothing moved)" if dry_run else ""))
+    for src, dst in result["moves"]:
+        print(f"  {src}  ->  {dst}")
+    for rel in result.get("removes") or []:
+        if (p / rel).exists() or not dry_run:
+            print(f"  {'would remove' if dry_run else 'removed'} {rel} (Blueprint made it; nothing of the project's)")
+    for name in result.get("stays") or []:
+        print(f"  left where it is: {name}")
+    if not dry_run:
+        for rel in result.get("made") or []:
+            print(f"  made {rel}")
+        print(f"  Issued files are still read-only, and comments keep their ids. The overview page and the Open the mock-up "
+              f"shortcuts were made again." + ("" if back else f" The moves are logged in {layout.MACHINE}/{layout.MIGRATION_LOG}; "
+                                                f"to move it back: python -I tools/project.py migrate {p.name} --undo"))
+    return True
+
+
+def cmd_migrate(a):
+    if bool(a.slug) == bool(a.all):
+        sys.exit("Name one project, or --all for every active project.")
+    if a.all:
+        slugs = [s for s in active_slugs() if (layout.is_new(PROJECTS / s) if a.undo else layout.is_old_project(PROJECTS / s))]
+        if not slugs:
+            print("No active project to move: " + ("none is in the new layout." if a.undo else "every one is in the new layout already."))
+            return
+    else:
+        project_dir(a.slug)
+        slugs = [a.slug]
+    failed = 0
+    for slug in slugs:
+        try:
+            ok = migrate_one(PROJECTS / slug, a.dry_run, a.undo)
+        except RuntimeError as e:
+            print(f"{slug}: not moved: {e}")
+            ok = False
+        failed += not ok
+    if failed:
+        sys.exit(1)
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -795,8 +876,11 @@ def main():
     s = sub.add_parser("match"); s.add_argument("file"); s.add_argument("--text"); s.add_argument("--json", action="store_true")
     s = sub.add_parser("hold"); s.add_argument("file"); s.add_argument("--reason", required=True)
     s = sub.add_parser("check"); s.add_argument("slug", nargs="?"); s.add_argument("--fix", action="store_true")
+    s = sub.add_parser("migrate"); s.add_argument("slug", nargs="?"); s.add_argument("--all", action="store_true")
+    s.add_argument("--dry-run", action="store_true"); s.add_argument("--undo", action="store_true")
     a = ap.parse_args()
-    {"issue": cmd_issue, "issued": cmd_issued, "file": cmd_file, "archive": cmd_archive, "restore": cmd_restore, "find": cmd_find, "match": cmd_match, "hold": cmd_hold, "check": cmd_check}[a.cmd](a)
+    {"issue": cmd_issue, "issued": cmd_issued, "file": cmd_file, "archive": cmd_archive, "restore": cmd_restore, "find": cmd_find,
+     "match": cmd_match, "hold": cmd_hold, "check": cmd_check, "migrate": cmd_migrate}[a.cmd](a)
 
 
 if __name__ == "__main__":

@@ -10,11 +10,13 @@ gaps    what a workshop for this project has to settle: the open client question
         knowledge base with their evidence, so the ones that already cost mandays come first
 check   checks an agenda file: every reference is an open client question, every screen exists, the
         sections fit the time, and no high-severity question is left off the agenda without a reason
-render  checks the agenda, then writes two Word documents next to it:
+render  checks the agenda, then writes two Word documents into the project's "3 Workshops" folder (next to
+        the agenda in a project not yet moved to the new folder layout):
           "<name> - agenda.docx"                       for the client: the questions, with room for each decision
           "<name> - facilitator notes (internal).docx" for the BA: the same, with why each question matters,
                                                        your recommendation and the questions left for later
-        Without a file name it takes the newest agenda in projects/<slug>/workshops/
+        Without a file name it takes the newest agenda in the project's workshops folder (_blueprint/workshops/,
+        or workshops/ in the old layout)
 
 workshops/<date> <name>.json:
 {
@@ -44,6 +46,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
+import layout  # noqa: E402  (where everything is in a project folder)
 import workspace  # noqa: E402
 
 CLOSED = ("resolved", "wont-fix")
@@ -54,7 +57,7 @@ INTERNAL_MARK = "Internal: not for the client"
 
 # ---------------------------------------------------------------- reading the project
 def read_register(project):
-    path = Path(project) / "register.json"
+    path = layout.register_json(project)
     if not path.exists():
         return []
     return [it for it in json.loads(path.read_text(encoding="utf-8")).get("items", []) if isinstance(it, dict)]
@@ -63,7 +66,7 @@ def read_register(project):
 def read_spec(project):
     import yaml
 
-    path = Path(project) / "spec" / "app.yaml"
+    path = layout.spec_file(project)
     if not path.exists():
         return None
     return json.loads(json.dumps(yaml.safe_load(path.read_text(encoding="utf-8")) or {}, default=str))
@@ -157,7 +160,7 @@ def gap_patterns(kdir=None):
 
 # ---------------------------------------------------------------- the agenda
 def agenda_file(project, name=None):
-    folder = Path(project) / "workshops"
+    folder = layout.workshops_source(project)
     if name:
         path = Path(name) if Path(name).exists() else folder / name
         if not path.exists():
@@ -318,7 +321,11 @@ def render(agenda, project, path):
         if agenda.get("after"):
             w.heading("After the session", 2)
             w.bullets([str(a) for a in agenda["after"]])
-        out = path.with_name(f"{path.stem} - {'facilitator notes (internal)' if internal else 'agenda'}.docx")
+        client_doc, notes_doc = layout.workshop_documents(project, path)
+        if path.parent.resolve() != layout.workshops_source(project).resolve():  # an agenda kept elsewhere: beside it
+            client_doc, notes_doc = (path.with_name(x.name) for x in (client_doc, notes_doc))
+        out = notes_doc if internal else client_doc
+        out.parent.mkdir(parents=True, exist_ok=True)
         try:
             doc.save(str(out))
         except PermissionError:
@@ -357,7 +364,7 @@ def cmd_gaps(project):
     for p in sorted(patterns, key=lambda p: (order[p["evidence"]], p["id"])):
         evidence = {"cost": "has cost mandays", "review": "found in reviews", "none": "no evidence yet"}[p["evidence"]]
         print(f"  {p['id']} {p['title']} [{evidence}; {p['questions']} workshop question{'s' if p['questions'] != 1 else ''}]")
-    earlier = sorted((Path(project) / "workshops").glob("*.json")) if (Path(project) / "workshops").exists() else []
+    earlier = sorted(layout.workshops_source(project).glob("*.json")) if layout.workshops_source(project).exists() else []
     if earlier:
         print(f"\nEarlier agendas: {', '.join(x.name for x in earlier)}")
 

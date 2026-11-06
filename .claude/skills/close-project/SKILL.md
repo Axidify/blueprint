@@ -16,7 +16,7 @@ Ask the user for anything missing. Do not guess numbers.
   worked, and what share of their time. Watch for parallel tasks that double-count (several tasks with the
   same dates).
 - **CRs:** each CR, what it changed, mandays billed, and effort actually spent if known. If
-  `projects/<slug>/changes/crs.json` exists, read it first: each CR's verdict, gap pattern, sizing and sold
+  `_blueprint/changes/crs.json` exists in the project, read it first: each CR's verdict, gap pattern, sizing and sold
   mandays, and the requests found Ambiguous (gaps even when they were not billed).
 - **What was deferred** to a later phase, and why.
 - **Where the time went:** the lead dev's view of which parts overran and why.
@@ -29,7 +29,7 @@ git. Keep it to effort, CRs and lessons, never client document content.
 
 Sections: effort table (sold, CRs billed, actual, variance and its value at the day rate), timeline, CRs
 (each with its gap pattern), what the requirements document already showed (if the requirements document
-is in `docs/`, check whether the overruns were visible in it), lessons. Keep it factual; no blame.
+is in `1 Client documents`, check whether the overruns were visible in it), lessons. Keep it factual; no blame.
 
 ## 3. Propose the knowledge-base changes
 

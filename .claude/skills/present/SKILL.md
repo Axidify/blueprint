@@ -29,7 +29,7 @@ platform; **Custom work** on the bar hides them. When the project changes, the b
 nothing reloads by itself, and the walk-through survives it. The window that started the mock-up must stay
 open: if it is closed, the mock-up says in red that a comment was not saved and keeps it in the browser
 until the mock-up is started again and **Try again** is pressed in the Feedback panel. Opened straight from
-`mockup/index.html` without the server, comments are exported with a button instead.
+the mock-up's `index.html` (in `_blueprint/mockup`) without the server, comments are exported with a button instead.
 
 ## A live session
 
@@ -55,7 +55,7 @@ they say **go**, you work through everything that is waiting.
      change request (outside the scope of work), or declined.
    - **Build everything; label custom work.** Make a change in the spec when the spec can say it. When it
      cannot (a new behaviour, a layout, an interaction, even an integration, faked with sample data), build
-     it in the project's own mock-up code, `spec/mockup.js` and `spec/mockup.css` (see "The project's own
+     it in the project's own mock-up code, `_blueprint/spec/mockup.js` and `mockup.css` beside it (see "The project's own
      mock-up code" in `docs/spec-format.md`), instead of leaving it out. Leave something out only when a
      browser genuinely cannot show it, and say so. What the project's code adds is tagged **Custom
      development** while presenting; mark a part with `Mockup.custom(el, "<what it takes>")`, or
@@ -116,7 +116,7 @@ they say **go**, you work through everything that is waiting.
   undone or declined and why, the questions and possible change requests added to the register; after only
   opening the mock-up, which version was shown and to whom.
 - **Where and for whom:** the new mock-up version (the one shown in the room is kept and can be shown
-  again), **for the client**; the change note in `reviews/` and the reasons on each comment are
+  again), **for the client**; the change note (in `2 Reviews`) and the reasons on each comment are
   **internal**: the room only ever sees Received, Working on it, Applied or Noted for follow-up.
   `Project overview.html` lists the versions and the change note.
 - **Next step, in the words to say:** "apply the feedback" for comments still waiting; if the client

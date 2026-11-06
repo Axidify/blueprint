@@ -33,29 +33,51 @@ Never write a company or client name into the app's files. Company details come 
 
 ## Project folders (`projects/<slug>/`)
 
-- `docs/` – client documents. Never modify them.
-- `reviews/<review>/` – extraction output and review reports.
-- `register.json` – every question, gap, assumption, decision and fix, with status. The source of truth;
-  render it with `tools/register.py`. `register.xlsx` is the rendered copy for the BA.
-- `spec/app.yaml` – the project spec (roles, statuses, screens, fields, sample data, requirements). It
-  drives both the mock-up and the generated requirements document. Format: `docs/spec-format.md`.
-  `spec/mockup.js` and `spec/mockup.css` – the project's own mock-up code, for what the spec cannot
-  describe (written in live sessions); its behaviour is also written into the spec's requirements.
-- `mockup/` – the built mock-up and screenshots. `feedback/feedback.json` – comments from sessions.
-- `output/` – generated requirements document `.docx`/`.pdf` and a spec snapshot per version; `issued.json` records which
-  versions went to the client. Issued versions are locked: change the spec version instead.
-- `estimates/` – dated manday estimates (`.json` source and the rendered `.xlsx`), format in
-  `docs/estimates.md`. Internal: never copy mandays, rates or cost into the spec, the mock-up, the
-  requirements document or a client item in the register.
-- `mockup/versions/v<version>/` – every mock-up version is kept and can be shown again.
-- `workshops/` – dated workshop agendas (`.json` source) and the two documents rendered from each: the
-  agenda for the client and the facilitator notes, which are internal.
-- `uat/` – dated UAT scripts (`.json` source), the testers' workbook `.xlsx` and the client's `.docx`.
-- `changes/` – the change request log (`crs.json`), its internal Excel file and the client's CR notes.
+People browse project folders in OneDrive or SharePoint, often without Claude, so what they open is at the
+top, numbered in the order of the process, and Blueprint's working files are in `_blueprint/`. Folders appear
+only when the project has something for them. `tools/layout.py` is the one place that knows where each part
+is; every tool goes through it.
+
 - `Project overview.html` – every document in process order, who it is for and the next step; rebuilt by
   the tools whenever they change the project. `Open the mock-up.cmd`/`.command` starts the mock-up from the
   shared folder.
+- `Questions and fixes register.xlsx` – the register rendered for the BA (only its "For client" sheet goes out).
+- `1 Client documents/` – the client's documents, filed with dated names. Never modify them.
+- `2 Reviews/` – each review as an internal Word file, and the mock-up's change notes as Word files.
+- `3 Workshops/` – the agenda for the client and the facilitator notes (internal) of each workshop.
+- `4 Mock-up screenshots/` – the pictures of the mock-up, as used in the requirements document.
+- `5 Requirements document/` – each version's `.docx` and `.pdf`. Issued versions are locked (read-only):
+  change the spec version instead.
+- `6 UAT/` – the testers' workbook and the client's UAT document.
+- `7 Change requests/` – the client's change request notes.
+- `Internal – estimates and change requests/` – the estimate Excel files and the CR log. Mandays, rates and
+  cost live here only: never copy them into the spec, the mock-up, the requirements document or a client
+  item in the register.
+- `_blueprint/` – Blueprint's working files (with a README saying to leave them alone):
+  - `register.json` – every question, gap, assumption, decision and fix, with status. The source of truth;
+    render it with `tools/register.py`.
+  - `spec/app.yaml` – the project spec (roles, statuses, screens, fields, sample data, requirements). It
+    drives both the mock-up and the generated requirements document. Format: `docs/spec-format.md`.
+    `spec/mockup.js` and `spec/mockup.css` – the project's own mock-up code, for what the spec cannot
+    describe (written in live sessions); its behaviour is also written into the spec's requirements.
+  - `reviews/<review>/` – extraction, `findings.json` and `review.md` (the source of the Word file);
+    `reviews/mockup-v<version>-changes.md` – the change notes.
+  - `mockup/` – the built mock-up; `mockup/versions/v<version>/` keeps every version so it can be shown again.
+  - `feedback/feedback.json` – comments from sessions (and the live session's state).
+  - `output/` – a spec snapshot per generated version, and `issued.json`, which records the versions that
+    went to the client.
+  - `workshops/`, `estimates/`, `uat/` – the dated `.json` sources (estimate format in `docs/estimates.md`);
+    `changes/crs.json` – the change request log.
+  - `migration.json` – in a project moved from the old layout, the log of the moves.
 - `projects/_archive/<slug>/` – delivered projects, out of the active list (`tools/project.py`).
+
+**The old layout.** Projects made before this layout keep `docs/`, `reviews/`, `spec/`, `mockup/`,
+`feedback/`, `output/`, `workshops/`, `estimates/`, `uat/`, `changes/` and `register.json`/`register.xlsx`
+at the top. Every tool works on both. Where these instructions or a skill name a `_blueprint/...` or
+numbered path, use the old one in such a project (`python -I tools/layout.py projects/<slug>` lists where
+each part is). When someone says "migrate the folders": `python -I tools/project.py migrate <slug> --dry-run`,
+summarise, then run it without `--dry-run` once they agree (`--undo` moves it back; `--all` does every
+project). Offer it once for an old-layout project (`status.py` marks them); never insist.
 
 File new documents with dated names through `tools/project.py file`.
 
@@ -112,14 +134,14 @@ tools/<script>.py`, the environment `setup.sh` makes; wherever these instruction
 `python`, use that, and `./setup.sh` and `./present.sh` for `setup.cmd` and `present.cmd`): `doctor.py` (machine check), `status.py`
 (projects and next steps), `new_project.py`, `extract.py` (documents to text and images), `register.py`
 (register validation and Excel), `mockup.py` (build, serve, screenshot, feedback, live session), `generate_requirements.py`,
-`document_format.py` (show, learn, preview the document format), `project.py` (issue, file, archive, find earlier work, match an inbox file to its project, hold a file in the inbox, check),
+`document_format.py` (show, learn, preview the document format), `project.py` (issue, file, archive, find earlier work, match an inbox file to its project, hold a file in the inbox, check, migrate a project to the new folder layout),
 `estimate.py` (rates, project inventory, estimate checks and Excel, weeks for the timeline),
 `workshop.py` (what a workshop has to settle, agenda checks and the two workshop documents),
 `platform_fit.py` (a spec against what its platform gives, and the platform sheets),
 `overview.py` (each project's overview page and mock-up shortcut), `review_doc.py` (a review as a Word file),
 `uat.py` (UAT draft from the spec, checks, workbook and document, results of a filled-in workbook),
 `change_request.py` (scope check against the signed version, CR log, sizing, client CR note),
-`tour.py` (the tour's scratch copy), `check_docs.py`.
+`tour.py` (the tour's scratch copy), `layout.py` (where each part of a project folder is, in either layout), `check_docs.py`.
 
 ## Documentation and changelog
 

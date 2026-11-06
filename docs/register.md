@@ -1,8 +1,10 @@
 # The register
 
 Each project has one register: every question, gap, assumption, decision and fix found at any stage,
-with its status. `register.json` is the source of truth; `register.xlsx` is the copy the BA takes to the
-client. The skills keep both up to date.
+with its status. `register.json` (in the project's `_blueprint` folder) is the source of truth;
+`Questions and fixes register.xlsx`, at the top of the project folder, is the copy the BA takes to the client.
+The skills keep both up to date. (In a project still in the old folder layout they are `register.json` and
+`register.xlsx` at the top; this page calls them `register.json` and `register.xlsx`.)
 
 ## The Excel file
 
@@ -28,7 +30,7 @@ Internal fixes never appear on the client sheet.
 **Client response** in `register.xlsx`, or change the **Status** from its drop-down, save the file and
 tell Blueprint ("the client answered R-012 and R-019"). When the client sends the file back with their answers typed in, drop
 it into the inbox (or say "the client answered" and name the file): Blueprint files it in the project's
-`docs/` and reads the answers from that copy (`register.py render --from`), by the same rules. Blueprint reads the Excel file before it writes
+`1 Client documents` and reads the answers from that copy (`register.py render --from`), by the same rules. Blueprint reads the Excel file before it writes
 it again, so what you typed goes into the register and is not lost; an answer moves an open question to
 `answered`. Close the file in Excel first, or Blueprint cannot write it. If you and Blueprint both changed
 the same item, it stops and shows the two values so you can say which is right. Resolved client items

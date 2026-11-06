@@ -1,6 +1,6 @@
 ---
 name: client-answers
-description: Take the client's answers to the open questions into the project - from the register Excel file they sent back (the Client response column), an e-mail, call notes or text pasted in - match each answer to its register item, record it, and act on it (a spec change, a decision, a follow-up question or a possible change request), then say whether the requirements document and the estimate need doing again. Use when the user says "the client answered", "here are the client's answers", "they replied to the questions", "the client answered R-012", or drops in a returned register.xlsx or an answers e-mail.
+description: Take the client's answers to the open questions into the project - from the register Excel file they sent back (the Client response column), an e-mail, call notes or text pasted in - match each answer to its register item, record it, and act on it (a spec change, a decision, a follow-up question or a possible change request), then say whether the requirements document and the estimate need doing again. Use when the user says "the client answered", "here are the client's answers", "they replied to the questions", "the client answered R-012", or drops in a returned register Excel file or an answers e-mail.
 ---
 
 # Take in the client's answers
@@ -25,14 +25,14 @@ Work out the project (ask if unsure). Then, by where the answers are:
   "client answers to the register"`), then take it in:
   `python -I tools/register.py render projects/<slug> --from "<the filed copy>"` (`--help` says how). It
   takes the client's Client response and Status changes made since the copy was written (after anything the
-  BA typed into the project's own `register.xlsx`) and lists them. If it stops because an item was also
+  BA typed into the project's own `Questions and fixes register.xlsx`) and lists them. If it stops because an item was also
   changed here since, show the user both values, record the right one with `register.py update`, and run it
   again. A copy without the hidden note (pasted into a new workbook) only gives answers to items that had
   none: read the rest yourself, as text.
 - **An e-mail, notes or pasted text:** file a document if not filed yet (`project.py file`, `--kind
   "client answers"`); pasted text needs no filing. Extract Word or PDF with `tools/extract.py`. Read it all.
 
-Read `register.json` (or `register.py similar projects/<slug> "<answer>"` for a hint) and `spec/app.yaml`.
+Read `_blueprint/register.json` (or `register.py similar projects/<slug> "<answer>"` for a hint) and `_blueprint/spec/app.yaml`.
 
 ## 2. Match each answer to its item
 
@@ -59,7 +59,7 @@ fields). `resolved` when the answer settles it and is in the spec (or needs noth
 follow-up or a change is pending. `resolved_in` never names a comment id. Never edit `register.json` by
 hand. Then `register.py render projects/<slug>`.
 
-An item a change request waits on (an Ambiguous CR in `changes/crs.json` names it): once it is answered,
+An item a change request waits on (an Ambiguous CR in `_blueprint/changes/crs.json` names it): once it is answered,
 continue with `change-request` to set that CR's verdict to in scope or new.
 
 If the spec changed: rebuild the mock-up (`python -I tools/mockup.py build projects/<slug>`) and fix what it
@@ -69,7 +69,7 @@ note).
 ## 4. What it means for the documents and the estimate
 
 - **The requirements document** needs generating again when the spec changed or answers moved to
-  Decisions made since the last one in `output/`. If that version was issued, the next one is a new version.
+  Decisions made since the last one in `5 Requirements document`. If that version was issued, the next one is a new version.
 - **The estimate** should be revisited when an answer changes a count (more endpoints, another approval
   level, a KPI with a formula), resolves a risk the estimate carries, or a possible change request was
   raised. Say which answers, for the lead developer; never put a figure on it yourself.
@@ -78,8 +78,8 @@ note).
 
 - **What changed:** how many answers were recorded (resolved, answered with a follow-up), what changed in the
   spec, the follow-up questions added, any possible change requests, and any answer you could not place.
-- **Where and for whom:** the register (`register.xlsx`: the **For client** sheet now shows the answers;
-  possible change requests are **internal**), the spec and mock-up, and the client's file filed in `docs/`.
+- **Where and for whom:** the register (`Questions and fixes register.xlsx`: the **For client** sheet now shows the answers;
+  possible change requests are **internal**), the spec and mock-up, and the client's file filed in `1 Client documents`.
   `Project overview.html` lists them.
 - **Next step, in the words to say:** with follow-up questions open, "prepare the workshop"; when the spec
   changed and nothing high is open, "generate the requirements document". For the lead developer, if counts

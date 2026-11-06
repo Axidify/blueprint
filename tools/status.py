@@ -11,6 +11,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "tools"))
+import layout  # noqa: E402  (where everything is in a project folder: either layout)
 
 
 def read(path, load, problems):
@@ -40,7 +42,7 @@ def files(folder, pattern):
 def upcoming_workshop(p, problems):
     """The date of the next workshop that has an agenda (today or later), or None."""
     dates = []
-    for f in files(p / "workshops", "*.json"):
+    for f in files(layout.workshops_source(p), "*.json"):
         agenda = read(f, json.loads, problems)
         date = str(agenda.get("date") or "") if isinstance(agenda, dict) else ""
         if not date:
@@ -73,8 +75,9 @@ def project_status(p):
 
     problems = []
     s = {"slug": p.name, "problems": problems,
-         "docs": sorted(x.name for x in (p / "docs").glob("*") if x.is_file()) if (p / "docs").exists() else []}
-    r = read(p / "register.json", json.loads, problems)
+         "docs": sorted(x.name for x in layout.docs_dir(p).glob("*") if x.is_file()) if layout.docs_dir(p).exists() else [],
+         "layout": layout.name(p)}
+    r = read(layout.register_json(p), json.loads, problems)
     if isinstance(r, dict):
         s["name"] = r.get("project") or p.name
         items = [i for i in r.get("items") or [] if isinstance(i, dict)]
@@ -85,28 +88,28 @@ def project_status(p):
         s["internal_open"] = sum(1 for i in items if i.get("audience") == "internal" and is_open(i))
     elif r is not None:
         problems.append("register.json is not a register: ask Blueprint to check it")
-    spec_file = p / "spec" / "app.yaml"
+    spec_file = layout.spec_file(p)
     spec = read(spec_file, yaml.safe_load, problems)
     if isinstance(spec, dict) and isinstance(spec.get("project"), dict) and spec["project"].get("version") is not None:
         s["spec_version"] = str(spec["project"]["version"])
         s["spec_mtime"] = mtime(spec_file)
-    outs = files(p / "output", "*.docx")
+    outs = files(layout.output_dir(p), "*.docx")
     if outs:
         s["latest_doc"] = outs[-1].name
         s["doc_mtime"] = mtime(outs[-1])
         m = re.search(r" v([\d.]+)\.docx$", outs[-1].name)
         s["doc_version"] = m.group(1) if m else None
-    s["reviews"] = [(f.parent.name, mtime(f)) for f in files(p / "reviews", "*/review.md")]
-    estimates = files(p / "estimates", "*.json")
+    s["reviews"] = [(f.parent.name, mtime(f)) for f in files(layout.reviews_dir(p), "*/review.md")]
+    estimates = files(layout.estimates_source(p), "*.json")
     if estimates:
         s["estimate_mtime"] = mtime(estimates[-1])
     s["upcoming_workshop"] = upcoming_workshop(p, problems)
-    fb = read(p / "feedback" / "feedback.json", json.loads, problems)
+    fb = read(layout.feedback_file(p), json.loads, problems)
     if isinstance(fb, list):
         # A comment taken back in the mock-up (withdrawn) is kept in the file but waits for nobody.
         s["feedback_unprocessed"] = sum(1 for i in fb if isinstance(i, dict) and not i.get("status") and not i.get("withdrawn"))
     s["actuals"] = (ROOT / "knowledge" / "actuals" / f"{p.name}.md").exists()
-    issues = read(p / "output" / "issued.json", json.loads, problems)
+    issues = read(layout.issued_file(p), json.loads, problems)
     if isinstance(issues, list) and issues and isinstance(issues[-1], dict):
         s["last_issued"] = issues[-1]
     return s
@@ -210,6 +213,8 @@ def main():
             bits.append(f"{s['client_open']} client questions open ({s['client_high_open']} high), {s['internal_open']} internal")
         if s.get("actuals"):
             bits.append("delivered, actuals logged")
+        if s.get("layout") == "old" and layout.is_old_project(p):
+            bits.append("old folder layout")
         line = f"- {s.get('name', s['slug'])} ({s['slug']}): " + ("; ".join(bits) or "documents only")
         print(line)
         for problem in s["problems"]:
@@ -219,6 +224,9 @@ def main():
             print(f"    next: {nxt}")
             if hint:
                 print(f"    also: {hint}")
+            if s.get("layout") == "old" and layout.is_old_project(p):
+                print("    folders: in the old layout; say 'migrate the folders' to put what people open in numbered "
+                      "folders (both layouts work)")
         elif nxt:
             print(f"    -> {nxt}")
     if archived and not brief:

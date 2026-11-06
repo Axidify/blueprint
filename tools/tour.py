@@ -6,8 +6,9 @@ Usage:
     python -I tools/tour.py end        remove the copy
 
 start    copies the made-up sample (its spec and the other files kept in git; not what was built from it)
-         into .tour/leave-request in the app folder, gives it an empty register, and puts a short draft
-         requirements document in its docs/ with a few gaps planted in it, for the tour's review. Run it
+         into .tour/leave-request in the app folder, in the folder layout a new project has (tools/layout.py),
+         gives it an empty register, and puts a short draft requirements document in its "1 Client documents"
+         with a few gaps planted in it, for the tour's review. Run it
          again to start over: the old copy is replaced. The copy is ignored by git, is not one of the
          projects (status.py and the page that lists every mock-up never show it), and every Blueprint tool
          works on it: give them .tour/leave-request where they ask for projects/<slug>.
@@ -165,21 +166,30 @@ def start(root=ROOT, today=None):
     shutil.copytree(EXAMPLE, copy, ignore=lambda folder, names: [n for n in names if n in GENERATED or n.endswith(".xlsx")])
     (copy / MARKER).write_text("Made by tools/tour.py for the Blueprint tour. Removed by: python -I tools/tour.py end\n",
                                encoding="utf-8")
-    for sub in ("docs", "reviews", "spec", "feedback"):
-        (copy / sub).mkdir(exist_ok=True)
-    spec = yaml.safe_load((copy / "spec" / "app.yaml").read_text(encoding="utf-8")) or {}
+    sys.path.insert(0, str(ROOT / "tools"))
+    import layout
+
+    if not layout.is_new(copy):  # the sample is kept in the old layout; the tour shows the one a new project has
+        moved = layout.migrate(copy, rebuild_page=False)
+        if moved["refusals"]:
+            sys.exit("The tour copy could not be laid out: " + "; ".join(moved["refusals"]))
+    layout.create_new(copy)
+    spec = yaml.safe_load(layout.spec_file(copy).read_text(encoding="utf-8")) or {}
     about = spec.get("project") or {}
-    if not (copy / "register.json").exists():
-        (copy / "register.json").write_text(json.dumps(
+    if not layout.register_json(copy).exists():
+        layout.register_json(copy).write_text(json.dumps(
             {"project": about.get("name", "Leave Request System"), "client": about.get("client", "Sample client"),
              "platform": about.get("platform", ""), "items": []}, indent=2) + "\n", encoding="utf-8")
     day = (today or dt.date.today()).isoformat()
-    write_draft(copy / "docs" / f"{day} {DRAFT_NAME}")
+    write_draft(layout.docs_dir(copy) / f"{day} {DRAFT_NAME}")
     return copy
 
 
 def draft_of(copy):
-    found = sorted(Path(copy, "docs").glob(f"* {DRAFT_NAME}"))
+    sys.path.insert(0, str(ROOT / "tools"))
+    import layout
+
+    found = sorted(layout.docs_dir(copy).glob(f"* {DRAFT_NAME}"))
     return found[-1] if found else None
 
 
@@ -191,12 +201,13 @@ def add_comment(root=ROOT):
     if not is_the_copy(copy, root):
         sys.exit("There is no tour copy yet. Start the tour first: python -I tools/tour.py start")
     sys.path.insert(0, str(ROOT / "tools"))
+    import layout
     import mockup
 
-    spec = yaml.safe_load((copy / "spec" / "app.yaml").read_text(encoding="utf-8")) or {}
+    spec = yaml.safe_load(layout.spec_file(copy).read_text(encoding="utf-8")) or {}
     item = {**SAMPLE_COMMENT, "x": 0, "y": 0, "time": dt.datetime.now().isoformat(timespec="seconds"),
             "version": str((spec.get("project") or {}).get("version", ""))}
-    return mockup.save_comment(copy / "feedback" / "feedback.json", item)
+    return mockup.save_comment(layout.feedback_file(copy), item)
 
 
 def main(argv=None):

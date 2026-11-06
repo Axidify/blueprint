@@ -3,9 +3,11 @@
 Usage:
     python -I tools/review_doc.py projects/<slug> [<review>]
 
-<review> is the review's folder in projects/<slug>/reviews/ (its name, or its path); without it, the review
-written last. The tool reads reviews/<review>/review.md, which the review-requirements skill writes, and
-writes "reviews/<review>/<document> review.docx" next to it (for example "SRS v1.0 review.docx"): headings,
+<review> is the review's folder among the project's reviews (its name, or its path); without it, the review
+written last. The tool reads <review>/review.md, which the review-requirements skill writes (in
+_blueprint/reviews/, or reviews/ in a project not yet moved to the new folder layout), and writes
+"<document> review.docx" (for example "SRS v1.0 review.docx") into the project's "2 Reviews" folder (beside
+review.md in the old layout): headings,
 lists, tables, bold, italic and code spans, in the company's Word template and document format, the way the
 workshop documents are made. Every page says it is internal: the review holds your team's reasons, risks
 and commercial notes. The client gets the register's "For client" sheet, never the review.
@@ -19,6 +21,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
+import layout  # noqa: E402  (where everything is in a project folder)
 import workspace  # noqa: E402
 
 INTERNAL_MARK = "Internal: not for the client"
@@ -46,18 +49,24 @@ def docx_name(review_dir):
     return f"{readable_name(Path(review_dir).name)} review.docx"
 
 
+def docx_path(project, review_dir):
+    """Where a review's Word file is (or goes)."""
+    return layout.review_reports_dir(project, review_dir) / docx_name(review_dir)
+
+
 def find_review(project, name=None):
     """The review folder named (by name or path), or the one whose review.md was written last."""
     project = Path(project)
+    reviews = layout.reviews_dir(project)
     if name:
-        for candidate in (Path(name), project / name, project / "reviews" / Path(name).name):
+        for candidate in (Path(name), project / name, reviews / Path(name).name):
             if (candidate / "review.md").exists():
                 return candidate
         sys.exit(f"No review.md in {name}. Reviews of this project: "
-                 + (", ".join(p.parent.name for p in sorted((project / "reviews").glob("*/review.md"))) or "none"))
-    found = sorted((project / "reviews").glob("*/review.md"), key=lambda p: p.stat().st_mtime) if (project / "reviews").exists() else []
+                 + (", ".join(p.parent.name for p in sorted(reviews.glob("*/review.md"))) or "none"))
+    found = sorted(reviews.glob("*/review.md"), key=lambda p: p.stat().st_mtime) if reviews.exists() else []
     if not found:
-        sys.exit(f"No review in {project / 'reviews'} yet: review a document first (say 'review the requirements document').")
+        sys.exit(f"No review in {reviews} yet: review a document first (say 'review the requirements document').")
     return found[-1].parent
 
 
@@ -192,31 +201,48 @@ def project_name(project):
 
     project = Path(project)
     try:
-        spec = yaml.safe_load((project / "spec" / "app.yaml").read_text(encoding="utf-8")) or {}
+        spec = yaml.safe_load(layout.spec_file(project).read_text(encoding="utf-8")) or {}
         if (spec.get("project") or {}).get("name"):
             return str(spec["project"]["name"])
     except (OSError, ValueError, yaml.YAMLError, AttributeError):
         pass
     try:
-        return str(json.loads((project / "register.json").read_text(encoding="utf-8")).get("project") or project.name)
+        return str(json.loads(layout.register_json(project).read_text(encoding="utf-8")).get("project") or project.name)
     except (OSError, ValueError, AttributeError):
         return project.name
 
 
 def render(project, review_dir):
-    """Write the review's Word file next to its review.md. Returns its path."""
+    """Write the review's Word file (into 2 Reviews/, or beside its review.md in the old layout). Returns its path."""
+    review_dir = Path(review_dir)
+    return render_markdown(project, review_dir / "review.md", docx_path(project, review_dir),
+                           "Review", f"Review of {readable_name(review_dir.name)}")
+
+
+def render_note(project, note):
+    """Write a note kept with the reviews (the mock-up's change notes) as a Word file in 2 Reviews/. Returns its
+    path, or None in the old layout, where the note itself is linked."""
+    out = layout.note_docx(project, note)
+    if out is None:
+        return None
+    hit = re.match(r"mockup-(v.+)-changes$", Path(note).stem)
+    label = "Mock-up changes" if hit else "Notes"
+    return render_markdown(project, Path(note), out, label, out.stem)
+
+
+def render_markdown(project, source, out, label, title):
+    """A markdown file of the team's as an internal Word file: `label` above the page title (the file's first
+    heading), `title` in the header. Returns `out`."""
     from docx import Document
 
     import generate_requirements as gen
 
-    review_dir = Path(review_dir)
-    source = review_dir / "review.md"
+    source, out = Path(source), Path(out)
     fmt = gen.load_format()
     problems = gen.format_errors(fmt)
     if problems:
         raise ValueError("The document format has mistakes:\n  " + "\n  ".join(problems))
     co = workspace.company()
-    title = f"Review of {readable_name(review_dir.name)}"
     doc = Document(str(workspace.asset("document-template.docx")))
     w = gen.Writer(doc, fmt)
     w.setup_styles()
@@ -232,7 +258,7 @@ def render(project, review_dir):
         if kind == "heading":
             level, text = block[1], block[2]
             if level == 1 and not titled:
-                w.para([("Review", "sec")], size=w.s["body"] + 1, after=2)
+                w.para([(label, "sec")], size=w.s["body"] + 1, after=2)
                 w.page_title(re.sub(r"^review\s*(?::|of\b)\s*", "", text, flags=re.I) or text, after=4)
                 w.para([(project_name(project), "sec")], size=w.s["body"] + 1, after=8)
                 w.para([("error", "dot"), (INTERNAL_MARK + ". It holds your team's findings, risks and commercial notes; "
@@ -273,7 +299,7 @@ def render(project, review_dir):
             header, rows = block[1], block[2]
             w.table([" ".join(words for words, _ in inline(h)) for h in header],
                     [[cell_segments(c) for c in r] for r in rows], column_widths(header, rows, w.text_width))
-    out = review_dir / docx_name(review_dir)
+    out.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(out))
     return out
 

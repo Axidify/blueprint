@@ -260,7 +260,9 @@ def features(spec, project=None, places=None):
     if str(project_info.get("text_size") or "normal").lower() != "normal":
         add("look:text size", "project")
     if project is not None:
-        own = [name for name in ("mockup.js", "mockup.css") if (Path(project) / "spec" / name).is_file()]
+        import layout
+
+        own = [name for name in ("mockup.js", "mockup.css") if (layout.spec_dir(project) / name).is_file()]
         if own:
             add("code:project", " and ".join(f"spec/{name}" for name in own))
     return found
@@ -418,9 +420,11 @@ def replace_fit(text, record):
 def cmd_apply(project, kdir=None):
     import mockup
 
+    import layout
+
     project = Path(project)
     result = cmd_check(project, kdir)
-    path = project / "spec" / "app.yaml"
+    path = layout.spec_file(project)
     raw = path.read_bytes().decode("utf-8")
     newline = "\r\n" if "\r\n" in raw else "\n"
     text = replace_fit(raw.replace("\r\n", "\n"), fit_record(result))
@@ -539,8 +543,10 @@ def main():
         ap.add_argument(f"--{name}")
     a = ap.parse_args()
     if a.command in ("check", "apply"):
-        if not (Path(a.target) / "spec" / "app.yaml").exists():
-            sys.exit(f"No spec at {Path(a.target) / 'spec' / 'app.yaml'}")
+        import layout
+
+        if not layout.spec_file(a.target).exists():
+            sys.exit(f"No spec at {layout.spec_file(a.target)}")
         if a.command == "check":
             cmd_check(a.target, a.knowledge)
         else:

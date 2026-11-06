@@ -31,6 +31,15 @@ folder can use it to find their files. A project with a mock-up also has **Open 
 which starts the mock-up so comments are saved. If a page is missing or out of date, run
 `python -I tools/overview.py build projects/<slug>` (or `build --all`).
 
+A project `status.py` marks as in the **old folder layout** (a `folders:` line) mixes the files people open
+with Blueprint's working files. Offer once, in a sentence, to tidy it: say "migrate the folders" and its
+documents go into numbered folders in the order of the process (`1 Client documents`, `2 Reviews` …,
+`Internal – estimates and change requests`), with Blueprint's files in `_blueprint`. Both layouts work, so it
+is their choice; do not offer again if they decline. When they say it: `python -I tools/project.py migrate
+<slug> --dry-run`, summarise the moves in a few lines, and once they agree run it without `--dry-run`. It
+refuses, with the reason, while the mock-up is open, a live session runs or one of its files is open in Word
+or Excel (on anyone's computer): pass the reason on. `--undo` moves a project back.
+
 ## 3. Ask what they want to do
 
 Use AskUserQuestion with these options (the tool adds "Other" automatically):

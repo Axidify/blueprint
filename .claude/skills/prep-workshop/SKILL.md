@@ -14,10 +14,10 @@ It produces two Word documents: the **agenda** for the client and the **facilita
 1. `python -I tools/workshop.py gaps projects/<slug>` lists the open client questions, what the spec does
    not say yet (status rules, integration details, formulas, scope, non-functional requirements,
    notifications) and the gap patterns with their evidence.
-2. Read `register.json`, `spec/app.yaml` if there is one, and in `knowledge/gap-patterns.md` the workshop
+2. Read `_blueprint/register.json`, `_blueprint/spec/app.yaml` if there is one, and in `knowledge/gap-patterns.md` the workshop
    questions of the patterns that apply to this project. Patterns that already cost mandays come first.
    Read unprocessed mock-up comments (`python -I tools/mockup.py feedback projects/<slug>`) and any earlier
-   agenda in `projects/<slug>/workshops/`.
+   agenda in `_blueprint/workshops/`.
 3. Ask the user what you cannot know: which session this is (workshop 1, the mock-up review, a sign-off
    review), the date, how long it is, and who attends. Do not guess names.
 
@@ -47,7 +47,8 @@ and the `parked` list appear in the facilitator notes only.
 
 ## 3. Write, check, render
 
-1. Write `projects/<slug>/workshops/<date> <short name>.json` (format at the top of `tools/workshop.py`).
+1. Write `projects/<slug>/_blueprint/workshops/<date> <short name>.json` (format at the top of `tools/workshop.py`); the two
+   documents go into `3 Workshops`.
 2. `python -I tools/workshop.py check projects/<slug>` and fix what it reports.
 3. `python -I tools/workshop.py render projects/<slug>` writes the two documents next to the file.
 4. Render the register if you added items: `python -I tools/register.py render projects/<slug>`.
@@ -67,6 +68,6 @@ and the `parked` list appear in the facilitator notes only.
   overview.html`. The **agenda is for the client**, sent a few days ahead; the **facilitator notes are
   internal**, for the BA only (marked so on every page).
 - **Next step, in the words to say:** in the session, "present the mock-up". Afterwards, with the client's
-  answers (typed into **Client response** in `register.xlsx`, an e-mail or the session notes): "the client
+  answers (typed into **Client response** in `Questions and fixes register.xlsx`, an e-mail or the session notes): "the client
   answered"; with comments on the mock-up: "apply the feedback". Answers then reach the spec, and the
   requirements document lists them under Decisions made.

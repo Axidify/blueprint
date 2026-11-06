@@ -16,12 +16,14 @@ if [ -z "$project" ] || [ "${project#--}" != "$project" ]; then  # no project na
   exec "$python" -I tools/mockup.py serve "$@"
 fi
 shift
+# A project's spec is in _blueprint/spec/ (the folder layout of new projects) or spec/ (a project not yet moved).
+has_spec() { [ -f "$1/spec/app.yaml" ] || [ -f "$1/_blueprint/spec/app.yaml" ]; }
 folder="projects/$project"
-if [ -f "$project/spec/app.yaml" ]; then folder="$project"; fi
-if [ ! -f "$folder/spec/app.yaml" ]; then
+if has_spec "$project"; then folder="$project"; fi
+if ! has_spec "$folder"; then
   echo "No mock-up spec found for \"$project\". Projects with a mock-up:"
   for p in projects/*/; do
-    if [ -f "${p}spec/app.yaml" ]; then echo "  $(basename "$p")"; fi
+    if has_spec "${p%/}"; then echo "  $(basename "$p")"; fi
   done
   exit 1
 fi

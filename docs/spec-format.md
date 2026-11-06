@@ -1,7 +1,8 @@
-# Project spec format (`spec/app.yaml`)
+# Project spec format (`_blueprint/spec/app.yaml`)
 
 One YAML file per project drives both the clickable mock-up (`tools/mockup.py`) and the generated requirements document
 (`tools/generate_requirements.py`). Change the spec, rebuild both, and they stay consistent.
+It is `_blueprint/spec/app.yaml` in the project folder (`spec/app.yaml` in a project still in the old folder layout).
 `examples/leave-request/spec/app.yaml` is a complete working example.
 
 ## Top level
@@ -182,11 +183,14 @@ Available}}` offers only the records the `where` lets through (same form as a li
 the walk-through: a car put on loan leaves the drop-down. The document says "From Cars where Status is
 Available". A `checkbox` with `options` is one tick box per option;
 without them it is a single tick box (I agree, Urgent), ticked when the record's value is `true` or `Yes`.
+A `user` field offers people: with `roles: [approver]` the `user` of each of those roles, without it everyone
+the spec names (each role's `user` and a `users` list in the sample data); `options` or `options_from` win.
 
 **What the mock-up does with fields.** A `required` field is checked by the main button of a form (`style:
 primary`) and by a dialog's confirm button: the first press marks the required fields left empty, on
 whichever step of the form they are (on a form in steps the button stays on the last step and names
-the step that holds them, marked with a dot), and the second press goes on without them. A read-only field is never
+the step that holds them, marked with a dot), and the second press goes on without them, saying on screen
+that only the mock-up does: the real system would not send the form. A read-only field is never
 asked for. A `file` field takes a sample file when clicked and a `signature` field signs as the signed-in
 role's `user`. None of this is in a screenshot.
 
@@ -293,8 +297,8 @@ applications list, as Pending Approval") and which main buttons only show their 
   empty form. When the button opens a dialog, the dialog's confirm button adds the record. A form that names
   its own `record` is never empty and adds nothing.
 - **Its status.** The button's `set_status` (or the confirm button's), stored as the list's records store
-  theirs (by name, or by id where they use ids). Without one: the first status of `statuses`, or the one
-  after it when that is a draft and the button is not about a draft.
+  theirs (by name, or by id where they use ids). Without one: the first status of `statuses`, or, when that is a
+  draft and the button is not about a draft, the draft's first `next` (or the status after it in the list).
 - **Its values.** What was typed. A field left empty takes its `default`, a sample file or the signer's
   name, a choice, or the value of a sample record; never made-up filler text. So that a new request is never
   the twin of one already waiting, that record is a finished one (a status with no `next`), or else one at

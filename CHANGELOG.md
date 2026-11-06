@@ -12,6 +12,11 @@ See [docs/maintaining.md](docs/maintaining.md).
 ## [Unreleased]
 
 ### Added
+- **`project.py migrate <project>`** moves a project to the new folder layout (`--dry-run` lists every
+  move, `--all` does every project, `--undo` moves it back exactly). It refuses, saying why, while the
+  mock-up is open, a live session runs, or one of its Word, Excel or PDF files is open on anyone's computer.
+  Issued files stay locked and comments keep their ids. The start menu offers it once for an older project,
+  and `project.py check` and the start-up summary name the projects still in the old layout.
 - **A guided tour for newcomers.** Say "give me a tour" for a ten-minute first run on a copy of the made-up
   sample: a quick review into the Excel register, the clickable mock-up, a comment turned into a live
   change, and the generated requirements document. It never touches your projects or client documents,
@@ -160,6 +165,15 @@ See [docs/maintaining.md](docs/maintaining.md).
   at all.
 
 ### Changed
+- **Project folders are laid out for the people who browse them.** Nothing to do for new projects. For an
+  existing project, say "migrate the folders" (or leave it: both layouts work, also for teammates on this
+  version). What people open is now at the top, numbered in the order of the process: `Project
+  overview.html`, `Questions and fixes register.xlsx`, `1 Client documents`, `2 Reviews` (each review and the
+  mock-up's change notes as Word files), `3 Workshops`, `4 Mock-up screenshots`, `5 Requirements document`,
+  `6 UAT`, `7 Change requests`, and `Internal – estimates and change requests` (estimates and the CR log,
+  never sent). Blueprint's working files (spec, register.json, comments, the mock-up and its versions,
+  review extracts, .json sources, issued versions) are in `_blueprint`, with a README saying to leave them
+  alone. Folders appear only when a project has something for them. New projects start this way.
 - **The presenter's bar, the pins and the feedback buttons are a burnt orange** on a dark bar, deep enough
   for white text to be read on it.
 - **Feedback mode is calmer and clearer, and any part of a screen can be commented on:** the header, the
@@ -234,6 +248,12 @@ See [docs/maintaining.md](docs/maintaining.md).
   of it.
 
 ### Fixed
+- **A user field in the mock-up offers people.** The approval steps of a form showed empty drop-downs; a
+  `user` field now offers the people of its `roles` (or everyone the spec names).
+- **Submit on a new form starts the request after its draft status** even when the draft lists no `next`; it
+  used to add the request as a draft.
+- **Going on with required fields empty says so.** The second press of a form's main button still goes on, so
+  a session is never stuck, but the mock-up now says that the real system would not send the form.
 - **Filters are kept when you open a record and come back.** The list used to show every row again.
 - **The Feedback button no longer covers the last buttons of a page**, such as Export or Approve.
 - **The outline in feedback mode is no longer cut off** on a column heading or anything else inside a table.

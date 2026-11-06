@@ -11,7 +11,9 @@ build   writes "Project overview.html" at the top of the project folder: one sel
         Claude, and four figures (client questions, internal fixes, the mock-up, the requirements
         document). It never shows mandays, rates or cost. Also writes, when the project has a mock-up, the
         "Open the mock-up" shortcuts (.cmd for Windows, .command for a Mac) that start the mock-up through
-        Blueprint so comments are saved, and the Word version of each review that has none or an older one.
+        Blueprint so comments are saved, and the Word version of each review that has none or an older one
+        (and, in the new folder layout, of the mock-up's change notes, in "2 Reviews").
+        It works on projects in either folder layout (see tools/layout.py) and links each file where it is.
         --all does it for every active project.
 
 The page is rebuilt by the tools that write into a project (register, workshop, estimate, requirements
@@ -27,12 +29,12 @@ from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
+import layout  # noqa: E402  (where everything is in a project folder)
 import project as project_tool  # noqa: E402
 import status  # noqa: E402  (the project's stage and next step: one place decides them)
 
-PAGE = "Project overview.html"
-SHORTCUT_WINDOWS = "Open the mock-up.cmd"
-SHORTCUT_MAC = "Open the mock-up.command"
+PAGE = layout.OVERVIEW
+SHORTCUT_WINDOWS, SHORTCUT_MAC = layout.SHORTCUTS
 EXAMPLES = ROOT / "examples"
 MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
           "November", "December")
@@ -130,18 +132,24 @@ def read_spec(project):
     import yaml
 
     try:
-        spec = yaml.safe_load((project / "spec" / "app.yaml").read_text(encoding="utf-8"))
+        spec = yaml.safe_load(layout.spec_file(project).read_text(encoding="utf-8"))
     except (OSError, ValueError, yaml.YAMLError):
         return {}
     return spec if isinstance(spec, dict) else {}
 
 
-def review_word(review_dir):
+def review_word(project, review_dir):
     """The review's Word file when it exists, else its review.md."""
     import review_doc
 
-    docx = review_dir / review_doc.docx_name(review_dir)
+    docx = review_doc.docx_path(project, review_dir)
     return docx if docx.exists() else review_dir / "review.md"
+
+
+def note_word(project, note):
+    """A note's Word file (new layout) when it exists, else the note itself."""
+    docx = layout.note_docx(project, note)
+    return docx if docx is not None and docx.exists() else note
 
 
 def reviews_of_generated(name, doc_versions):
@@ -154,15 +162,24 @@ def reviews_of_generated(name, doc_versions):
 
 
 def render_reviews(project):
-    """The Word file of every review that has none, or an older one than its review.md (best effort)."""
+    """The Word file of every review that has none, or an older one than its review.md, and in the new layout of
+    every note kept with the reviews (best effort)."""
     import review_doc
 
-    for md in sorted((project / "reviews").glob("*/review.md")) if (project / "reviews").exists() else []:
-        docx = md.parent / review_doc.docx_name(md.parent)
+    reviews = layout.reviews_dir(project)
+    for md in sorted(reviews.glob("*/review.md")) if reviews.exists() else []:
+        docx = review_doc.docx_path(project, md.parent)
         try:
             if not docx.exists() or docx.stat().st_mtime < md.stat().st_mtime:
                 review_doc.render(project, md.parent)
         except Exception:  # open in Word, or a format mistake: the page links review.md instead
+            continue
+    for note in layout.review_notes(project):
+        docx = layout.note_docx(project, note)
+        try:
+            if docx is not None and (not docx.exists() or docx.stat().st_mtime < note.stat().st_mtime):
+                review_doc.render_note(project, note)
+        except Exception:  # the page links the note itself instead
             continue
 
 
@@ -213,7 +230,7 @@ def gather(project):
     s = status.project_status(p)
     spec = read_spec(p)
     P = spec.get("project") if isinstance(spec.get("project"), dict) else {}
-    register = read_json(p / "register.json", {})
+    register = read_json(layout.register_json(p), {})
     register = register if isinstance(register, dict) else {}
     items = [i for i in register.get("items") or [] if isinstance(i, dict)]
     info = {
@@ -221,41 +238,45 @@ def gather(project):
         "client": str(P.get("client") or register.get("client") or ""),
         "platform": str(P.get("platform") or register.get("platform") or ""),
     }
-    feedback = read_json(p / "feedback" / "feedback.json", [])
+    feedback = read_json(layout.feedback_file(p), [])
     standing = [c for c in feedback if isinstance(c, dict) and not c.get("withdrawn")] if isinstance(feedback, list) else []
     m = {"project": p, "s": s, "info": info, "items": items, "spec": spec, "P": P,
          "handled": sum(1 for c in standing if c.get("status") and c.get("status") != "working"),
          "waiting": s.get("feedback_unprocessed") or 0,
          "scope": sum(1 for c in standing if c.get("status") == "scope")}
-    m["docs"] = sorted((f for f in (p / "docs").glob("*") if f.is_file() and not f.name.startswith(("~$", ".")) and f.suffix.lower() != ".json"),
-                       key=lambda f: (file_day(f), f.name)) if (p / "docs").exists() else []
+    docs = layout.docs_dir(p)
+    m["docs"] = sorted((f for f in docs.glob("*") if f.is_file() and not f.name.startswith(("~$", ".")) and f.suffix.lower() != ".json"),
+                       key=lambda f: (file_day(f), f.name)) if docs.exists() else []
     outputs = {}
-    for f in (p / "output").glob("*") if (p / "output").exists() else []:
+    out_dir = layout.output_dir(p)
+    for f in out_dir.glob("*") if out_dir.exists() else []:
         hit = OUTPUT_VERSION.search(f.name)
         if f.is_file() and hit:
             outputs.setdefault(hit.group(1), {})[hit.group(2)] = f
     m["outputs"] = outputs
     reviews, generated_reviews = [], {}
-    for md in sorted((p / "reviews").glob("*/review.md"), key=lambda f: f.stat().st_mtime) if (p / "reviews").exists() else []:
+    reviews_dir = layout.reviews_dir(p)
+    for md in sorted(reviews_dir.glob("*/review.md"), key=lambda f: f.stat().st_mtime) if reviews_dir.exists() else []:
         version = reviews_of_generated(md.parent.name, set(outputs))
         if version is None:
             reviews.append(md.parent)
         else:
             generated_reviews.setdefault(version, []).append(md.parent)
     m["reviews"], m["generated_reviews"] = reviews, generated_reviews
-    m["notes"] = sorted((f for f in (p / "reviews").glob("*.md") if f.is_file()), key=lambda f: f.stat().st_mtime) if (p / "reviews").exists() else []
+    m["notes"] = layout.review_notes(p)
     m["workshops"] = []
-    for f in sorted((p / "workshops").glob("*.json")) if (p / "workshops").exists() else []:
+    sources = layout.workshops_source(p)
+    for f in sorted(sources.glob("*.json")) if sources.exists() else []:
         agenda = read_json(f, {})
         agenda = agenda if isinstance(agenda, dict) else {}
         m["workshops"].append((f, agenda))
-    m["issued"] = [i for i in (read_json(p / "output" / "issued.json", []) or []) if isinstance(i, dict)]
-    shots = p / "mockup" / "screenshots"
+    m["issued"] = [i for i in (read_json(layout.issued_file(p), []) or []) if isinstance(i, dict)]
+    shots = layout.screenshots_dir(p)
     m["shots"] = sorted(shots.glob("*.png")) if shots.is_dir() else []
-    saved = p / "mockup" / "versions"
+    saved = layout.versions_dir(p)
     natural = lambda v: [int(x) if x.isdigit() else x for x in re.split(r"(\d+)", v.name)]
     m["versions"] = sorted((v for v in saved.iterdir() if (v / "index.html").exists()), key=natural) if saved.is_dir() else []
-    est_dir = p / "estimates"
+    est_dir = layout.estimates_source(p)
     if est_dir.is_dir():
         import estimate as estimate_tool
 
@@ -315,24 +336,24 @@ def stage_documents(m):
 
 def stage_review(m):
     p, rows = m["project"], []
-    xlsx = p / "register.xlsx"
+    xlsx = layout.register_xlsx(p)
     if xlsx.exists():
         rows.append(row("sheet", "Questions and fixes register",
                         ['Send only the "For client" sheet. Type the client\'s answers into it'], "client-sheet", file_day(xlsx), link(p, xlsx)))
     elif m["items"]:
         rows.append(row("sheet", "Questions and fixes register", says("Not made into Excel yet: say 'render the register'"),
-                        "client-sheet", file_day(p / "register.json")))
+                        "client-sheet", file_day(layout.register_json(p))))
     for review_dir in reversed(m["reviews"]):
         import review_doc
 
-        target = review_word(review_dir)
+        target = review_word(p, review_dir)
         rows.append(row("file", f"Review of {review_doc.readable_name(review_dir.name)}",
                         ["Verdict, top risks and commercial notes" + ("" if target.suffix == ".docx" else ". The Word version is made the next time this page is built")],
                         "internal", file_day(review_dir / "review.md"), link(p, target)))
     for note in m["notes"]:
         if re.match(r"mockup-v.+-changes\.md$", note.name):
             continue  # change notes of the mock-up: under Mock-up
-        rows.append(row("file", capital(note.stem.replace("-", " ")), ["Notes from a review"], "internal", file_day(note), link(p, note)))
+        rows.append(row("file", capital(note.stem.replace("-", " ")), ["Notes from a review"], "internal", file_day(note), link(p, note_word(p, note))))
     found = sum(1 for i in m["items"] if str(i.get("stage", "")).startswith("requirements"))
     if m["reviews"]:
         state = ("done", "Done" + (f" · {plural(found, 'finding')}" if found else ""))
@@ -357,8 +378,7 @@ def stage_workshops(m):
         length = ""
         if isinstance(minutes, (int, float)) and not isinstance(minutes, bool) and minutes > 0:
             length = f" in {plural(int(minutes // 60), 'hour')}" if minutes % 60 == 0 else f" in {minutes:g} minutes"
-        client = f.with_name(f"{f.stem} - agenda.docx")
-        notes = f.with_name(f"{f.stem} - facilitator notes (internal).docx")
+        client, notes = layout.workshop_documents(p, f)
         about = plural(questions, "question") + length + (". Send it a few days ahead" if day >= today else "")
         if client.exists():
             rows.append(row("file", f"{short} agenda", [about], "for-client", day, link(p, client)))
@@ -380,10 +400,10 @@ def stage_workshops(m):
 def stage_mockup(m):
     p, s, rows = m["project"], m["s"], []
     version = s.get("spec_version")
-    if not version and not (p / "spec" / "app.yaml").exists():
+    if not version and not layout.spec_file(p).exists():
         return {"step": "4", "title": "Mock-up", "state": None, "rows": [],
                 "hint": says("No mock-up yet: say 'build a mock-up'")}
-    index = p / "mockup" / "index.html"
+    index = layout.mockup_dir(p) / "index.html"
     label = f"Mock-up v{version}" if version else "Mock-up"
     if index.exists():
         rows.append(row("screen", label, ["Opens in the browser to look through. To save comments, double-click "
@@ -397,9 +417,9 @@ def stage_mockup(m):
         sub = ["Changes per screen from the session, and the questions still open"]
         if note == next((n for n in reversed(m["notes"]) if n.name.startswith("mockup-v")), None) and m["scope"]:
             sub += [", ", ("status", "late", plural(m["scope"], "possible change request"))]
-        rows.append(row("file", f"What changed in {hit.group(1)}", sub, "internal", file_day(note), link(p, note)))
+        rows.append(row("file", f"What changed in {hit.group(1)}", sub, "internal", file_day(note), link(p, note_word(p, note))))
     if m["shots"]:
-        folder = p / "mockup" / "screenshots"
+        folder = layout.screenshots_dir(p)
         rows.append(row("image", "Screenshots", [f"{plural(len(m['shots']), 'screen')}, as used in the requirements document"],
                         "shareable", dt.date.fromtimestamp(newest(m["shots"]).stat().st_mtime), link(p, folder)))
     earlier = [v for v in reversed(m["versions"]) if v.name != f"v{version}"]
@@ -454,7 +474,7 @@ def stage_document(m):
         rows.append(row("file", name, ["Change it through Claude, not in Word: hand edits are lost when it is generated again"],
                         "for-client", file_day(files["docx"]), link(p, files["docx"])))
     for review_dir in reversed(m["generated_reviews"].get(version, []) + m["generated_reviews"].get("", [])):
-        target = review_word(review_dir)
+        target = review_word(p, review_dir)
         rows.append(row("file", f"Review of v{version}", ["What to fix before it goes to the client"], "internal",
                         file_day(review_dir / "review.md"), link(p, target)))
     older = sorted((v for v in m["outputs"] if v != version), key=lambda v: [int(x) for x in v.split(".")], reverse=True)
@@ -473,7 +493,7 @@ def stage_document(m):
 def stage_estimate(m):
     p, s, rows = m["project"], m["s"], []
     for n, f in enumerate(m["estimates"]):
-        xlsx = f.with_suffix(".xlsx")
+        xlsx = layout.estimate_xlsx(p, f)
         if n == 0:
             sub = [estimate_line(p, f) + ". Never send it to the client"]
         else:
@@ -520,16 +540,16 @@ def primary(m, phrase):
     today = dt.date.today()
     for f, data in m["workshops"]:
         day = iso_day(data.get("date") or f.name)
-        docx = f.with_name(f"{f.stem} - agenda.docx")
+        docx = layout.workshop_documents(p, f)[0]
         if day and day >= today and docx.exists() and (agenda is None or day < agenda[0]):
             agenda = (day, docx)
-    mock = p / "mockup" / "index.html"
+    mock = layout.mockup_dir(p) / "index.html"
     version = s.get("doc_version")
     files = m["outputs"].get(version, {}) if version else {}
     document = files.get("pdf") or files.get("docx")
-    review = review_word(m["reviews"][-1]) if m["reviews"] else None
+    review = review_word(p, m["reviews"][-1]) if m["reviews"] else None
     client_doc = m["docs"][-1] if m["docs"] else None
-    xlsx = p / "register.xlsx"
+    xlsx = layout.register_xlsx(p)
     choices = {
         "present the mock-up": [("Open the agenda", agenda[1] if agenda else None), ("Open the mock-up", mock)],
         "apply the feedback": [("Open the mock-up", mock)],
@@ -560,7 +580,7 @@ def figures(m):
         out.append(("–", "Questions for the client", ("neutral", "No register yet")))
         out.append(("–", "Fixes for our team", ("neutral", "No register yet")))
     version = s.get("spec_version")
-    index = m["project"] / "mockup" / "index.html"
+    index = layout.mockup_dir(m["project"]) / "index.html"
     if not version and not index.exists():
         out.append(("–", "Mock-up", ("neutral", "Not built yet")))
     else:
@@ -747,9 +767,15 @@ def page(m, stages, moment=None):
         else:
             content = f'<div class="hint">{segments(st.get("hint") or [])}</div>'
         out.append(f'<section class="card span-12">{head}{content}</section>')
+    if layout.is_new(m["project"]):
+        working = (f"Blueprint's working files are in <code>{esc(layout.MACHINE)}</code>: leave them as they are. "
+                   f"Files in <i>{esc(layout.INTERNAL)}</i> are never sent to the client.")
+    else:
+        working = ("Other files here are Blueprint's working files (<code>spec</code>, <code>feedback</code>, "
+                   "<code>register.json</code>, the <code>.json</code> beside each document): leave them as they are, "
+                   "or ask Claude to \u201cmigrate the folders\u201d to tidy them away.")
     out.append("<footer><span>Blueprint rebuilds this page whenever the project changes. Ask Claude anything about the project "
-               "in your own words.</span><span>Other files here are Blueprint's working files (<code>spec</code>, <code>feedback</code>, "
-               "<code>register.json</code>, the <code>.json</code> beside each document): leave them as they are.</span></footer>")
+               f"in your own words.</span><span>{working}</span></footer>")
     out += ["</div>", "</body>", "</html>", ""]
     return "\n".join(out)
 
@@ -774,8 +800,8 @@ echo Blueprint is not set up on this computer, so the mock-up cannot be started 
 echo To set it up: get the Blueprint app folder (ask whoever looks after Blueprint in your team) and
 echo double-click setup.cmd in it. Then double-click this file again.
 echo.
-echo To only look through the mock-up, without saving comments, open the mockup folder here and
-echo double-click index.html.
+echo To only look through the mock-up, without saving comments, open the mockup folder here (inside
+echo _blueprint in a project in the new folder layout) and double-click index.html.
 echo.
 pause
 exit /b 1
@@ -796,8 +822,8 @@ else
   echo "To set it up: get the Blueprint app folder (ask whoever looks after Blueprint in your team) and"
   echo "double-click setup.command in it. Then double-click this file again."
   echo
-  echo "To only look through the mock-up, without saving comments, open the mockup folder here and"
-  echo "double-click index.html."
+  echo "To only look through the mock-up, without saving comments, open the mockup folder here (inside"
+  echo "_blueprint in a project in the new folder layout) and double-click index.html."
   result=1
 fi
 echo
@@ -824,7 +850,7 @@ def write_if_changed(path, text, newline="\n", ignore=None):
 
 def write_shortcuts(project):
     """The two "Open the mock-up" files, for a project that has a mock-up. Same content in every project."""
-    if not (project / "spec" / "app.yaml").exists():
+    if not layout.spec_file(project).exists():
         return []
     win, mac = project / SHORTCUT_WINDOWS, project / SHORTCUT_MAC
     write_if_changed(win, WINDOWS_SHORTCUT, newline="\r\n")

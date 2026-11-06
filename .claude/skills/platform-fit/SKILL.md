@@ -11,7 +11,7 @@ finds those features early, from the product's own documentation.
 
 ## 1. The tech stack
 
-- The project's platform is `project.platform` in `spec/app.yaml`; the other products it uses (a database,
+- The project's platform is `project.platform` in `_blueprint/spec/app.yaml`; the other products it uses (a database,
   a directory, a cloud service, a reporting tool) go in `project.stack`, a list. When the user gives the
   stack, or it changes, write it there.
 - **`project.stack` is for products**: software with a vendor and documentation of its own (`MariaDB 10.11`,
