@@ -55,7 +55,8 @@ h3 { font-weight: 700; }
   background: color-mix(in srgb, var(--accent) 14%, #fff); }
 .stat::after { content: ""; position: absolute; top: 27px; right: 27px; width: 18px; height: 18px; background: var(--accent);
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 17.5l6.5-6.5 4 4 8-8'/%3E%3Cpath d='M15 7h6v6'/%3E%3C/svg%3E") center/contain no-repeat; }
-.stat-value { font-size: 30px; font-weight: 800; letter-spacing: -.02em; padding-right: 50px; } /* clear of the icon */
+.stat-value { font-size: 30px; font-weight: 800; letter-spacing: -.02em; white-space: nowrap; }
+.stat { padding-top: 68px; } /* the value sits below the icon, so long values get the full card width */
 .stat-label { font-size: 13px; font-weight: 500; }
 .stat .stat-label::after { content: ""; display: block; height: 4px; border-radius: 4px; margin-top: 14px; width: 60%;
   background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 20%, #fff)); }
