@@ -205,9 +205,9 @@ body.fb-active #fb-toggle { background: var(--fb-ink); color: #1d1d1f; }
 
 /* In feedback mode the thing under the pointer is outlined in the accent, and stays outlined while its comment
    is typed. The outline is drawn inside the element, so a table or card that clips its content cannot cut it
-   off, and only the innermost thing is marked. */
+   off, and only the innermost thing is marked. Nothing is marked by the pointer while a box is being drawn. */
 body.fb-active #app * { cursor: crosshair !important; }
-body.fb-active #app [data-el]:hover:not(:has([data-el]:hover)), #app .fb-target { outline: 2px solid var(--fb-mark); outline-offset: -2px; box-shadow: inset 0 0 0 9999px var(--fb-tint); }
+body.fb-active:not(.fb-drawing) #app [data-el]:hover:not(:has([data-el]:hover)), #app .fb-target { outline: 2px solid var(--fb-mark); outline-offset: -2px; box-shadow: inset 0 0 0 9999px var(--fb-tint); }
 .fb-pin { position: absolute; z-index: 65; width: 22px; height: 22px; border-radius: 50%; background: var(--fb-mark); color: #fff; font: 700 11px/1 var(--fb-font); display: flex; align-items: center; justify-content: center;
   box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0, 0, 0, .3); cursor: pointer; transition: transform .12s var(--ease); }
 .fb-pin:hover { transform: scale(1.12); }

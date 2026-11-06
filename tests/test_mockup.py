@@ -2828,7 +2828,10 @@ def test_the_room_gets_a_comments_box_and_its_things_back():
 
 def test_a_box_for_something_new_keeps_its_place_when_the_layout_changes(tmp_path):
     """Drawn under the centred sign-in card with the Feedback panel open (the page narrower), it stays centred
-    under the card, at the same distance, with the panel closed and in a narrower window."""
+    under the card, at the same distance, with the panel closed and in a narrower window. Drawn just left of the
+    toolbar's New button where the toolbar wraps under the filters, it stays just left of that button when the
+    panel closes and in a wide window, where the toolbar sits beside the filters. Dragging marks nothing, and a
+    box over the empty page never picks the page background (only a click comments on that)."""
     node = shutil.which("node")
     if not node or not (support.ROOT / "node_modules" / "playwright-core").is_dir():
         pytest.skip("needs Node.js and the Node packages (run setup.cmd or ./setup.sh)")
@@ -2846,3 +2849,8 @@ def test_a_box_for_something_new_keeps_its_place_when_the_layout_changes(tmp_pat
     assert seen["errors"] == [] and seen["title"].startswith("Something new")
     for state in ("panelOpen", "panelClosed", "narrower"):
         assert abs(seen[state]["offCentre"]) <= 2 and abs(seen[state]["gapUnderCard"] - 14) <= 2, (state, seen[state])
+    assert seen["toolbarTitle"] == "Something new in the area above the list"
+    for state in ("toolbarPanelOpen", "toolbarPanelClosed", "toolbarWide"):
+        assert abs(seen[state]["gapLeftOfButton"] - 14) <= 2 and abs(seen[state]["offMiddle"]) <= 2, (state, seen[state])
+    assert seen["markedWhileDrawing"] == [] and seen["markedOverEmptyPage"] == []
+    assert seen["emptyTitle"] == "Something new here" and seen["emptyElement"] == ""

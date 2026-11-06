@@ -1,6 +1,9 @@
 // Draws a box for something new under the sign-in card of a built mock-up (opened from its folder, so the
 // comment is kept in the browser) with the Feedback panel open, then measures where the box is against the
-// card with the panel open, closed and in a narrower window. Prints one line of JSON.
+// card with the panel open, closed and in a narrower window. Then the same for a box drawn just left of the
+// My Applications toolbar button, where the filters and the toolbar wrap differently at each width.
+// Last, a box dragged over the empty page: nothing is marked while it is drawn and it never picks the page
+// background (only a click comments on that). Prints one line of JSON.
 // Usage: node tests/mockup_box.mjs <built index.html>
 // Called by tests/test_mockup.py. Exit code 77: Edge could not be started (the test is then skipped).
 import { pathToFileURL } from "node:url";
@@ -50,6 +53,55 @@ out.panelClosed = await measure();
 await page.setViewportSize({ width: 1150, height: 860 });
 await page.waitForTimeout(400);
 out.narrower = await measure();
+// A box just left of the toolbar button, drawn with the panel open in a window where the toolbar wraps
+await page.setViewportSize({ width: 1120, height: 734 });
+await page.goto(pathToFileURL(process.argv[2]).href + "#/my-applications?role=employee");
+await page.waitForSelector(".toolbar .btn");
+if (!(await page.locator("#fb-panel").isVisible())) await page.click("#fb-toggle");
+await page.waitForTimeout(400);
+const btn = await page.locator(".toolbar .btn").first().boundingBox();
+await page.mouse.move(btn.x - 196, btn.y - 4);
+await page.mouse.down();
+await page.mouse.move(btn.x - 100, btn.y + 10, { steps: 4 });
+const marked = () => page.evaluate(() => [...document.querySelectorAll("#app [data-el]")].filter((el) => getComputedStyle(el).outlineStyle !== "none").map((el) => el.dataset.el));
+out.markedWhileDrawing = await marked();
+await page.mouse.move(btn.x - 14, btn.y + btn.height + 4, { steps: 4 });
+await page.mouse.up();
+await page.waitForSelector(".fb-dialog");
+out.toolbarTitle = await page.textContent(".fb-title");
+await page.fill("#fb-text", "Export to Excel button here");
+await page.click("#fb-save");
+await page.waitForTimeout(500);
+const beside = () => page.evaluate(() => {
+  const c = document.querySelector(".toolbar .btn").getBoundingClientRect();
+  const boxes = [...document.querySelectorAll(".fb-box")].map((b) => b.getBoundingClientRect()).filter((b) => b.width);
+  const b = boxes[boxes.length - 1];
+  return { gapLeftOfButton: Math.round(c.left - b.right), offMiddle: Math.round(b.top + b.height / 2 - (c.top + c.height / 2)) };
+});
+out.toolbarPanelOpen = await beside();
+await page.click("#fb-toggle");
+await page.waitForTimeout(400);
+out.toolbarPanelClosed = await beside();
+await page.setViewportSize({ width: 1600, height: 900 });
+await page.waitForTimeout(400);
+out.toolbarWide = await beside();
+// A box over the empty page under the list (feedback on again)
+await page.click("#fb-toggle");
+await page.waitForTimeout(400);
+const table = await page.locator("#content table").first().boundingBox();
+const y0 = table.y + table.height + 70;
+await page.mouse.move(table.x + 40, y0);
+await page.mouse.down();
+await page.mouse.move(table.x + 140, y0 + 20, { steps: 4 });
+out.markedOverEmptyPage = await marked();
+await page.mouse.move(table.x + 260, y0 + 40, { steps: 4 });
+await page.mouse.up();
+await page.waitForSelector(".fb-dialog");
+out.emptyTitle = await page.textContent(".fb-title");
+await page.fill("#fb-text", "A help link here");
+await page.click("#fb-save");
+await page.waitForTimeout(400);
+out.emptyElement = await page.evaluate(() => { const k = Object.keys(localStorage).find((x) => x.startsWith("mock-feedback")); const l = JSON.parse(localStorage[k]); return l[l.length - 1].element; });
 out.errors = errors;
 console.log(JSON.stringify(out));
 await browser.close();
