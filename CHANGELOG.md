@@ -11,6 +11,8 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-06
+
 ### Fixed
 - **The PDF is no longer twice the size it needs to be.** In 0.8.0, putting the screenshots back into the
   PDF at full size stored each of them twice. Each is now stored once, which roughly halves the PDF of a
@@ -405,7 +407,8 @@ First release.
 - One-step setup (`setup.cmd`) with a machine check, `present.cmd` for sessions, shared Claude Code
   permissions and a start-up status greeting.
 
-[Unreleased]: https://github.com/Axidify/blueprint/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/Axidify/blueprint/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/Axidify/blueprint/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/Axidify/blueprint/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Axidify/blueprint/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Axidify/blueprint/compare/v0.5.0...v0.6.0
