@@ -11,6 +11,8 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-06
+
 ### Added
 - **The mock-up can act the process out.** Give a button `set_status` in the spec and clicking it moves the
   record to that status: approve an application as the manager and it shows as Approved on every screen,
@@ -438,7 +440,8 @@ First release.
 - One-step setup (`setup.cmd`) with a machine check, `present.cmd` for sessions, shared Claude Code
   permissions and a start-up status greeting.
 
-[Unreleased]: https://github.com/Axidify/blueprint/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/Axidify/blueprint/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/Axidify/blueprint/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/Axidify/blueprint/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/Axidify/blueprint/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/Axidify/blueprint/compare/v0.7.0...v0.8.0
