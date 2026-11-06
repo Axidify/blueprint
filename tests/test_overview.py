@@ -1,6 +1,8 @@
 """tools/overview.py: the overview page at the top of a project folder, the "Open the mock-up" shortcuts, the
 review as a Word file (tools/review_doc.py), and the tools that rebuild the page after they write."""
+import contextlib
 import datetime as dt
+import io
 import json
 import os
 import re
@@ -17,11 +19,38 @@ from docx import Document
 import support
 
 import estimate
+import mockup
 import overview
 import project as project_tool
 import register
 import review_doc
 import status
+
+SAMPLE_DOC = "Leave Request System – System Requirement Specifications v0.1"
+
+
+def build_mockup(p):
+    """Build the project's mock-up as `mockup.py build` does (it keeps a copy as mockup/versions/v<version>)."""
+    with contextlib.redirect_stdout(io.StringIO()):
+        mockup.build(p)
+
+
+def fake_output(p):
+    """What generating the requirements document leaves in output/; the built sample's own output is git-ignored."""
+    out = p / "output"
+    out.mkdir(exist_ok=True)
+    (out / f"{SAMPLE_DOC}.docx").write_bytes(b"docx")
+    (out / f"{SAMPLE_DOC}.pdf").write_bytes(b"%PDF-1.4 sample")
+    shutil.copy(p / "spec" / "app.yaml", out / "spec-v0.1.yaml")
+
+
+def sample_copy(p):
+    """The sample project as a fresh checkout makes it, built here: its mock-up and output are git-ignored."""
+    shutil.copytree(support.EXAMPLE, p, ignore=shutil.ignore_patterns("mockup", "output"))
+    build_mockup(p)
+    support.fake_screenshots(p)
+    fake_output(p)
+
 
 MOMENT = dt.datetime(2026, 11, 6, 21, 40)
 REVIEW_MD = """# Review: Leave Request System SRS v1.0
@@ -87,7 +116,7 @@ def full(tmp_path, monkeypatch):
     """The sample project with something in every stage: a client document, a review, a workshop on its way,
     comments, change notes, an older mock-up version, the generated document and an estimate."""
     p = tmp_path / "leave-request"
-    shutil.copytree(support.EXAMPLE, p)
+    sample_copy(p)
     spec = support.load_spec(p)
     spec["project"]["client"] = "Sample <script>alert('x')</script> & Co"
     support.write_spec(p, spec)
@@ -217,9 +246,9 @@ def test_the_next_step_follows_the_projects_stage(tmp_path, stage, heading, butt
         register.render(p, register.load(p))
     if stage in ("mock-up", "issued"):
         shutil.copytree(support.EXAMPLE / "spec", p / "spec", dirs_exist_ok=True)
-        shutil.copytree(support.EXAMPLE / "mockup", p / "mockup")
+        build_mockup(p)
     if stage == "issued":
-        shutil.copytree(support.EXAMPLE / "output", p / "output")
+        fake_output(p)
         (p / "output" / "issued.json").write_text(json.dumps([{"version": "0.1", "date": "2026-11-05", "to": "Client", "files": []}]), encoding="utf-8")
     html = unquote(page_text(overview.build(p, MOMENT).parent))
     focus = re.search(r'<section class="card focus span-12">(.*?)</section>', html, re.S).group(1)
