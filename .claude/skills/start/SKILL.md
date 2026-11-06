@@ -33,8 +33,8 @@ Use AskUserQuestion with these options (the tool adds "Other" automatically):
 | Build or update a mock-up | the `build-mockup` skill |
 | Process the inbox / apply feedback | the `process-inbox` skill (it routes mock-up feedback to `apply-feedback`) |
 
-If they pick "Other", or mention generating the requirements document, presenting a mock-up or closing a project, use the
-matching skill: `generate-requirements`, presenting (`present.cmd <project>` or
+If they pick "Other", or mention generating the requirements document, estimating mandays, presenting a mock-up or
+closing a project, use the matching skill: `generate-requirements`, `estimate`, presenting (`present.cmd <project>` or
 `python -I tools/mockup.py serve projects/<slug>`; add `--version 0.2` for an earlier mock-up),
 `close-project`. Recording that a document went to the client: `python -I tools/project.py issue <slug>`.
 If `python -I tools/project.py check` reports problems, offer to fix them with `--fix`.
@@ -44,4 +44,4 @@ If a project is involved and it is not obvious which, ask which one, listing the
 ## 4. Hand over
 
 Invoke the chosen skill and follow it. At the end, tell the person where their output is (Excel register,
-Word document, mock-up link) in plain words, and what the sensible next step is.
+Word document, mock-up link, estimate) in plain words, and what the sensible next step is.

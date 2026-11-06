@@ -10,6 +10,7 @@ Start with **[Getting started](getting-started.md)** if you are new.
 | [Workflow](workflow.md) | How Blueprint fits each stage of a project, from brief to sign-off and delivery |
 | [Skills](skills.md) | Everything you can ask Blueprint to do, and what each produces |
 | [The register](register.md) | The project register: fields, statuses, the Excel file for the BA |
+| [Estimates](estimates.md) | Manday estimates: ranges, confidence, the Excel file for the lead developer |
 | [Knowledge base](knowledge.md) | Gap patterns, estimating building blocks, the requirements standard, project actuals |
 | [Troubleshooting](troubleshooting.md) | Common problems and their fixes |
 
@@ -26,5 +27,5 @@ Start with **[Getting started](getting-started.md)** if you are new.
 
 | Guide | What it covers |
 |---|---|
-| [Maintaining](maintaining.md) | Keeping documentation and the changelog current, the docs check, releases |
+| [Maintaining](maintaining.md) | Keeping documentation and the changelog current, the docs check, the tests, releases |
 | [Changelog](../CHANGELOG.md) | What changed in each version |

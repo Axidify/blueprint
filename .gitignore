@@ -16,7 +16,9 @@ workspace/
 # Python
 __pycache__/
 *.pyc
+.pytest_cache/
 node_modules/
 examples/*/mockup/
 examples/*/feedback/
 examples/*/output/
+examples/*/estimates/*.xlsx

@@ -1,0 +1,21 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    # Linux has no Microsoft Word, so this also proves documents are generated without it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - name: Install Python packages
+        run: python -m pip install -r requirements-dev.txt
+      - name: Run the tests
+        run: python -m pytest

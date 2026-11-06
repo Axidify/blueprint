@@ -54,8 +54,8 @@ mock-up version.
 **Ask:** "generate the requirements document", "issue version 1.0"
 Builds the requirements document from the spec and fresh screenshots in your company's format: cover, document at a
 glance (counts, how to review it, sign-off status, version history), users and access, requirements by
-role, functional requirements linked to screens, every screen with its fields, NFRs, the project timeline (drafted from the scope of work
-if you have one), decisions needed before sign-off, a sign-off block per signatory, and appendices. It warns about stale cross-references
+role, functional requirements linked to screens, every screen with its fields, NFRs, the project timeline (drafted from the project's
+estimate, in weeks), decisions needed before sign-off, a sign-off block per signatory, and appendices. It warns about stale cross-references
 and mock-up remarks in requirements, then reviews the document with `review-requirements`.
 See [Document format](document-format.md).
 **Output:** `projects/<name>/output/<System> – System Requirement Specifications v<version>.docx`, a PDF
@@ -70,6 +70,23 @@ Changes how generated requirements documents look and are structured, from a pla
 company's existing requirements document, and shows a preview before any real requirements document is regenerated.
 **Output:** `workspace/branding/document-format.yaml` (and optionally the Word template and logo), preview
 pages in `examples/leave-request/output/preview/`. See [Document format](document-format.md).
+
+### estimate
+
+**Ask:** "estimate this project", "how many mandays is this?", "check the SOW's mandays"
+Counts the project in the knowledge base's building blocks, from the firmest thing that exists (a brief or
+scope of work early on, the project spec later), and applies your rates for the project's platform and
+your shares for other work (project management, testing …). It never makes up a figure: where the
+knowledge base has no rate it asks the lead developer, and a line nobody has a figure for is counted and
+shown as not priced. Every figure is a range, with the assumptions and a confidence level, and what makes
+it uncertain: open high-severity questions, gap patterns that apply, lines not priced and how few delivered
+projects the rates rest on. When there is a scope of work, it compares the sold mandays line by line and
+puts the largest differences first. It ends with the workshop questions that would narrow the range most.
+The estimate is internal and never goes into a client document; the project timeline is drafted from it,
+in weeks. See [Estimates](estimates.md).
+**Output:** `projects/<name>/estimates/<date> estimate from <basis>.xlsx` (and the `.json` it is rendered
+from). Afterwards it offers to save the lead developer's rates in the knowledge base and to add the
+questions to the register.
 
 ### close-project
 
@@ -88,5 +105,5 @@ See [Maintaining](maintaining.md).
 
 ## Planned
 
-`estimate` (brief to building-block estimate with ranges), `prep-workshop` (question bank per module),
+`prep-workshop` (question bank per module),
 `price-cr` (price a change request from building blocks), a Figma connection.

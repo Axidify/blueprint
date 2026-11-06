@@ -4,8 +4,9 @@ Estimate by counting building blocks, not by module. A module called "Dashboard"
 depending on what is inside it.
 
 **Status: not yet calibrated.** Fill in the rates with your lead dev, then refine them with every project
-logged by `close-project`. Until at least three projects are logged, every estimate must say it is
-low-confidence.
+logged by `close-project`. A rate is mandays per unit, as a range ("2–4") or a single figure; a block left
+as TBD is counted in estimates and not priced. Until at least three projects are logged, every estimate
+must say it is low-confidence.
 
 ## Platform: Joget DX
 
@@ -29,6 +30,21 @@ low-confidence.
 | BB-16 | AD / SSO login integration | Group mapping, environments | TBD | – |
 | BB-17 | Audit trail | Which actions, old/new values | TBD | – |
 | BB-18 | Environment migration (dev → test → prod) | Number of environments, configuration | TBD | – |
+
+## Other work
+
+Work around the build. Set each item as a share of the building-block subtotal ("10–15%") or as fixed
+mandays ("2–3 MD"). An item left as TBD is listed in estimates and not priced. Add or remove rows to match
+how your company scopes projects.
+
+| ID | Item | Share or mandays | Notes |
+|---|---|---|---|
+| OW-01 | Project management | TBD | |
+| OW-02 | Requirement workshops and documentation | TBD | |
+| OW-03 | Internal testing and fixes before UAT | TBD | |
+| OW-04 | UAT support | TBD | |
+| OW-05 | Training and user guide | TBD | |
+| OW-06 | Warranty support | TBD | |
 
 ## Calibration notes
 

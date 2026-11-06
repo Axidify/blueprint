@@ -30,7 +30,8 @@ edit the originals.
 
 Based on what exists:
 - Only a brief or SOW: build a first mock-up (`build-mockup`) to take into workshop 1, and list the gap
-  patterns from `knowledge/gap-patterns.md` worth asking about.
+  patterns from `knowledge/gap-patterns.md` worth asking about. For the lead developer, offer a first
+  manday range (`estimate`), or a check of the SOW's mandays.
 - A requirements document or URS draft: review it (`review-requirements`).
 - Nothing yet: ask them to drop the brief into `inbox/` or paste it.
 

@@ -12,11 +12,42 @@ See [docs/maintaining.md](docs/maintaining.md).
 ## [Unreleased]
 
 ### Added
+- **Estimates.** Say "estimate this project" to get a manday estimate for the lead developer, counted in the
+  knowledge base's building blocks from whatever exists: a brief or scope of work early on, the project spec
+  later. Every figure is a range, with the assumptions and a confidence level, and what makes it uncertain:
+  open high-severity questions, the gap patterns that apply, lines with no rate and how few delivered
+  projects the rates rest on. When the project has a scope of work, the sold mandays are compared line by
+  line and the largest differences come first. It ends with the workshop questions that would narrow the
+  range most, and offers to add them to the register. Each estimate is a dated Excel file in the project's
+  new `estimates/` folder; it is internal and never goes into a client document. See
+  [docs/estimates.md](docs/estimates.md).
+- **Your rates, not Blueprint's.** Estimates use the rates you set in `knowledge/building-blocks.md`, or a
+  range the lead developer gives for one estimate. Blueprint never makes up a figure: a line with no rate is
+  counted, shown as not priced and left out of the total, and Blueprint offers to save the rates it is
+  given.
+- **Other work in estimates.** A new `Other work` table in `building-blocks.md` holds your shares for project
+  management, testing, UAT support, training and the like, as a percentage of the build or fixed mandays.
+  New workspaces get it with every item unset. To add it to an existing workspace, ask Blueprint or copy
+  the table from `templates/knowledge/building-blocks.md`.
+- A sample estimate for the Leave Request example (counts, assumptions and questions, no figures of its
+  own), and `tools/estimate.py` to list the rates, list what a project contains, render an estimate and
+  turn it into weeks.
 - A third mock-up look, `vivid`, for demos, pitches and clients who want a bold branded UI: a dark gradient
   side menu, a coloured header band with the page floating over it, gradient buttons and a glass login
   screen. Set `theme: vivid` in the spec. All of it follows the project's `primary_color`.
+- Automated tests for the tools, so a fix to one part of the requirements document can no longer quietly
+  break another. They check the generated Word document (chapter order, cross-references, the access
+  matrix, a figure and field table for every screen, the timeline, sign-off forms, locked issued versions,
+  and that everything works on a machine without Microsoft Word), the register and its Excel file, project
+  housekeeping (issue, file, archive, restore) and the commit check. Nothing changes for people using
+  Blueprint. If you change Blueprint itself: `python -m pip install -r requirements-dev.txt` once, then
+  `python -m pytest`; GitHub runs them on every push. See [docs/maintaining.md](docs/maintaining.md#tests).
 
 ### Changed
+- The **project timeline** is now drafted from the project's estimate instead of the scope of work's
+  mandays, which are a commercial figure and often lower than the likely effort. Generating the
+  requirements document offers to draft a missing timeline from the latest estimate, in weeks for the team
+  size the lead developer gives; mandays never reach the document. Existing timelines are unchanged.
 - The `modern` mock-up look is more polished: stat cards with icons and their own accent colours, a menu
   with icons, a user badge in the top bar, softer shadows, clearer form fields with a focus ring, status
   chips with a dot, and row highlighting in lists. The `joget` look is unchanged.
@@ -24,6 +55,9 @@ See [docs/maintaining.md](docs/maintaining.md).
 ### Fixed
 - In the `modern` and `vivid` mock-up looks, long stat card values (for example "RM 48,920") are no longer
   hidden behind the card's icon.
+- Tables in a requirements document's extra sections and appendices no longer print "False" or "True"
+  where the spec says `No` or `Yes` without quotes, for example a numbering column headed "No" or a
+  "Yes"/"No" cell. They now print the word, and a "No" column is narrow again.
 
 ## [0.5.0] - 2026-11-06
 

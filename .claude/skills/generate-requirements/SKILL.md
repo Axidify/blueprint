@@ -16,12 +16,21 @@ requirement tables and screenshots all come from the spec, so they cannot contra
 - Every screen has a `description`; every form field that matters has `length`, `source` and `validation`.
 - Requirements cover every screen and workflow step.
 - `nfr` and `integrations` are filled in. Missing NFRs are a known gap (GP-12).
-- `timeline` is filled in (`docs/spec-format.md`). If it is missing and the project has a scope of work in
-  `docs/`, offer to draft it: one activity per SOW item (`ref` = item number), weeks worked out from the
-  mandays and the team size, client activities marked `client: true`, milestones for kick-off, sign-off,
-  development complete, UAT sign-off, go-live and end of warranty, each with what the client must do.
-  Mandays are not weeks: ask the lead developer for the team size and state it in `assumptions`, with a
-  range where the team is not fixed. Show the draft to the user before generating.
+- `timeline` is filled in (`docs/spec-format.md`). If it is missing, offer to draft it: one activity per
+  SOW item (`ref` = item number) where there is a scope of work, client activities marked `client: true`,
+  milestones for kick-off, sign-off, development complete, UAT sign-off, go-live and end of warranty, each
+  with what the client must do.
+  - Take the durations from the project's latest estimate, not from the scope of work's mandays (those are
+    a commercial figure, often lower than the real effort):
+    `python -I tools/estimate.py weeks projects/<slug> --team <people>` gives working weeks per SOW item for
+    a team size. If the project has no estimate, or the estimate is older than the spec, run the
+    `estimate` skill first. Fall back to the scope of work's mandays only when the user asks for it, and
+    say in the summary that the timeline rests on sold figures.
+  - Ask the lead developer for the team size and state it in `assumptions`, with a range where the team is
+    not fixed. Weeks of effort are not the calendar: add review turnaround, client activities and
+    waiting time.
+  - Only weeks reach the spec. Never copy mandays, rates or cost from the estimate into it.
+  - Show the draft to the user before generating.
 - Open questions are in `register.json` as client items; they become the **Open Issues** section.
   Resolved items drop out automatically.
 - Version, dates, `status` and `history` in `project` are right for this issue.

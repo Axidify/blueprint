@@ -1,0 +1,292 @@
+# Test fixture, not a client project: everything in it is made up. It covers what the sample in
+# examples/leave-request/ does not: many roles (the access matrix turns its headers on their side), a
+# timeline longer than 40 weeks, a form in steps with grouped field tables, cross-references, an extra
+# section and an appendix, named signatories and a register. Used by tests/test_generate_requirements.py.
+
+project:
+  name: Equipment Booking System
+  short_name: EBS
+  client: Sample Client Sdn. Bhd.
+  client_short: SAMPLE
+  version: "1.2"
+  platform: Joget DX
+  theme: modern
+  primary_color: "#1f6fb2"
+  prepared_by: Business Analyst
+  reviewed_by: Project Lead
+  date: 2026-11-06
+  history:
+    - {version: "1.0", date: 2026-10-01, author: Business Analyst, changes: "First draft after workshop 1"}
+    - {version: "1.2", date: 2026-11-06, author: Business Analyst, changes: "Booking form split into two steps, see {ref:screen:new-booking}"}
+
+overview:
+  - "{system} lets the staff of {client} book shared equipment. The roles are described in {ref:section:roles} and what each role may do in {ref:section:access}."
+  - "The booking form is specified in {ref:screen:new-booking} and its rules in {ref:req:FR-BKG-001}. The plan is in {ref:section:timeline}, the migration approach in {ref:extra:Data migration} and the lists of values in {ref:extra:Reference data}."
+
+roles:
+  - {id: requester, name: Requester, description: Books equipment and returns it., scope: Own bookings only}
+  - {id: supervisor, name: Supervisor, description: Approves or rejects bookings from their team., scope: Bookings from their team}
+  - {id: storekeeper, name: Storekeeper, description: Issues equipment and records its return., scope: Approved bookings}
+  - {id: technician, name: Technician, description: Records maintenance on equipment., scope: All equipment}
+  - {id: safety, name: Safety Officer, description: Reviews bookings of restricted equipment., scope: Restricted equipment}
+  - {id: finance, name: Finance Officer, description: Views usage for cost recovery., scope: All bookings}
+  - {id: auditor, name: Auditor, description: Reads the audit log., scope: Read only}
+  - {id: manager, name: Department Manager, description: Approves bookings longer than five days., scope: Bookings from their department}
+  - {id: admin, name: Administrator, description: Maintains equipment and users., scope: Everything}
+
+statuses:
+  - {id: draft, name: Draft, meaning: Saved by the requester but not submitted.}
+  - {id: pending, name: Pending Approval, meaning: Submitted and waiting for the supervisor.}
+  - {id: approved, name: Approved, meaning: Approved and waiting for the storekeeper.}
+  - {id: issued, name: Issued, meaning: The equipment is with the requester.}
+  - {id: returned, name: Returned, meaning: The equipment is back in the store.}
+  - {id: rejected, name: Rejected, meaning: Rejected by the supervisor with a reason.}
+
+process_flow:
+  title: Booking process
+  steps:
+    - {name: Submit booking, role: requester, status: Pending Approval}
+    - {name: Approve, role: supervisor, status: Approved}
+    - {name: Issue equipment, role: storekeeper, status: Issued}
+    - {name: Record return, role: storekeeper, status: Returned}
+  reject: Rejected
+
+data:
+  bookings:
+    - {id: "BK-0012", requester: "Farah Lim", equipment: "Projector P-03", from: "2026-11-20", to: "2026-11-21", purpose: "Client workshop", status: "Pending Approval"}
+    - {id: "BK-0011", requester: "Farah Lim", equipment: "Camera C-01", from: "2026-11-02", to: "2026-11-03", purpose: "Site visit", status: "Returned"}
+  equipment:
+    - {code: "P-03", name: "Projector", category: "Presentation", restricted: "No"}
+    - {code: "C-01", name: "Camera", category: "Photography", restricted: "No"}
+  audit:
+    - {at: "2026-11-05 09:12", user: "Farah Lim", action: "Submitted BK-0012"}
+
+screens:
+  - id: login
+    type: login
+    title: Login
+
+  - id: my-bookings
+    type: dashboard
+    title: My Bookings
+    menu: My Bookings
+    roles: [requester]
+    description: The requester's own bookings.
+    stats:
+      - {label: Pending, value: 1}
+      - {label: Returned, value: 1}
+    list:
+      data: bookings
+      columns:
+        - {field: id, label: Booking No}
+        - {field: equipment, label: Equipment}
+        - {field: from, label: From}
+        - {field: status, label: Status, chip: true}
+      search: [id]
+      filters: [status, purpose]
+      sort: By booking date, newest first
+      actions:
+        - {label: View, to: booking-details}
+      toolbar:
+        - {label: "+ New Booking", to: new-booking, style: primary}
+
+  - id: new-booking
+    type: form
+    title: New Booking
+    menu: New Booking
+    roles: [requester]
+    description: "The requester fills in the booking in two steps. Approval is described in {ref:screen:booking-details}."
+    sections:
+      - title: Booking Details
+        page: 1
+        fields:
+          - {id: requester, label: Requester, type: text, readonly: true, length: 100, required: true, source: "System: signed-in user"}
+          - {id: purpose, label: Purpose, type: textarea, length: 500, required: true}
+          - {id: from, label: From Date, type: date, required: true}
+          - {id: to, label: To Date, type: date, required: true, validation: "To Date must be on or after From Date"}
+      - title: Equipment
+        page: 1
+        fields:
+          - {id: equipment, label: Equipment, type: select, options_from: equipment.name, required: true}
+          - {id: quantity, label: Quantity, type: number, required: true, validation: "Between 1 and 10"}
+          - {id: accessories, label: Accessories, type: checkbox, options: [Tripod, Spare battery, Carry case]}
+      - title: Declaration
+        page: 2
+        fields:
+          - {id: agree, label: I accept the equipment loan terms, type: checkbox, options: ["Yes"], required: true}
+          - {id: signature, label: Signature, type: signature, required: true}
+    buttons:
+      - {label: Cancel, to: my-bookings}
+      - {label: Save as Draft, toast: "Draft saved", to: my-bookings}
+      - {label: Submit, style: primary, toast: "Booking submitted", to: my-bookings}
+
+  - id: booking-details
+    type: detail
+    title: Booking Details
+    description: Read-only view of a booking with the actions each role may take.
+    data: bookings
+    record: "BK-0012"
+    fields_from: new-booking
+    buttons:
+      - {label: Back, to: my-bookings}
+      - {label: Approve, style: primary, roles: [supervisor, manager], dialog: approve-dialog}
+      - {label: Reject, style: danger, roles: [supervisor, manager], dialog: reject-dialog}
+      - {label: Issue Equipment, style: primary, roles: [storekeeper], toast: "Equipment issued"}
+      - {label: Show loan terms, example: true, dialog: terms-dialog}
+
+  - id: approvals
+    type: list
+    title: Pending Approvals
+    menu: Pending Approvals
+    roles: [supervisor, manager, safety]
+    description: Bookings waiting for a decision.
+    list:
+      data: bookings
+      where: {status: "Pending Approval"}
+      columns:
+        - {field: id, label: Booking No}
+        - {field: requester, label: Requester}
+        - {field: equipment, label: Equipment}
+      actions:
+        - {label: Review, to: booking-details}
+
+  - id: equipment
+    type: list
+    title: Equipment
+    menu: Equipment
+    roles: [storekeeper, technician, admin]
+    description: The equipment that can be booked.
+    list:
+      data: equipment
+      columns:
+        - {field: code, label: Code}
+        - {field: name, label: Name}
+        - {field: category, label: Category}
+      actions:
+        - {label: Edit, roles: [admin], toast: "Edit equipment"}
+        - {label: Print label, access: false, toast: "Label printed"}
+      toolbar:
+        - {label: "+ Add Equipment", style: primary, roles: [admin], toast: "Add equipment"}
+
+  - id: audit-log
+    type: list
+    title: Audit Log
+    menu: Audit Log
+    roles: [auditor, finance, admin]
+    description: Who did what, and when.
+    list:
+      data: audit
+      columns:
+        - {field: at, label: Date and time}
+        - {field: user, label: User}
+        - {field: action, label: Action}
+
+dialogs:
+  - id: approve-dialog
+    title: Approve Booking
+    fields:
+      - {id: comment, label: Comment, type: textarea, length: 500}
+    confirm: {label: Confirm Approve, style: primary, toast: "Booking approved", to: approvals}
+  - id: reject-dialog
+    title: Reject Booking
+    fields:
+      - {id: reason, label: Reason for rejection, type: textarea, length: 500, required: true}
+    confirm: {label: Confirm Reject, style: danger, toast: "Booking rejected", to: approvals}
+  - id: terms-dialog
+    title: Loan Terms
+    doc_table: false
+    fields:
+      - {id: terms, label: Hidden terms field, type: textarea}
+    confirm: {label: Close, to: booking-details}
+
+screenshots:
+  - {screen: booking-details, role: supervisor, dialog: reject-dialog, name: booking-details-reject}
+
+requirements:
+  - id: FR-BKG-001
+    title: Book Equipment
+    screens: [new-booking]
+    priority: Must
+    items:
+      - "System shall pre-fill Requester with the signed-in user's name (read-only)."
+      - {text: "System shall stop a booking that overlaps another booking of the same equipment.", tbc: R-001}
+      - {text: "System shall show the booking as specified in {ref:screen:booking-details}.", priority: Should, screens: [booking-details]}
+  - id: FR-BKG-002
+    title: Approve or Reject
+    screens: [approvals, booking-details]
+    priority: Must
+    items:
+      - "System shall route a submitted booking to the requester's supervisor."
+      - "System shall require a reason when rejecting."
+  - id: FR-EQP-001
+    title: Maintain Equipment
+    screens: [equipment]
+    items:
+      - "System shall allow the Administrator to add and edit equipment."
+
+signoff:
+  - {name: Tan Wei Ling, designation: Project Lead, organisation: Your Company, signing_for: Supplier}
+  - {name: Aminah Yusof, designation: Head of Operations, department: Operations, organisation: Sample Client Sdn. Bhd., signing_for: Business owner}
+  - {name: Rajesh Kumar, designation: IT Manager, organisation: Sample Client Sdn. Bhd., signing_for: IT}
+
+notifications:
+  - {event: Booking submitted, recipient: Supervisor, template: "As agreed for {ref:req:FR-BKG-002}"}
+  - {event: Booking approved or rejected, recipient: Requester}
+
+integrations:
+  - {system: Active Directory, purpose: "User sign-in and supervisor lookup", direction: Inbound, notes: ""}
+
+glossary:
+  - {term: Restricted equipment, meaning: Equipment that needs a review by the Safety Officer before it is issued.}
+
+nfr:
+  - {area: Users, requirement: "Up to 200 staff, 20 concurrent users"}
+  - {area: Browsers, requirement: "Latest Microsoft Edge and Google Chrome"}
+
+timeline:
+  summary:
+    - {value: "48 – 52 weeks", label: Kick-off to go-live}
+    - {value: "4", label: Milestones}
+  stages:
+    - name: Requirements
+      items:
+        - {ref: "1", name: Kick-off and workshops, start: 1, end: 4, client: true}
+        - {ref: "2", name: Mock-up and requirements document, start: 3, end: 8}
+        - {milestone: MS1, name: Requirements signed off, week: 9, title: Requirements document signed off, client_action: Review and sign within 5 working days}
+    - name: Development
+      items:
+        - {ref: "3", name: Booking and approval, start: 10, end: 26}
+        - {ref: "4", name: Equipment and audit log, start: 20, end: 36}
+        - {milestone: MS2, name: Development complete, week: 37}
+    - name: Testing
+      items:
+        - {ref: "5", name: System testing, start: 37, end: 42}
+        - {ref: "6", name: User acceptance testing, start: 43, end: 48, client: true}
+        - {milestone: MS3, name: UAT signed off, week: 49, client_action: Sign the UAT report}
+    - name: Go-live
+      items:
+        - {ref: "7", name: Training and data migration, start: 49, end: 51, client: true}
+        - {milestone: MS4, name: Go-live, week: 52}
+  assumptions:
+    - Two developers during development.
+    - "The client answers open questions within 3 working days; they are listed in {ref:section:decisions}."
+
+extra_sections:
+  - title: Data migration
+    content:
+      - {text: "Existing bookings of {client} are loaded once before go-live."}
+      - {bullets: ["Open bookings only", "Closed bookings stay in the old spreadsheet"]}
+      - {heading: Migration steps}
+      - table:
+          header: [No, Step, Owner]   # unquoted on purpose: YAML reads it as false, the document says No
+          rows:
+            - [1, Export the spreadsheet, Client]
+            - [2, Load and check, Supplier]
+  - title: Reference data
+    appendix: true
+    content:
+      - {text: "The lists of values used on the screens of {system}."}
+      - table:
+          header: [List, Values]
+          rows:
+            - [Category, "Presentation, Photography"]

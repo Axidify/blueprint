@@ -70,6 +70,7 @@ working on which project, especially during a session.
 | `mockup/` | The current mock-up and screenshots; `mockup/versions/v0.1/`, `v0.2/` … keep every version | `tools/mockup.py` |
 | `feedback/` | Comments from mock-up sessions | the mock-up's Feedback mode |
 | `output/` | Every generated requirements document (Word and PDF) and the spec that produced it; `issued.json` lists the versions sent to the client | `generate-requirements`, `tools/project.py issue` |
+| `estimates/` | Manday estimates, one dated Excel file (and its `.json` source) per estimate. Internal: never sent to the client | `estimate` |
 | `register.json`, `register.xlsx` | The project register | the skills |
 
 Versions sent to the client are **locked**: their files are read-only and the generator refuses to

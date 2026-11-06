@@ -73,6 +73,24 @@ company profile, branding and [Document format](document-format.md). Prints warn
 spec. With Word installed it also updates the table of contents and page numbers, embeds the fonts and
 writes a PDF.
 
+### estimate.py
+
+```bash
+python -I tools/estimate.py blocks    "Joget DX"
+python -I tools/estimate.py inventory projects/<slug>
+python -I tools/estimate.py render    projects/<slug> ["<estimate.json>"]
+python -I tools/estimate.py weeks     projects/<slug> --team 2 ["<estimate.json>"]
+```
+`blocks` lists the building blocks and rates for a platform, the shares set for other work, and how many
+delivered projects they rest on. `inventory` lists what a project has to count from: documents, screens,
+forms, lists, integrations and open register items. `render` checks an estimate file, works out the
+ranges, the confidence level and the comparison with the scope of work, and writes the Excel file next to
+it; lines with no rate or share are listed as not priced and left out of the total. `weeks` turns the
+estimate into working weeks for a team size (`--days` sets the working days a week, default 5), for
+drafting the project timeline. `render` and `weeks` take the newest file in `estimates/` unless you name
+one. Add `--knowledge <folder>` before the command to use another knowledge base.
+See [Estimates](estimates.md).
+
 ### project.py
 
 ```bash

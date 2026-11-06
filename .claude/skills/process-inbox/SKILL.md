@@ -21,7 +21,7 @@ For each file, work out two things. Read just enough of it to decide (`python -I
 | Requirements document (SRS, URS, FSD, draft) | Requirement IDs, roles, screens | `review-requirements` |
 | Mock-up feedback export | `feedback-*.json` with `screen`, `element`, `text` | merge into `projects/<slug>/feedback/feedback.json`, then `apply-feedback` |
 | Workshop notes or transcript | Meeting notes, Teams transcript, attendee names | `apply-feedback` (it handles notes and transcripts) |
-| Brief or SOW | Scope, modules, mandays | file it; suggest `build-mockup` |
+| Brief or SOW | Scope, modules, mandays | file it; suggest `build-mockup`, and `estimate` for the lead developer |
 | Project actuals, tracker export, CR list | Dates, durations, effort, CRs | `close-project` |
 | Logo or Figma export | Images | file under the project's `docs/` (or `spec/client-logo.png` for a client logo) |
 

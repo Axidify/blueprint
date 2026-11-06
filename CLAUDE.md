@@ -42,6 +42,9 @@ Never write a company or client name into the app's files. Company details come 
 - `mockup/` – the built mock-up and screenshots. `feedback/feedback.json` – comments from sessions.
 - `output/` – generated requirements document `.docx`/`.pdf` and a spec snapshot per version; `issued.json` records which
   versions went to the client. Issued versions are locked: change the spec version instead.
+- `estimates/` – dated manday estimates (`.json` source and the rendered `.xlsx`), format in
+  `docs/estimates.md`. Internal: never copy mandays, rates or cost into the spec, the mock-up, the
+  requirements document or a client item in the register.
 - `mockup/versions/v<version>/` – every mock-up version is kept and can be shown again.
 - `projects/_archive/<slug>/` – delivered projects, out of the active list (`tools/project.py`).
 
@@ -67,10 +70,13 @@ after the user agrees; describe gaps in general terms, without client content.
 - `apply-feedback` – mock-up comments, BA notes or transcripts → spec changes, register items, new version.
 - `generate-requirements` – spec + screenshots → requirements document in the company's format, then reviewed with `review-requirements`.
 - `document-format` – change the requirements document look and structure, or learn it from a sample; preview before regenerating.
+- `estimate` – brief, scope of work or spec → manday ranges in building blocks, with assumptions, confidence,
+  a line-by-line comparison with the SOW and the questions that narrow the range. Rates and shares come
+  from the knowledge base or the lead developer, never invented; the timeline is drafted from the estimate.
 - `close-project` – log actuals and CRs after delivery; feeds gap patterns and building-block rates.
 - `release` – for maintainers: publish a new version of the app (changelog, `VERSION`, tag).
 
-Planned: `estimate`, `prep-workshop`, `price-cr`, a Figma connection.
+Planned: `prep-workshop`, `price-cr`, a Figma connection.
 
 ## Tools
 
@@ -78,6 +84,7 @@ Run Python scripts with `python -I tools/<script>.py`: `doctor.py` (machine chec
 (projects and next steps), `new_project.py`, `extract.py` (documents to text and images), `register.py`
 (register validation and Excel), `mockup.py` (build, serve, screenshot, feedback), `generate_requirements.py`,
 `document_format.py` (show, learn, preview the document format), `project.py` (issue, file, archive, check),
+`estimate.py` (rates, project inventory, estimate checks and Excel, weeks for the timeline),
 `check_docs.py`.
 
 ## Documentation and changelog
@@ -89,6 +96,9 @@ change anything in `tools/`, `.claude/`, `templates/`, `examples/`, setup or lau
   Security), written for the people using Blueprint;
 - update the docs it affects (`docs/skills.md` for skills, `docs/tools.md` for tools,
   `docs/spec-format.md` for the spec, and so on; the full table is in `docs/maintaining.md`);
+- run `python -m pytest` when you change `tools/` or `templates/`, and add or update a test in `tests/`
+  with the change (how: `docs/maintaining.md`). Tests use only the made-up sample and fixtures, never the
+  workspace;
 - run `python -I tools/check_docs.py` before committing. A hook runs it with `--pre-commit` on every
   `git commit` and blocks the commit if it fails; fix the reason it gives rather than working around it.
 
@@ -104,4 +114,5 @@ Use the `release` skill to publish a version.
 - Keep client-facing items and internal fixes apart (`audience` in the register). Internal fixes must
   never appear on the client sheet.
 - Fix generated documents in the spec, never by hand in the Word file.
-- Estimates are ranges with stated assumptions and a confidence level, never a single number.
+- Estimates are ranges with stated assumptions and a confidence level, never a single number. Never make up
+  a rate or share: one the knowledge base or the lead developer has not set leaves the line not priced.

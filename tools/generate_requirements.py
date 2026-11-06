@@ -722,6 +722,14 @@ def short(ref):
     return ref.replace("section ", "") if ref else ""
 
 
+def as_word(value):
+    """A table cell from the spec as it was meant. YAML reads an unquoted No, Yes, Off or On as false or
+    true; in a document table it is a word, such as "No" heading a numbering column or "Yes" in a cell."""
+    if isinstance(value, bool):
+        return "Yes" if value else "No"
+    return value
+
+
 # ====================================================================== main
 def build(project):
     project = Path(project)
@@ -917,10 +925,11 @@ def build(project):
             if "bullets" in block:
                 w.bullets([fill(b, where) for b in block["bullets"]])
             if "table" in block:
-                hdr = block["table"]["header"]
+                hdr = [as_word(h) for h in block["table"]["header"]]
+                body = [[as_word(v) for v in row] for row in block["table"]["rows"]]
                 first = 1.3 if str(hdr[0]).lower().startswith("no") else None
                 rest = (tw - (first or 0)) / (len(hdr) - (1 if first else 0))
-                w.table(hdr, block["table"]["rows"], ([first] if first else []) + [rest] * (len(hdr) - (1 if first else 0)))
+                w.table(hdr, body, ([first] if first else []) + [rest] * (len(hdr) - (1 if first else 0)))
             if "image" in block:
                 img = project / "spec" / block["image"]
                 if img.exists():

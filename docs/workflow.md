@@ -6,9 +6,10 @@ catches gaps earlier.
 
 | Stage | What happens | What to ask Blueprint | You get |
 |---|---|---|---|
-| 1. Brief → SOW | The lead dev scopes the work and estimates mandays | "Start a new project", then share the brief | A project folder; the gap patterns worth raising in workshop 1 |
+| 1. Brief → SOW | The lead dev scopes the work and estimates mandays | "Start a new project", then share the brief; "estimate this project" | A project folder; the gap patterns worth raising in workshop 1; a first manday range with the questions to ask before pricing |
 | 2. Workshop 1 | The BA gathers requirements | "Build a mock-up from the brief / these notes" | A clickable mock-up and open questions in the register |
 | 3. Mock-up review (workshop 2) | The client walks through the mock-up | Present with `present.cmd`, then "apply the feedback" | A new mock-up version; decisions, questions and possible CRs in the register |
+| 3a. Before sign-off | The lead dev sizes what the requirements became | "Estimate this project" | A narrower range from the spec, compared line by line with the scope of work while scope that grew can still be raised, and the weeks for the timeline |
 | 4. Sign-off | The requirements document goes to the client | "Generate the requirements document" | Word and PDF in the company's layout, with screenshots, an access matrix built from the screens, and an Open Issues section from the register |
 | 4a. Any requirements document | Drafts from anyone, including the client | "Review this requirements document" | A review report and the Excel register for the BA |
 | 5. Delivery | Development, UAT, CRs, go-live | "Close the project" with actual effort and the CR list | Estimate vs actual, CRs mapped to gap patterns, a stronger knowledge base |
@@ -21,6 +22,10 @@ catches gaps earlier.
 - **One register per project** collects every question, gap, assumption and decision from every stage, with
   its status. The BA takes the Excel version to the client; resolved items drop out of the Open Issues
   section automatically. See [The register](register.md).
+- **Estimates** are counted from the brief, the scope of work or the spec in the knowledge base's building
+  blocks, with the rates you set there, and are kept per project with their date, so you can see how the
+  range moved. They are internal: no mandays go into the mock-up or the requirements document. The
+  timeline chapter is drafted from the estimate, in weeks. See [Estimates](estimates.md).
 - **The knowledge base** grows with every project: each CR becomes evidence for a gap pattern, and each
   gap pattern becomes a standard workshop question and review check. See [Knowledge base](knowledge.md).
 

@@ -1,0 +1,62 @@
+{
+  "project": "Equipment Booking System",
+  "client": "Sample Client Sdn. Bhd.",
+  "items": [
+    {
+      "id": "R-001",
+      "type": "question",
+      "audience": "client",
+      "severity": "high",
+      "category": "GP-02",
+      "stage": "workshop-1",
+      "source": "v1.0 FR-BKG-001.2",
+      "finding": "The brief does not say what happens when two bookings overlap.",
+      "question": "May two people book the same equipment for overlapping dates?",
+      "status": "open",
+      "raised": "2026-10-20",
+      "owner": "Operations",
+      "due": "2026-11-20"
+    },
+    {
+      "id": "R-002",
+      "type": "gap",
+      "audience": "client",
+      "severity": "medium",
+      "category": "notifications",
+      "stage": "workshop-1",
+      "source": "v1.0 notifications",
+      "finding": "No e-mail is listed for the Storekeeper.",
+      "question": "Should the Storekeeper get an e-mail when a booking is approved?",
+      "status": "asked",
+      "raised": "2026-10-20"
+    },
+    {
+      "id": "R-003",
+      "type": "question",
+      "audience": "client",
+      "severity": "low",
+      "category": "retention",
+      "stage": "workshop-1",
+      "source": "v1.0 NFR",
+      "finding": "Retention period was not stated.",
+      "question": "How long must closed bookings be kept?",
+      "status": "resolved",
+      "answer": "Seven years.",
+      "raised": "2026-10-20",
+      "resolved_in": "v1.2"
+    },
+    {
+      "id": "R-004",
+      "type": "fix",
+      "audience": "internal",
+      "severity": "medium",
+      "category": "hygiene",
+      "stage": "requirements-draft",
+      "source": "v1.0 screen new-booking",
+      "finding": "INTERNAL-ONLY-MARKER the Quantity field had no validation rule in the first draft.",
+      "recommendation": "Add the rule to the spec.",
+      "status": "open",
+      "raised": "2026-10-21"
+    }
+  ]
+}

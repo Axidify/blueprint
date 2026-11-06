@@ -24,15 +24,15 @@ One YAML file per project drives both the clickable mock-up (`tools/mockup.py`) 
 | `glossary` | `{term, meaning}`. document section 1.5 |
 | `process_flow` | `{title, steps: [{name, role, optional, status}], reject, notes}`. Drawn as a diagram (mock-up URL `#/__flow`), screenshotted and placed in document section 1.3, so it always matches the statuses |
 | `timeline` | The project timeline chapter (below) |
-| `extra_sections` | Free-form document sections after the NFRs: `{title, appendix, content: [{heading} \| {text} \| {bullets} \| {table: {header, rows}} \| {image, caption}]}`. `appendix: true` puts it after sign-off as Appendix A, B… Text may use `{client}` and `{system}` |
+| `extra_sections` | Free-form document sections after the NFRs: `{title, appendix, content: [{heading} \| {text} \| {bullets} \| {table: {header, rows}} \| {image, caption}]}`. `appendix: true` puts it after sign-off as Appendix A, B… Text may use `{client}` and `{system}`. In a table, an unquoted `No` or `Yes` is printed as that word (a first column headed `No` is the narrow numbering column); quote `"On"`, `"Off"`, `"True"` and `"False"` to keep those exact words |
 
 Optional files next to `app.yaml`: `client-logo.png` (document cover) and `process-flow.png` (document section 1.3).
 
 ## Timeline
 
-The project timeline chapter: a week-by-week chart, the milestones and the assumptions. Draft it from
-the scope of work (SOW) with the lead developer; weeks count from the kick-off, so the plan stays right
-until a kick-off date is agreed.
+The project timeline chapter: a week-by-week chart, the milestones and the assumptions. Draft it with the
+lead developer from the project's [estimate](estimates.md), one activity per scope-of-work (SOW) item;
+weeks count from the kick-off, so the plan stays right until a kick-off date is agreed.
 
 ```yaml
 timeline:
@@ -59,8 +59,11 @@ timeline:
 | `milestone`, `week` | A milestone's ID (M1, M2 …) and the week it falls in; drawn as a diamond |
 | `title`, `client_action` | A milestone's full name and what the client must do, for the milestones table |
 
-Projects longer than 40 weeks show one column per 2 or more weeks. Mandays are not durations: state the
-team size and other assumptions that turn the SOW's mandays into weeks.
+Projects longer than 40 weeks show one column per 2 or more weeks. Durations come from the estimate, not from the
+SOW's mandays, which are a commercial figure and often lower than the likely effort:
+`python -I tools/estimate.py weeks projects/<slug> --team 2` gives the working weeks per SOW item for a team
+size. State the team size and the other assumptions behind the weeks. Mandays, rates and cost never go
+into the spec.
 
 ## Screens
 

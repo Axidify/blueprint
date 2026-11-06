@@ -5,16 +5,17 @@
 **Every change to the app ships with its documentation and a changelog entry, in the same commit.**
 
 "The app" is everything in the repository except the documentation itself: `tools/`, `.claude/`,
-`templates/`, `examples/`, `setup.*`, `present.cmd`, `requirements.txt`, `package.json`, `CLAUDE.md`.
+`templates/`, `examples/`, `tests/`, `setup.*`, `present.cmd`, `requirements.txt`, `package.json`, `CLAUDE.md`.
 The workspace is never part of a change.
 
 | If you change … | Also update |
 |---|---|
 | Anything people will notice | `CHANGELOG.md` → Unreleased |
 | A skill (new, renamed, removed, or what it does) | `docs/skills.md`, the skills list in `CLAUDE.md` |
-| A tool or its options | `docs/tools.md` |
+| A tool or its options | `docs/tools.md`, and its tests in `tests/` (see [Tests](#tests)) |
 | The spec format or mock-up engine | `docs/spec-format.md` |
 | Register fields or the Excel layout | `docs/register.md` |
+| The estimate file, its rules or its Excel layout | `docs/estimates.md` |
 | Setup, workspace, company profile or branding | `docs/workspace.md`, `docs/getting-started.md`, `docs/troubleshooting.md` if relevant |
 | The starter knowledge base | `docs/knowledge.md` if its structure changes |
 | The overall process | `docs/workflow.md`, `README.md` |
@@ -52,8 +53,52 @@ It fails when:
 - **Before every commit made through Claude Code**: a hook in `.claude/settings.json` runs
   `check_docs.py --pre-commit` and blocks the commit if it fails, with the reason.
 - **On GitHub**: `.github/workflows/docs.yml` runs the check on every push and pull request.
+  (The tests run there too, in their own workflow: see [Tests](#tests).)
 
 If you commit outside Claude Code, run the check yourself first.
+
+## Tests
+
+The tools have automated tests in `tests/`. Install the test runner once, then run them from the app folder:
+
+```bash
+python -m pip install -r requirements-dev.txt
+```
+
+```bash
+python -m pytest
+```
+
+They take about half a minute and need neither Microsoft Word, Node nor a browser. Run them whenever you
+change anything in `tools/` or `templates/`, and add or update a test with the change. On GitHub,
+`.github/workflows/tests.yml` runs them on Linux on every push and pull request.
+
+The tests never read or write your workspace. Every project they use is made in a temp folder from the
+made-up sample in `examples/leave-request/` or from `tests/fixtures/wide-project/` (a made-up project with
+many roles, a 52-week timeline, a form in steps, extra sections and named signatories), with plain grey
+images in place of mock-up screenshots. The company is always the neutral "Your Company". Keep it that
+way: never put a real company, client or project into `tests/`.
+
+| File | What it checks |
+|---|---|
+| `tests/test_generate_requirements.py` | The generated Word document, read back with python-docx: chapters in the order of the document format, cross-references resolved, the access matrix, a figure and field table for every screen, the timeline chapter, decisions from the register, one sign-off form per signatory, that an issued version is locked, and that generating works without Word |
+| `tests/test_register.py` | Register validation (missing fields, unknown stage and other values, duplicates) and the Excel file, including that internal items never reach the client sheet |
+| `tests/test_project.py` | Issuing and locking a version, filing documents under dated names, archiving and restoring, and the layout check |
+| `tests/test_check_docs.py` | The commit hook acts only on `git commit`, and the documentation check itself, on a small made-up repository |
+| `tests/conftest.py`, `tests/support.py` | The temp workspace and the helpers for making projects and reading documents |
+
+**Not covered.** How pages look (fonts, spacing, page breaks, where tables split), the table of contents
+and page numbers, and the PDF: Word makes all of these, so check them by eye on a generated document
+before a release. Also not covered: the mock-up engine and its screenshots, `extract.py`, `status.py`,
+`new_project.py`, `document_format.py`, `doctor.py` and setup.
+
+One test does use Word, and is skipped unless you ask for it. On a Windows machine with Word, this
+generates the fixture project for real and checks that the PDF exists and has a signing field for each
+signatory (PowerShell):
+
+```powershell
+$env:BLUEPRINT_TEST_WORD = "1"; python -m pytest -k with_word; Remove-Item Env:BLUEPRINT_TEST_WORD
+```
 
 ## Releasing a version
 
@@ -64,7 +109,7 @@ Ask Blueprint to "release a new version" (the `release` skill), or by hand:
 2. In `CHANGELOG.md`, rename `## [Unreleased]` to `## [x.y.z] - YYYY-MM-DD`, add a new empty
    `## [Unreleased]` above it, and update the comparison links at the bottom.
 3. Put the version in `VERSION`.
-4. Run `python -I tools/check_docs.py`.
+4. Run `python -I tools/check_docs.py` and `python -m pytest`.
 5. Commit ("Release x.y.z"), tag `vx.y.z`, push the commit and the tag.
 6. Optionally publish a GitHub release with the changelog section as its notes.
 

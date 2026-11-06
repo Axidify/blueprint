@@ -26,6 +26,7 @@ Type it in your own words, for example:
 - "Build a mock-up from the brief"
 - "Apply the feedback from today's session"
 - "Generate the requirements document"
+- "Estimate the mandays for this project"
 - "Process my inbox"
 
 To present a mock-up in a meeting, double-click **`present.cmd`** and pick the project. Press **Feedback**

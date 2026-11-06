@@ -30,6 +30,8 @@
       "PowerShell(python -I tools/project.py *)",
       "Bash(python -I tools/document_format.py *)",
       "PowerShell(python -I tools/document_format.py *)",
+      "Bash(python -I tools/estimate.py *)",
+      "PowerShell(python -I tools/estimate.py *)",
       "Bash(python -I tools/check_docs.py *)",
       "Bash(python -I tools/check_docs.py)",
       "PowerShell(python -I tools/check_docs.py *)",
