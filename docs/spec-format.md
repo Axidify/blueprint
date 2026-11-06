@@ -106,7 +106,8 @@ allowed values `{status: [Submitted, Approved]}`), `columns: [{field, label, chi
 the value as a coloured status), `filters: [field, ...]`,
 `actions: [{label, to | toast, when}]` (per row; `to` opens a screen with that row's record; `when:
 {status: Draft}` shows the action only on matching rows),
-`toolbar: [{label, to | toast, style}]`, `search: [field]` (text search boxes, partial match), `sort` (text for the requirements document), `empty` (empty-state text). Actions and toolbar buttons appear in the requirements document access matrix unless `access: false`.
+`toolbar: [{label, to | toast, style}]`, `search: [field]` (text search boxes, partial match). In the
+mock-up both work on the sample rows: **Search** applies them and **Clear Filters** resets them. `sort` (text for the requirements document), `empty` (empty-state text). Actions and toolbar buttons appear in the requirements document access matrix unless `access: false`.
 
 **`sections`:** `[{title, page, page_title, note, fields}]`. Give sections a `page` number to split a
 form into steps (tabs); each page gets its own screenshot.

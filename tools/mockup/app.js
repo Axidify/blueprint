@@ -4,6 +4,9 @@
  * URL: index.html#/<screen>?role=<role>&record=<id>&page=<n>&dialog=<id>&clean=1
  *   clean=1 hides the feedback UI (used for screenshots).
  *
+ * Filters and search boxes on lists work on the sample rows (Search applies, Clear Filters resets), and what
+ * is typed into a form is kept while moving between its steps or opening a dialog.
+ *
  * Feedback mode: press "Feedback" (or F2), click any element, type a comment. Comments are saved to the
  * mock-up server (tools/mockup.py serve) when the page is served over http, otherwise to localStorage
  * with an Export button. A comment the server does not take is kept in localStorage and sent again later.
@@ -131,23 +134,26 @@
     const filters = (list.filters || []).map((f) => {
       const col = cols.find((c) => c.field === f) || { label: String(f).replace(/_/g, " ").replace(/\b\w/g, (ch) => ch.toUpperCase()) };
       const vals = [...new Set(((S.data || {})[list.data] || []).map((x) => x[f]))];
-      return `<div class="filter" data-el="filter:${esc(col.label)}"><label>${esc(col.label)}</label><select class="f-input"><option>All</option>${vals.map((v) => `<option>${esc(v)}</option>`).join("")}</select></div>`;
+      return `<div class="filter" data-el="filter:${esc(col.label)}"><label>${esc(col.label)}</label><select class="f-input" data-filter="${esc(f)}"><option>All</option>${vals.map((v) => `<option>${esc(v)}</option>`).join("")}</select></div>`;
     }).join("");
     const search = (list.search || []).map((f) => {
       const col = cols.find((c) => c.field === f) || { label: f };
-      return `<div class="filter" data-el="search:${esc(col.label)}"><label>${esc(col.label)}</label><input class="f-input" placeholder="Search"></div>`;
+      return `<div class="filter" data-el="search:${esc(col.label)}"><label>${esc(col.label)}</label><input class="f-input" placeholder="Search" data-search="${esc(f)}"></div>`;
     }).join("");
     const toolbar = (list.toolbar || []).map((b) => button(b, r)).join("");
     const key = Object.keys(data[0] || {})[0];
-    const body = data.length ? data.map((row) => `<tr>${cols.map((c) => `<td>${c.chip ? `<span class="chip ${statusClass(row[c.field])}">${esc(row[c.field])}</span>` : esc(row[c.field])}</td>`).join("")}${(list.actions || []).length ? `<td class="actions">${list.actions.filter((a) => matches(a.when, row)).map((a) => `<a href="#" class="link" data-el="action:${esc(a.label)}" ${a.to ? `data-go="${a.to}" data-record="${esc(row[key])}"` : ""} ${a.toast ? `data-toast="${esc(a.toast)}"` : ""}>${esc(a.label)}</a>`).join(" ")}</td>` : ""}</tr>`).join("")
+    // Each row carries the values its filters and search boxes look at (also fields that are not columns).
+    const watched = [...(list.filters || []), ...(list.search || [])];
+    const watchedValues = (row) => esc(JSON.stringify(Object.fromEntries(watched.map((f) => [f, row[f] == null ? "" : String(row[f])]))));
+    const body = data.length ? data.map((row) => `<tr data-row="${watchedValues(row)}">${cols.map((c) => `<td>${c.chip ? `<span class="chip ${statusClass(row[c.field])}">${esc(row[c.field])}</span>` : esc(row[c.field])}</td>`).join("")}${(list.actions || []).length ? `<td class="actions">${list.actions.filter((a) => matches(a.when, row)).map((a) => `<a href="#" class="link" data-el="action:${esc(a.label)}" ${a.to ? `data-go="${a.to}" data-record="${esc(row[key])}"` : ""} ${a.toast ? `data-toast="${esc(a.toast)}"` : ""}>${esc(a.label)}</a>`).join(" ")}</td>` : ""}</tr>`).join("")
       : `<tr><td colspan="${cols.length + 1}" class="empty">${esc(list.empty || "No records found")}</td></tr>`;
     return `
-      ${search || filters || toolbar ? `<div class="list-tools">${search || filters ? `<div class="filters">${search}${filters}<button class="btn small" data-el="button:Search">Search</button><button class="btn small" data-el="button:Clear Filters">Clear Filters</button></div>` : "<div></div>"}<div class="toolbar">${toolbar}</div></div>` : ""}
+      ${search || filters || toolbar ? `<div class="list-tools">${search || filters ? `<div class="filters">${search}${filters}<button class="btn small" data-el="button:Search" data-apply-filters>Search</button><button class="btn small" data-el="button:Clear Filters" data-clear-filters>Clear Filters</button></div>` : "<div></div>"}<div class="toolbar">${toolbar}</div></div>` : ""}
       <div class="table-wrap"><table class="datalist ${cols.length > 9 ? "dense" : ""}">
         <thead><tr>${cols.map((c) => `<th data-el="column:${esc(c.label)}">${esc(c.label)}</th>`).join("")}${(list.actions || []).length ? "<th>Action</th>" : ""}</tr></thead>
-        <tbody>${body}</tbody>
+        <tbody>${body}${data.length ? `<tr class="none-match" hidden><td colspan="${cols.length + 1}" class="empty">${esc(list.empty || "No records found")}</td></tr>` : ""}</tbody>
       </table></div>
-      <div class="pager">Showing ${data.length} of ${data.length} records</div>`;
+      <div class="pager" data-total="${data.length}">Showing ${data.length} of ${data.length} records</div>`;
   }
 
   function field(f, value, readonly) {
@@ -258,9 +264,63 @@
     </div></div>`;
   }
 
+  // ------------------------------------------------------------------ filters and search
+  // They work on the rows already on the page: Search (or Enter in a search box) applies them, Clear Filters
+  // resets them. A filter picks one value; a search box matches part of the text, in any letter case.
+  function applyFilters(scope) {
+    if (!scope) return;
+    const picks = [...scope.querySelectorAll("[data-filter]")].filter((s) => s.value !== "All").map((s) => [s.dataset.filter, s.value]);
+    const words = [...scope.querySelectorAll("[data-search]")].filter((i) => i.value.trim()).map((i) => [i.dataset.search, i.value.trim().toLowerCase()]);
+    const rowsOnPage = scope.querySelectorAll("tbody tr[data-row]");
+    let shown = 0;
+    rowsOnPage.forEach((tr) => {
+      const row = JSON.parse(tr.dataset.row);
+      const match = picks.every(([f, v]) => row[f] === v) && words.every(([f, w]) => String(row[f]).toLowerCase().includes(w));
+      tr.hidden = !match;
+      if (match) shown += 1;
+    });
+    const none = scope.querySelector("tr.none-match");
+    if (none) none.hidden = shown > 0 || !rowsOnPage.length;
+    const pager = scope.querySelector(".pager");
+    if (pager) pager.textContent = `Showing ${shown} of ${pager.dataset.total} records`;
+  }
+  const listScope = (el) => el.closest(".modal-body") || document.getElementById("content");
+
+  // ------------------------------------------------------------------ what was typed
+  // The page is drawn again on every move (another step of a form, a dialog opening or closing). What the
+  // presenter typed or picked is kept while they stay on the same screen and record, and put back after the
+  // redraw. Moving to another screen starts clean, as a new form would.
+  const typed = { key: null, values: {} };
+  const TYPED = "[data-el^='field:'], [data-el^='filter:'], [data-el^='search:']";
+  const typedId = (holder) => (holder.closest(".modal") ? "dialog " : "") + holder.dataset.el;
+  const controls = (holder) => [...holder.querySelectorAll("input, textarea, select")];
+  function rememberTyped() {
+    if (!typed.key) return;
+    document.querySelectorAll("#app " + TYPED.split(", ").join(", #app ")).forEach((holder) => {
+      const found = controls(holder);
+      if (found.length) typed.values[typedId(holder)] = found.map((c) => (c.type === "checkbox" || c.type === "radio" ? c.checked : c.value));
+    });
+  }
+  function restoreTyped() {
+    document.querySelectorAll("#app " + TYPED.split(", ").join(", #app ")).forEach((holder) => {
+      const saved = typed.values[typedId(holder)];
+      const found = controls(holder);
+      if (!saved || saved.length !== found.length) return;
+      found.forEach((c, i) => {
+        if (c.type === "checkbox" || c.type === "radio") c.checked = saved[i];
+        else if (c.type !== "file") c.value = saved[i];
+      });
+    });
+    const content = document.getElementById("content");
+    if (content && content.querySelector("[data-filter], [data-search]")) applyFilters(content);
+  }
+
   // ------------------------------------------------------------------ main render
   function render() {
     const r = route();
+    rememberTyped();  // the page still shows the previous view here
+    const nowOn = `${r.screen}|${r.q.record || ""}|${r.role || ""}`;
+    if (nowOn !== typed.key) Object.assign(typed, { key: nowOn, values: {} });
     document.body.classList.toggle("clean", !!r.q.clean);
     if (r.screen === "__flow") {
       app.innerHTML = renderFlow();
@@ -277,6 +337,7 @@
     }
     if (r.q.dialog) app.insertAdjacentHTML("beforeend", renderDialog(r.q.dialog));
     app.dataset.screen = screen.id || "login";
+    restoreTyped();
     feedback.renderPins();
   }
 
@@ -290,9 +351,17 @@
 
   document.addEventListener("click", (e) => {
     if (feedback.active) return; // feedback mode handles clicks itself
-    const el = e.target.closest("[data-go],[data-toast],[data-dialog],[data-close],[data-page],[data-role-login]");
+    const el = e.target.closest("[data-go],[data-toast],[data-dialog],[data-close],[data-page],[data-role-login],[data-apply-filters],[data-clear-filters]");
     if (!el) return;
     e.preventDefault();
+    if (el.dataset.applyFilters !== undefined || el.dataset.clearFilters !== undefined) {
+      const scope = listScope(el);
+      if (el.dataset.clearFilters !== undefined) {
+        scope.querySelectorAll("[data-filter]").forEach((s) => { s.value = "All"; });
+        scope.querySelectorAll("[data-search]").forEach((i) => { i.value = ""; });
+      }
+      return applyFilters(scope);
+    }
     const r = route();
     if (el.dataset.roleLogin) { sessionStorage.setItem("mock-role", el.dataset.roleLogin); return go(firstScreen(el.dataset.roleLogin)); }
     if (el.dataset.role && el.dataset.go) sessionStorage.setItem("mock-role", el.dataset.role);
@@ -449,7 +518,10 @@
   };
 
   document.addEventListener("click", (e) => feedback.capture(e), true);
-  document.addEventListener("keydown", (e) => { if (e.key === "F2") feedback.toggle(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "F2") feedback.toggle();
+    if (e.key === "Enter" && e.target.matches && e.target.matches("[data-search]")) applyFilters(listScope(e.target));
+  });
   window.addEventListener("hashchange", render);
   window.addEventListener("resize", () => feedback.renderPins());
 

@@ -35,6 +35,10 @@ def mockup_spec():
     dialogs = {d["id"]: d for d in spec["dialogs"]}
     del dialogs["approve-dialog"]["confirm"]["to"]
     spec["dialogs"].append({"id": "info-dialog", "title": "Information", "message": "Nothing to confirm."})
+    # A second step on the form, and a search box on a list, for the tests of kept input and of searching.
+    new_application = next(s for s in spec["screens"] if s["id"] == "new-application")
+    new_application["sections"].append({"title": "More", "page": 2, "page_title": "More", "fields": [{"id": "note", "label": "Note", "type": "text"}]})
+    next(s for s in spec["screens"] if s["id"] == "approvals")["list"]["search"] = ["employee"]
     return spec
 
 
@@ -421,7 +425,7 @@ def test_screenshots_are_cropped_to_the_content(pictures):
     """No minimum height: a list with two rows and the process flow are short pictures, not half-empty ones."""
     sizes = pictures["sizes"]
     assert sizes["approvals"][1] < 800 and sizes["process-flow"][1] < 700
-    assert sizes["new-application"][1] > sizes["approvals"][1] + 300, "a form is as tall as its fields"
+    assert sizes["new-application-p1"][1] > sizes["approvals"][1] + 300, "a form is as tall as its fields"
     assert 800 < sizes["login"][1] < 1400, "the login card with space around it"
     assert sizes["review-application-reject"][1] >= sizes["review-application"][1], "a dialog never shortens its screen"
 
@@ -482,6 +486,37 @@ def test_a_confirm_button_still_goes_to_its_screen(browser):
 def test_cancel_closes_a_dialog_and_stays_on_the_screen(browser):
     after = browser["cancel"]
     assert not after["dialog"] and after["screen"] == "review-application" and after["toasts"] == []
+
+
+def test_a_filter_is_applied_by_search_and_removed_by_clear_filters(browser):
+    """Filters, search boxes and their two buttons used to do nothing when clicked."""
+    before, picked, filtered, cleared = (browser[k] for k in ("listBefore", "listPickedNotApplied", "listFiltered", "listCleared"))
+    total = len(before["rows"])
+    assert total >= 2 and before["pager"] == f"Showing {total} of {total} records"
+    assert picked["rows"] == before["rows"], "choosing a value does nothing until Search is pressed, as in the real system"
+    assert filtered["rows"] and all(" Approved " in f" {row} " for row in filtered["rows"]) and len(filtered["rows"]) < total
+    assert filtered["pager"] == f"Showing {len(filtered['rows'])} of {total} records"
+    assert cleared["rows"] == before["rows"] and browser["filterAfterClear"] == "All"
+
+
+def test_a_search_box_matches_part_of_the_text_in_any_letter_case(browser):
+    found = browser["searched"]
+    assert len(found["rows"]) == 1 and "Daniel Tan" in found["rows"][0] and found["pager"] == "Showing 1 of 2 records"
+
+
+def test_a_search_that_finds_nothing_says_so(browser):
+    nothing = browser["searchedNone"]
+    assert nothing["rows"] == [] and nothing["noneShown"] and nothing["pager"] == "Showing 0 of 2 records"
+
+
+def test_what_was_typed_survives_moving_between_the_steps_of_a_form(browser):
+    """The page is drawn again on every move, which used to empty every field already filled in."""
+    assert browser["typedBack"] == {"reason": "Family trip", "typeKept": True}
+    assert browser["typedStep2"] == "Back on Monday"
+
+
+def test_a_form_starts_clean_when_it_is_opened_again(browser):
+    assert browser["typedAfterLeaving"] == ""
 
 
 def test_a_comment_the_server_takes_is_shown_as_saved(browser):

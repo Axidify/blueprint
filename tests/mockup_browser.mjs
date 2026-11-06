@@ -64,6 +64,48 @@ await page.click(".modal-foot [data-close]:not([data-el])");      // Cancel
 await page.waitForTimeout(150);
 out.cancel = await state();
 
+// ---- filters and search on a list
+const listState = () => page.evaluate(() => ({
+  rows: [...document.querySelectorAll("#content tbody tr[data-row]")].filter((tr) => !tr.hidden).map((tr) => tr.innerText.replace(/\s+/g, " ").trim()),
+  pager: document.querySelector("#content .pager").textContent,
+  noneShown: !document.querySelector("#content tr.none-match").hidden,
+}));
+await open("#/my-applications?role=employee");
+out.listBefore = await listState();
+await page.selectOption('[data-el="filter:Status"] select', "Approved");
+out.listPickedNotApplied = await listState();              // nothing happens until Search is pressed
+await page.click('[data-el="button:Search"]');
+out.listFiltered = await listState();
+await page.click('[data-el="button:Clear Filters"]');
+out.listCleared = await listState();
+out.filterAfterClear = await page.inputValue('[data-el="filter:Status"] select');
+
+await open("#/approvals?role=manager");
+await page.fill('[data-el="search:Employee"] input', "dAN");
+await page.press('[data-el="search:Employee"] input', "Enter");   // part of the name, any letter case
+out.searched = await listState();
+await page.fill('[data-el="search:Employee"] input', "nobody of that name");
+await page.click('[data-el="button:Search"]');
+out.searchedNone = await listState();
+
+// ---- what was typed survives a step change, and a new visit starts clean
+await open("#/new-application?role=employee");
+await page.fill('[data-el="field:reason"] textarea', "Family trip");
+await page.selectOption('[data-el="field:leave_type"] select', { index: 2 });
+const pickedType = await page.inputValue('[data-el="field:leave_type"] select');
+await page.click('[data-el="tab:More"]');
+await page.fill('[data-el="field:note"] input', "Back on Monday");
+await page.click('[data-el="tab:Step 1"]');
+out.typedBack = { reason: await page.inputValue('[data-el="field:reason"] textarea'),
+                  typeKept: (await page.inputValue('[data-el="field:leave_type"] select')) === pickedType && pickedType !== "" };
+await page.click('[data-el="tab:More"]');
+out.typedStep2 = await page.inputValue('[data-el="field:note"] input');
+await page.click('[data-el="menu:My Applications"]');
+await page.waitForSelector('[data-el="title:My Leave Applications"]');
+await page.click('[data-el="menu:New Application"]');
+await page.waitForSelector('[data-el="field:reason"] textarea');
+out.typedAfterLeaving = await page.inputValue('[data-el="field:reason"] textarea');
+
 // ---- feedback: a comment the server does not take is kept, shown as not saved, and sent later
 const feedbackState = () => page.evaluate(() => ({
   toggle: document.getElementById("fb-toggle").textContent,

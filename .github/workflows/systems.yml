@@ -54,9 +54,10 @@ jobs:
           ls -l examples/leave-request/output/*.docx
       - name: Present the mock-up and save a comment
         run: |
+          cp -R examples/leave-request projects/leave-request   # present.sh shows projects of the workspace
           ./present.sh leave-request --port 8765 > present.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://localhost:8765/ > /dev/null && break; sleep 1; done
-          curl -sf http://localhost:8765/ | grep -q 'id="app"'
+          curl -sf http://localhost:8765/ | grep -q 'id="app"' || { cat present.log; exit 1; }
           curl -sf -X POST -H "Content-Type: application/json" -d '{"screen": "approvals", "text": "From the Mac check"}' http://localhost:8765/api/feedback
           grep -q "From the Mac check" projects/leave-request/feedback/feedback.json
         env:

@@ -33,6 +33,12 @@ See [docs/maintaining.md](docs/maintaining.md).
   register. Internal items and unanswered ones still never reach the document.
 
 ### Changed
+- **Filters and search boxes in the mock-up work.** On a list, choosing a filter value or typing in a
+  search box and pressing **Search** (or Enter) now narrows the sample rows, the line under the list
+  counts what is shown, and **Clear Filters** brings everything back. They used to do nothing, which
+  clients noticed the moment they clicked.
+- **What you type in the mock-up stays.** Moving between the steps of a form, or opening and closing a
+  dialog, no longer empties the fields already filled in. Opening the form again starts it clean.
 - **Typing mistakes in the spec are reported when the mock-up is built.** A column, filter, search or
   condition that names a field the sample data does not have, an `options_from` that points nowhere, an
   unknown field type, a record or role that does not exist, and a setting that nearly spells a real one

@@ -1741,7 +1741,10 @@ def finish_in_word(docx_path):
         return False, f"PowerShell could not be run ({e})"
     if r.returncode == 0 and pdf.exists():
         return True, ""
-    said = (r.stderr or b"").decode("oem" if sys.platform == "win32" else "utf-8", "replace")
+    try:
+        said = (r.stderr or b"").decode("oem", "replace")  # what Windows PowerShell writes its errors in
+    except LookupError:  # the codec exists on Windows only
+        said = (r.stderr or b"").decode("utf-8", "replace")
     if "80040154" in said or "Class not registered" in said:
         return False, NO_WORD
     if r.returncode == 0:
