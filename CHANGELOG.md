@@ -25,6 +25,12 @@ See [docs/maintaining.md](docs/maintaining.md).
   Edge, the mock-up itself clicked through in the browser.
 
 ### Changed
+- **Screenshots you can read in the document.** Screens are now captured 1000 pixels wide instead of 1440,
+  so the text inside a screenshot prints about 40% larger (roughly 6 pt instead of 4 pt). A screen that
+  does not fit, such as a list with many columns, is captured wider automatically, and the command says
+  which. Each screenshot is cropped to its content, so a short list or the process flow is no longer half
+  empty. Screens are laid out a little tighter in the document than in the live mock-up, which still fills
+  the window. **Take the screenshots again and regenerate** to get this in a document you already have.
 - The document generator now stops with the list of errors when the spec has any (an unknown screen,
   role or dialog, for example), the same check the mock-up runs. It used to carry on or crash.
 
@@ -52,6 +58,11 @@ See [docs/maintaining.md](docs/maintaining.md).
 - **A failed Word step says why.** Every failure used to be reported as "Word not available", even with
   Word installed. Now the reason is shown (for example the file is in use, or Word did not answer), and
   "Word not available" is said only when Word is not installed.
+- **Owners and dates no longer break in the decisions table.** The Owner and Due columns were narrower than
+  a date, so "2026-11-20" printed on two lines and a name such as "Operations" broke before its last
+  letter. The Impact, Owner and Due columns are now sized to what they hold, and the question takes the
+  rest of the width. Requirement IDs and references such as "FR-BKG-001.2" are no longer split across two
+  lines at a hyphen, anywhere in the document.
 - **System names with a colon, a slash or an apostrophe.** A colon in the system name (such as
   "Phase 2: Claims System") made Windows hide the generated document inside an empty file, a slash stopped
   the run, and an apostrophe broke the Word step so no PDF was written. The file name now replaces the

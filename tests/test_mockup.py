@@ -262,6 +262,61 @@ def test_screenshot_problems_copes_with_a_damaged_note_or_list(tmp_path):
     assert len(mockup.screenshot_problems(project, spec)) == 1
 
 
+# ---------------------------------------------------------------------- real screenshots
+WIDE_LIST = {"id": "wide-list", "type": "list", "title": "Every Column", "menu": "Every Column", "roles": ["hr"],
+             "list": {"data": "applications",
+                      "columns": [{"field": f, "label": f"{f.replace('_', ' ').title()} of the application"}
+                                  for f in ("id", "employee", "leave_type", "from", "to", "days", "reason", "status", "submitted")] * 2}}
+FLOW = {"title": "Leave process", "steps": [{"name": "Apply", "role": "Employee", "status": "Pending Approval"},
+                                           {"name": "Approve", "role": "Line Manager", "status": "Approved"}]}
+
+
+@pytest.fixture(scope="module")
+def pictures(tmp_path_factory):
+    """The screenshot command for real, in Microsoft Edge: {shot name: (width, height) in pixels} and what
+    it printed. Skipped where Node, the Node packages or Edge are missing, as on GitHub."""
+    from PIL import Image
+
+    if not shutil.which("node") or not (support.ROOT / "node_modules" / "playwright-core").is_dir():
+        pytest.skip("needs Node.js and the Node packages (run setup.cmd or `npm install`)")
+    project = tmp_path_factory.mktemp("pictures") / "leave-request"
+    spec = mockup_spec()
+    spec["screens"].append(WIDE_LIST)
+    spec["process_flow"] = FLOW
+    support.write_spec(project, spec)
+    run = subprocess.run([sys.executable, "-I", str(support.ROOT / "tools" / "mockup.py"), "screenshots", str(project)],
+                         cwd=support.ROOT, capture_output=True, text=True, encoding="utf-8", timeout=300)
+    if run.returncode == 77:
+        pytest.skip(f"Microsoft Edge could not be started: {run.stderr.strip()[:200]}")
+    assert run.returncode == 0, run.stdout + run.stderr
+    sizes = {p.stem: Image.open(p).size for p in (project / "mockup" / "screenshots").glob("*.png")}
+    return {"sizes": sizes, "log": run.stdout, "planned": [s["name"] for s in mockup.shot_list(mockup.load_spec(project))]}
+
+
+def test_every_planned_screenshot_is_taken(pictures):
+    assert sorted(pictures["sizes"]) == sorted(pictures["planned"])
+
+
+def test_screens_are_taken_narrow_so_their_text_is_readable_in_the_document(pictures):
+    """1000 px wide at twice the pixels. At the old 1440 px the mock-up's text printed at about 4 pt."""
+    narrow = {name: size for name, size in pictures["sizes"].items() if name != "wide-list"}
+    assert {size[0] for size in narrow.values()} == {2000}, narrow
+
+
+def test_a_screen_that_does_not_fit_is_taken_wider_and_says_so(pictures):
+    assert pictures["sizes"]["wide-list"][0] in (2400, 2880)
+    assert "wide-list.png (taken" in pictures["log"] and "it does not fit in 1000" in pictures["log"]
+
+
+def test_screenshots_are_cropped_to_the_content(pictures):
+    """No minimum height: a list with two rows and the process flow are short pictures, not half-empty ones."""
+    sizes = pictures["sizes"]
+    assert sizes["approvals"][1] < 800 and sizes["process-flow"][1] < 700
+    assert sizes["new-application"][1] > sizes["approvals"][1] + 300, "a form is as tall as its fields"
+    assert 800 < sizes["login"][1] < 1400, "the login card with space around it"
+    assert sizes["review-application-reject"][1] >= sizes["review-application"][1], "a dialog never shortens its screen"
+
+
 # ---------------------------------------------------------------------- in the browser
 @pytest.fixture(scope="module")
 def browser(built, tmp_path_factory):

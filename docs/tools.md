@@ -69,7 +69,16 @@ in the Feedback panel.
 ### screenshot.mjs
 
 Called by `mockup.py screenshots`; you don't run it directly. Drives the installed Microsoft Edge through
-`playwright-core` and crops each screenshot to its content.
+`playwright-core`.
+
+- **Width.** A screenshot is printed about 14 cm wide in the requirements document, so the narrower the
+  window it is taken in, the larger the screen's text on paper. Each screen is taken 1000 pixels wide
+  (text prints at about 6 pt). A screen that does not fit, for example a list with many columns, is taken
+  1200 or 1440 pixels wide instead, and the command says so; its text prints smaller.
+- **Height.** Each screenshot is cropped to its content, with no minimum: a list with one row is a short
+  picture. The login card and an open dialog are centred with space around them.
+- **Sharpness.** Pictures have twice the pixels of the screen. The Word file keeps them whole; Word's PDF
+  export reduces every picture to about 200 dots per inch.
 
 ### generate_requirements.py
 

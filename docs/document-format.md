@@ -49,6 +49,8 @@ Generated documents are laid out so nothing is cut off awkwardly between pages:
 - tables never start with a lone header at the foot of a page, short tables (up to six rows) are kept
   whole, rows never split, and the header row repeats on every page of a long table;
 - short lists (a role's screens) stay together, and each sign-off form stays on one page;
+- an ID or reference (FR-BKG-001.2, R-014) is never split across two lines, and in the decisions table
+  the impact, owner and due date each stay on one line when they are a single word or date;
 - no paragraph leaves a single line stranded at the top or bottom of a page.
 
 ## Changing the format

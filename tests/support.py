@@ -105,7 +105,9 @@ def clean(text):
 
 def all_text(doc):
     """Every piece of text in the document body, tables included, one paragraph per line."""
-    return "\n".join("".join(t.text or "" for t in p.iter(qn("w:t"))) for p in doc.element.body.iter(qn("w:p")))
+    hyphen = qn("w:noBreakHyphen")  # IDs are written with Word's non-breaking hyphen: read it as "-"
+    return "\n".join("".join("-" if t.tag == hyphen else t.text or "" for t in p.iter(qn("w:t"), hyphen))
+                     for p in doc.element.body.iter(qn("w:p")))
 
 
 def is_heading(block, level):

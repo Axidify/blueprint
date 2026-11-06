@@ -379,7 +379,7 @@ def screenshots(project):
     script = ROOT / "tools" / "screenshot.mjs"
     result = subprocess.run(["node", str(script), str(mock / "index.html"), str(plan), str(out)], cwd=ROOT)
     if result.returncode:
-        sys.exit(result.returncode)
+        sys.exit(result.returncode)  # the script has said why (77: Microsoft Edge could not be started)
     record_screenshots(project, spec)
     snapshot(project, spec)
     print(f"Wrote {len(shots)} screenshots to {out}")

@@ -38,7 +38,9 @@ so every decision put into the spec shows up in both. Format: `docs/spec-format.
 
 1. `python -I tools/mockup.py build projects/<slug>` — fix any spec errors it reports.
 2. `python -I tools/mockup.py screenshots projects/<slug>` and look at every screenshot. Check for layout
-   problems, empty lists, wrong roles, and leftover sample text.
+   problems, empty lists, wrong roles, and leftover sample text. Screens are captured 1000 pixels wide so
+   their text is readable in the requirements document; if the command says a screen was taken wider
+   because it does not fit, its text will print smaller: consider fewer or shorter list columns.
 3. Render the register if you added items: `python -I tools/register.py render projects/<slug>`.
 
 ## 4. Hand over

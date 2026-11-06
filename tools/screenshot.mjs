@@ -10,23 +10,51 @@ const [index, planFile, outDir] = process.argv.slice(2);
 const shots = JSON.parse(readFileSync(planFile, "utf8"));
 const base = pathToFileURL(index).href;
 
-const browser = await chromium.launch({ channel: "msedge", headless: true });
-const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1.5 });
+// A screenshot is printed about 14 cm wide in the requirements document, so the narrower the window it
+// is taken in, the larger the screen's text on paper: at 1000 px the mock-up's 14 px text prints at about
+// 6 pt, at 1440 px at 4 pt. Each screen is taken at the first width in which nothing is cut off sideways
+// (a list with many columns needs a wider one), and at twice the pixels so it stays sharp when zoomed.
+const WIDTHS = [1000, 1200, 1440];
+const SCALE = 2;
+
+let browser;
+try {
+  browser = await chromium.launch({ channel: "msedge", headless: true });
+} catch (e) {
+  console.error(`Microsoft Edge could not be started, so no screenshots were taken.\n${String(e).split("\n")[0]}`);
+  process.exit(77);
+}
+const page = await browser.newPage({ viewport: { width: WIDTHS[0], height: 900 }, deviceScaleFactor: SCALE });
 for (const shot of shots) {
-  await page.goto("about:blank");
-  await page.goto(base + shot.hash);
-  await page.waitForSelector("#app > *");
-  await page.waitForTimeout(150);
-  const file = join(outDir, `${shot.name}.png`);
-  // Crop to the content (and any open dialog) so screenshots fit a Word page without empty space.
+  let width;
+  for (width of WIDTHS) {
+    await page.setViewportSize({ width, height: 900 });
+    if (width === WIDTHS[0]) {
+      await page.goto("about:blank");
+      await page.goto(base + shot.hash);
+      await page.waitForSelector("#app > *");
+    }
+    await page.waitForTimeout(150);
+    const fits = await page.evaluate(() =>
+      document.documentElement.scrollWidth <= window.innerWidth + 1 &&
+      ![...document.querySelectorAll(".table-wrap, .content, .modal-body")].some((el) => el.scrollWidth > el.clientWidth + 1));
+    if (fits) break;
+  }
+  // Crop to the content, so the picture holds the screen and no empty space: a list with one row is a
+  // short picture. The login card and an open dialog are centred in a window just tall enough for them.
   const height = await page.evaluate(() => {
-    const bottoms = [...document.querySelectorAll("#content > *, .modal, .login-card, .flow")]
-      .map((el) => el.getBoundingClientRect().bottom + window.scrollY);
-    return Math.ceil(Math.max(520, ...bottoms) + 32);
+    const bottom = (el) => el.getBoundingClientRect().bottom + window.scrollY;
+    const card = document.querySelector(".login-card");
+    if (card) return Math.ceil(card.getBoundingClientRect().height + 160);
+    const flow = document.querySelector(".flow");
+    if (flow) return Math.ceil(bottom(flow));
+    const content = Math.max(0, ...[...document.querySelectorAll("#content > *")].map(bottom)) + 32;
+    const modal = document.querySelector(".modal");
+    return Math.ceil(Math.max(content, modal ? modal.getBoundingClientRect().height + 140 : 0));
   });
-  await page.setViewportSize({ width: 1440, height: Math.max(900, height) });
-  await page.screenshot({ path: file, clip: { x: 0, y: 0, width: 1440, height } });
-  await page.setViewportSize({ width: 1440, height: 900 });
-  console.log(`  ${shot.name}.png`);
+  await page.setViewportSize({ width, height });
+  await page.waitForTimeout(100);
+  await page.screenshot({ path: join(outDir, `${shot.name}.png`) });
+  console.log(`  ${shot.name}.png${width === WIDTHS[0] ? "" : ` (taken ${width} px wide: it does not fit in ${WIDTHS[0]})`}`);
 }
 await browser.close();

@@ -164,6 +164,23 @@ def keep_row_together(row):
     tr_pr.append(el)
 
 
+def no_break_hyphens(run):
+    """Keep an ID such as FR-BKG-001.2 on one line. Word breaks a line at an ordinary hyphen; its own
+    non-breaking hyphen is drawn with the same glyph (the document fonts have no U+2011 of their own)."""
+    for t in list(run._r.findall(qn("w:t"))):
+        first, *rest = (t.text or "").split("-")
+        if not rest:
+            continue
+        t.text, at = first, t
+        for part in rest:
+            hyphen = OxmlElement("w:noBreakHyphen")
+            at.addnext(hyphen)
+            at = OxmlElement("w:t")
+            at.set(qn("xml:space"), "preserve")
+            at.text = part
+            hyphen.addnext(at)
+
+
 def add_field(paragraph, instr):
     run = paragraph.add_run()
     for tag, text in (("begin", None), (None, instr), ("separate", None), (None, ""), ("end", None)):
@@ -254,6 +271,8 @@ class Writer:
             if style == "tag":
                 shade(r._r.get_or_add_rPr(), self.c["field"])
                 r.font.size = Pt((size or self.s["body"]) * 0.95)
+            if style in ("mono", "ref"):  # IDs and references: never split at a hyphen
+                no_break_hyphens(r)
         return paragraph
 
     def para(self, segments, size=None, after=None, before=None, align=None, style=None, keep=False):
@@ -1204,7 +1223,18 @@ def build(project):
                            if x.split(".")[0] in {g["id"] for g in groups}]
                     rows.append([[(it["id"], "mono")], [(it["question"], "")] + ([("  " + ", ".join(ids), "ref")] if ids else []),
                                  [(color, "dot"), (word, "")], it.get("owner") or names["client_short"], it.get("due") or "–"])
-                w.table(["ID", "Question", "Impact", "Owner", "Due"], rows, [1.6, tw - 8.4, 3.2, 1.9, 1.7])
+                # The three narrow columns are sized to what they hold, so an impact stays on one line and an
+                # owner's name or a date never breaks in the middle of a word. The question takes the rest.
+                char_cm = w.s["table"] * 0.56 / 72 * 2.54
+
+                def fit(texts, least, most):
+                    return min(most, max(least, max((len(str(t)) for t in texts), default=0) * char_cm + 0.5))
+
+                impact_w = fit([row[2][1][0] + "  " for row in rows], 2.4, 4.2)  # the whole label, with its dot
+                owner_w = fit([word for row in rows for word in str(row[3]).split()], 1.9, 3.6)
+                due_w = fit([word for row in rows for word in str(row[4]).split()], 1.7, 3.2)
+                w.table(["ID", "Question", "Impact", "Owner", "Due"], rows,
+                        [1.6, tw - 1.6 - impact_w - owner_w - due_w, impact_w, owner_w, due_w])
             else:
                 w.para([("ok", "dot"), ("There are no open decisions in this version.", "")])
 

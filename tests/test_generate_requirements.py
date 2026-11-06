@@ -4,6 +4,7 @@ Documents are generated in temp folders, the way a machine without Microsoft Wor
 and read back with python-docx. What a page looks like, the table of contents, page numbers and the PDF
 are made by Word and are not checked here, except by the one opt-in test at the end.
 """
+import json
 import os
 import re
 import shutil
@@ -408,6 +409,48 @@ def test_decisions_list_only_open_client_items(wide):
                             "● Blocks sign-off", "Operations", "2026-11-20"]
     assert table[2][2:] == ["● Needs an answer", "SAMPLE", "–"], "owner defaults to the client, due to a dash"
     assert "2 decisions needed" in wide.log
+
+
+def test_decisions_columns_are_wide_enough_for_what_they_hold(wide):
+    """The owner and due columns had fixed widths narrower than a date: "Operations" printed as "Operation"
+    and "s", and "2026-11-20" as "2026-11-" and "20". The widths below are the text in Geist 9 pt plus the
+    cell padding (0.39 cm), measured from the font."""
+    table = support.table_starting(chapter(wide.doc, TITLES["decisions"]), "ID")
+    width = dict(zip(header(table), (column.width / 360000 for column in table.columns)))  # cm
+    assert width["Due"] >= 1.71 + 0.39, "2026-11-20 on one line"
+    assert width["Owner"] >= 1.63 + 0.39, "Operations on one line"
+    assert width["Impact"] >= 2.55 + 0.25 + 0.39, "the dot and 'Needs an answer' on one line"
+    assert width["Question"] == max(width.values()) and width["Question"] >= 5
+    section = wide.doc.sections[0]
+    text_width = (section.page_width - section.left_margin - section.right_margin) / 360000
+    assert abs(sum(width.values()) - text_width) < 0.05, "the table is as wide as the text"
+
+
+def test_ids_and_references_never_break_at_a_hyphen(wide):
+    """Word breaks a line at an ordinary hyphen, so "FR-BKG-001.2" could end a line as "FR-". IDs and
+    references are written with Word's non-breaking hyphen; ordinary words keep theirs."""
+    table = support.table_starting(chapter(wide.doc, TITLES["decisions"]), "ID")
+    cells = table.rows[1].cells
+    hyphens = lambda cell: (cell._tc.xml.count("<w:noBreakHyphen/>"), sum("-" in (t.text or "") for t in cell._tc.iter(support.qn("w:t"))))
+    assert cells[0].text == "R-001" and hyphens(cells[0]) == (1, 0)
+    assert cells[1].text.endswith("FR-BKG-001.2") and hyphens(cells[1]) == (2, 0)
+    assert cells[2].text == "● Blocks sign-off" and hyphens(cells[2]) == (0, 1), "a word may still break at its hyphen"
+    first_group = rows(tables(chapter(wide.doc, TITLES["requirements"]))[0])
+    assert first_group[1][0] == "FR-BKG-001.1", "and it still reads as a plain hyphen"
+    assert "FR-BKG-001.1" in all_text(wide.doc)
+
+
+def test_decisions_columns_stay_within_limits_for_long_owners(tmp_path):
+    """A long owner or due text wraps at its spaces; it does not squeeze the question out."""
+    project = support.make_project(tmp_path / "long-owner", support.WIDE)
+    register = json.loads((project / "register.json").read_text(encoding="utf-8"))
+    for item in register["items"]:
+        item["owner"], item["due"] = "Procurement and Administration Department", "Before the second workshop"
+    (project / "register.json").write_text(json.dumps(register), encoding="utf-8")
+    result = support.generate(project)
+    table = support.table_starting(chapter(result.doc, TITLES["decisions"]), "ID")
+    width = dict(zip(header(table), (column.width / 360000 for column in table.columns)))
+    assert width["Owner"] <= 3.6 and width["Due"] <= 3.2 and width["Question"] >= 5
 
 
 def test_internal_and_resolved_items_never_reach_the_document(wide):
