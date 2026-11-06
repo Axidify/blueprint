@@ -168,8 +168,9 @@ puts the largest differences first. It ends with the workshop questions that wou
 The estimate is internal and never goes into a client document; the project timeline is drafted from it,
 in weeks. See [Estimates](estimates.md).
 **Output:** `projects/<name>/estimates/<date> estimate from <basis>.xlsx` (and the `.json` it is rendered
-from). Afterwards it offers to save the lead developer's rates in the knowledge base and to add the
-questions to the register.
+from); it opens on a one-page Overview, and while rates are missing its Rates needed sheet is a form for
+the lead developer. Afterwards it offers to save the lead developer's rates in the knowledge base (also
+from a returned Rates needed sheet: "save these rates") and to add the questions to the register.
 
 ### close-project
 

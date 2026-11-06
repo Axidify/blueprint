@@ -5,6 +5,7 @@ Usage:
     python -I tools/estimate.py inventory projects/<slug>
     python -I tools/estimate.py render    projects/<slug> ["<estimate.json>"]
     python -I tools/estimate.py weeks     projects/<slug> --team 2 ["<estimate.json>"]
+    python -I tools/estimate.py rates-from "<estimate.xlsx>" [--json]
 
 blocks     the building blocks and rates for a platform in knowledge/building-blocks.md, the shares for
            other work set there, and how many delivered projects in knowledge/projects-log.md they rest on
@@ -15,6 +16,8 @@ render     checks an estimate file, works out the ranges, the confidence level a
            file in projects/<slug>/estimates/
 weeks      turns the estimate's mandays into working weeks for a team size, per scope-of-work line or
            group, for drafting the project timeline (weeks only: mandays never go to the client)
+rates-from the rates a lead developer filled in on the Rates needed sheet of an estimate's Excel file, as
+           rows for knowledge/building-blocks.md (or --json); it changes nothing
 
 Figures are never invented: a rate or share comes from the knowledge base or from the lead developer for
 this estimate. A line without one is listed with its count and left out of the totals ("not priced").
@@ -53,6 +56,7 @@ Totals are the sum of the low ends and the sum of the high ends. Risks widen the
 See docs/estimates.md.
 """
 import argparse
+import datetime as dt
 import json
 import math
 import re
@@ -477,192 +481,573 @@ def compute(est, project, kdir):
 
 # ---------------------------------------------------------------- Excel
 
+# The look of the workbook: true greys, hairlines between rows, status as a coloured word, and the one
+# accent colour for the headline only.
+XL_FONT = "Calibri"
+INK, GREY = "1D1D1F", "6E6E73"
+HEAD_FILL, HEAD_LINE, ROW_LINE = "F5F5F7", "D2D2D7", "E5E5EA"
+GREEN, ORANGE, RED, ACCENT = "248A3D", "C93400", "D70015", "1F5FBF"
+INPUT_FILL = "FFF2CC"  # a cell to fill in, as on the UAT workbook
+INTERNAL = "Internal: not for the client"
+DASH = "—"
+RATES_SHEET = "Rates needed"
+RATE_HEADS = ("Low MD per unit", "High MD per unit")
+
+
+def readable_date(text):
+    """'2026-11-06' -> '6 November 2026'; anything else as it is."""
+    try:
+        d = dt.date.fromisoformat(str(text))
+    except ValueError:
+        return str(text)
+    return f"{d.day} {d:%B %Y}"
+
+
+def span(low, high, unit=""):
+    """A range for a cell: (1, 2) -> '1–2', (3, 3) -> '3'."""
+    return f"{num(low)}{unit}" if round(low, 1) == round(high, 1) else f"{num(low)}–{num(high)}{unit}"
+
+
+def plural(n, word, many=None):
+    return f"{num(n)} {word if n == 1 else many or word + 's'}"
+
+
+def row_height(text, width, size=11):
+    """Points for a wrapped cell of this many character widths: Excel does not size merged cells itself."""
+    per_line = max(10, width * 1.25 * 11 / size)
+    lines = sum(max(1, math.ceil(len(part) / per_line)) for part in str(text).split("\n"))
+    return round(lines * size * 1.32 + 5, 1)
+
+
 def render_xlsx(est, res, out):
     from openpyxl import Workbook
-    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.cell.rich_text import CellRichText, TextBlock
+    from openpyxl.cell.text import InlineFont
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
     from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.datavalidation import DataValidation
+    from openpyxl.worksheet.page import PageMargins
 
-    header_fill = PatternFill("solid", fgColor="1F3864")
-    total_fill = PatternFill("solid", fgColor="D9E1F2")
-    warn_fill = PatternFill("solid", fgColor="FFE699")
-    wrap = Alignment(wrap_text=True, vertical="top")
-    bold = Font(bold=True)
-    internal = "Internal: not for the client"
-    md = lambda x: round(x, 1)
+    def put(ws, r, c, value, color=INK, bold=False, size=11, wrap=True, align=None, fill=None, fmt=None, indent=0):
+        if isinstance(value, float):
+            value = round(value, 1)
+        numeric = isinstance(value, (int, float)) and not isinstance(value, bool)
+        cell = ws.cell(row=r, column=c, value=value)
+        if not isinstance(value, CellRichText):
+            cell.font = Font(name=XL_FONT, size=size, bold=bold, color=color)
+        cell.alignment = Alignment(wrap_text=wrap, vertical="top", indent=indent,
+                                   horizontal=align or ("right" if numeric or value == DASH else "left"))
+        if numeric:
+            cell.number_format = fmt or ("#,##0" if float(value).is_integer() else "#,##0.0")
+        if fill:
+            cell.fill = PatternFill("solid", fgColor=fill)
+        return cell
 
-    def table(ws, columns, rows, start=1, fills=None):
-        for c, (name, width) in enumerate(columns, 1):
-            cell = ws.cell(row=start, column=c, value=name)
-            cell.font, cell.fill, cell.alignment = Font(bold=True, color="FFFFFF"), header_fill, wrap
-            ws.column_dimensions[get_column_letter(c)].width = width
-        for r, row in enumerate(rows, start + 1):
-            for c, value in enumerate(row, 1):
-                cell = ws.cell(row=r, column=c, value=round(value, 2) if isinstance(value, float) else value)
-                cell.alignment = wrap
-                if fills and fills.get(r - start - 1):
-                    cell.fill = fills[r - start - 1]
-                    cell.font = bold if fills[r - start - 1] is total_fill else Font()
-        ws.freeze_panes = ws.cell(row=start + 1, column=1)
-        ws.oddHeader.center.text = internal
-        return start + len(rows) + 1
+    def rich(*parts):
+        """Text in pieces: (text, colour, size, bold)."""
+        return CellRichText(*[TextBlock(InlineFont(rFont=XL_FONT, sz=size, color=color, b=bold or None), text)
+                              for text, color, size, bold in parts if text])
+
+    def edge(ws, r, columns, bottom=ROW_LINE, top=None):
+        for c in range(1, columns + 1):
+            ws.cell(row=r, column=c).border = Border(bottom=Side(style="thin", color=bottom) if bottom else Side(),
+                                                     top=Side(style="thin", color=top) if top else Side())
+
+    def heads(ws, r, names, right=(), indent=()):
+        for c, name in enumerate(names, 1):
+            put(ws, r, c, name, color=GREY, bold=True, size=10, fill=HEAD_FILL, align="right" if c in right else "left",
+                indent=1 if c in indent else 0)
+        edge(ws, r, len(names), bottom=HEAD_LINE)
+
+    def total_row(ws, r, columns):
+        for c in range(1, columns + 1):
+            cell = ws.cell(row=r, column=c)
+            cell.fill = PatternFill("solid", fgColor=HEAD_FILL)
+            if not isinstance(cell.value, CellRichText):
+                cell.font = Font(name=XL_FONT, size=11, bold=True, color=INK)
+        edge(ws, r, columns, bottom=HEAD_LINE, top=HEAD_LINE)
+
+    def sheet(title, widths, titles="1:1", freeze="A2", one_page=False):
+        ws = wb.worksheets[0] if wb.worksheets[0].title == "Sheet" else wb.create_sheet()
+        ws.title = title
+        for c, w in enumerate(widths, 1):
+            ws.column_dimensions[get_column_letter(c)].width = w
+        ws.sheet_view.showGridLines = False
+        ws.freeze_panes = freeze
+        ws.print_title_rows = titles
+        ws.page_setup.orientation = "landscape"
+        ws.page_setup.paperSize = ws.PAPERSIZE_A4
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 1 if one_page else 0
+        ws.sheet_properties.pageSetUpPr.fitToPage = True
+        ws.print_options.horizontalCentered = True
+        ws.page_margins = PageMargins(left=0.5, right=0.5, top=0.75, bottom=0.75, header=0.3, footer=0.3)
+        for part, text in ((ws.oddHeader.center, INTERNAL), (ws.oddFooter.center, "Page &P of &N")):
+            part.text, part.size, part.color = text, 9, GREY
+        return ws
+
+    def merged(ws, r, columns, text, width, color=INK, bold=False, size=11):
+        put(ws, r, 1, text, color=color, bold=bold, size=size)
+        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=columns)
+        ws.row_dimensions[r].height = row_height(text, width, size)
 
     wb = Workbook()
+    lines, risks = res["lines"], res["risks"]
     low, high = res["total"]
+    build = [l for l in lines if l["kind"] == "block"]
+    other = [l for l in lines if l["kind"] != "block"]
+    unpriced = res["unpriced"]
+    nothing = len(unpriced) == len(lines)
+    build_unpriced = res["build_unpriced"]
+    other_unpriced = [l for l in other if not l["priced"]]
+    n, m = len(build_unpriced), res["build_lines"]
+    understated = bool(build_unpriced) and any(l["pct"] and l["priced"] for l in lines)
+    need = {}  # building blocks the estimate uses with no rate: block -> its unpriced lines
+    for l in build_unpriced:
+        need.setdefault(l["block"], []).append(l)
+    sized = [r for r in risks if r["sized"]]
+    unsized = [r for r in risks if not r["sized"]]
+    waiting = lambda c: c["verdict"].startswith("Cannot compare") or "(not priced)" in c["verdict"]
+    conf = res["confidence"]
+
+    # ------------------------------------------------ Overview: the answer first, then the figures
+    width = (40, 11, 11, 70)
+    o = sheet("Overview", width, titles="1:2", freeze="A3", one_page=True)
+    full = sum(width)
+    put(o, 1, 1, f"Estimate · {est['project']}", bold=True, size=20, wrap=False)
+    o.row_dimensions[1].height = 30
+    put(o, 2, 1, f"{est['platform']} · counted from {est['basis']} · {readable_date(est['date'])} · {INTERNAL}",
+        color=GREY, wrap=False)
+    if nothing:
+        headline, tone = (f"Nothing is priced yet: none of the {len(lines)} lines has a rate or share, so this is a "
+                          "count only."), ORANGE
+        under = "Ask for the rates and shares below, and the next estimate turns this count into mandays."
+    elif build_unpriced:
+        headline, tone = (f"The build is not priced yet: {n} of {m} building-block lines need a rate, so there is "
+                          "no project total."), ORANGE
+        under = "The figures below are what is priced so far, not a figure for the project."
+    elif other_unpriced:
+        headline, tone = (f"Priced lines: {rng(low, high, ' mandays')} (confidence: {conf}). "
+                          f"{plural(len(other_unpriced), 'item')} of other work {'has' if len(other_unpriced) == 1 else 'have'} "
+                          "no share yet, so this is not the whole project."), ORANGE
+        under = res["reading"]
+    else:
+        headline, tone = f"Likely effort: {rng(low, high, ' mandays')} (confidence: {conf})", ACCENT
+        under = res["reading"]
+    r = 4
+    merged(o, r, 4, headline, full, color=tone, bold=True, size=15)
+    if under:
+        r += 1
+        merged(o, r, 4, under, full, color=GREY)
+    r += 2
+    heads(o, r, ("Mandays", "Low", "High", "What it means"), right=(2, 3), indent=(4,))
+    figures = []  # (label, low, high, meaning, total?)
+    priced_build = [l for l in build if l["priced"]]
+    priced_other = [l for l in other if l["priced"]]
+    if build:
+        if nothing:
+            means = f"{plural(m, 'line')} counted, none priced yet"
+        elif build_unpriced:
+            means = (f"{m - n} of {m} lines {'has' if m - n == 1 else 'have'} a rate; {n} {'needs' if n == 1 else 'need'} "
+                     "one (Rates needed sheet)")
+        else:
+            means = f"{plural(m, 'line')}, counted in building blocks (Lines sheet)"
+        figures.append(("Building blocks" + (", priced lines" if build_unpriced and priced_build else ""),
+                        res["build"][0] if priced_build else DASH, res["build"][1] if priced_build else DASH, means, False))
+    if other:
+        bits = [f"{plural(len(other), 'item')} around the build: project management, testing and the like"]
+        if understated:
+            bits.append("shares of the build are understated until the build is priced")
+        if other_unpriced:
+            bits.append(f"{len(other_unpriced)} not priced yet")
+        figures.append(("Other work", res["other"][0] if priced_other else DASH,
+                        res["other"][1] if priced_other else DASH, "; ".join(bits), False))
+    if build_unpriced and not nothing:
+        figures.append(("Priced so far", low, high, "Not a figure for the project: it leaves out the lines that need a rate", True))
+    elif other_unpriced and not nothing:
+        figures.append(("Total of the priced lines", low, high,
+                        f"Leaves out {plural(len(other_unpriced), 'item')} of other work with no share set", True))
+    elif not nothing:
+        figures.append(("Total", low, high, "Every line at its low end, to every line at its high end", True))
+    if sized:
+        figures.append(("Open questions, the costly way", res["risk"][0], res["risk"][1],
+                        f"Up to {num(res['risk'][1])} MD more if {plural(len(sized), 'sized question')} "
+                        f"{'goes' if len(sized) == 1 else 'go'} the costly way; "
+                        "widens the high end only" + (f"; {len(unsized)} more not sized yet" if unsized else ""), False))
+        if not build_unpriced and not nothing:
+            figures.append(("Total with open questions", low, high + res["risk"][1],
+                            "The high end if every sized question goes the costly way", True))
+    elif unsized:
+        figures.append(("Open questions", DASH, DASH,
+                        f"{plural(len(unsized), 'open question')} not sized yet (Risks and questions sheet)", False))
     co = workspace.company()
+    cost_fmt = "#,##0"
+    if co.get("day_rate"):
+        label = f"Cost at {(co.get('currency') or '').strip()} {co['day_rate']:,} a day".replace("  ", " ")
+        if build_unpriced or nothing:
+            figures.append((label, DASH, DASH, "Not worked out: the build is not priced", False))
+        else:
+            top = high + res["risk"][1]
+            means = "; ".join(x for x in ("Priced lines only" if unpriced else "",
+                                          "Low end to the high end including open questions" if res["risk"][1] else "") if x)
+            figures.append((label, round(low * co["day_rate"]), round(top * co["day_rate"]),
+                            means or "Low end to the high end", "cost"))
+    if res["sow_total"] is not None:
+        count = len(est["sow"].get("lines", []))
+        figures.append(("Scope of work sold", res["sow_total"], "",
+                        f"All {plural(count, 'line')} of the scope of work; the Against SOW sheet compares them line by line", False))
+        blocked = [c for c in res["comparison"] if waiting(c) and c["ref"] != "–"]
+        if blocked:
+            figures.append(("… of which can be compared now", res["sow_covered"], "",
+                            f"{plural(len(blocked), 'line')} can't be compared until their lines are priced", False))
+        elif res["sow_covered"] != res["sow_total"]:
+            figures.append(("… of which this estimate prices", res["sow_covered"], "", "Compare this with the total above", False))
+    for label, lo, hi, means, style in figures:
+        r += 1
+        put(o, r, 1, label)
+        for c, v in ((2, lo), (3, hi)):
+            put(o, r, c, v, color=GREY if v == DASH else INK, fmt=cost_fmt if style == "cost" else None)
+        put(o, r, 4, means, color=GREY, indent=1)
+        o.row_dimensions[r].height = row_height(means, width[3])
+        if style is True:
+            total_row(o, r, 4)
+            o.cell(row=r, column=4).font = Font(name=XL_FONT, size=11, color=GREY)
+        else:
+            edge(o, r, 4)
+    r += 2
+    o.cell(row=r, column=1).value = rich(("Confidence: ", INK, 13, True),
+                                         (conf.capitalize(), {"low": ORANGE, "high": GREEN}.get(conf, INK), 13, True))
+    o.row_dimensions[r].height = 20
+    for why in res["reasons"]:
+        r += 1
+        merged(o, r, 4, f"•  {why}", full)
+    r += 2
+    put(o, r, 1, "What to do next", bold=True, size=13, wrap=False)
+    o.row_dimensions[r].height = 20
+    steps = []
+    ask = []
+    if need:
+        ask.append(f"the rates on the Rates needed sheet ({plural(len(need), 'building block')})")
+    if other_unpriced:
+        ask.append(f"the shares for {plural(len(other_unpriced), 'item')} of other work (Lines sheet)")
+    if ask:
+        steps.append("Ask the lead developer for " + " and ".join(ask) + ".")
+    questions = [q for q in res["questions"] if not (ask and q["question"].lower().startswith("lead developer:"))]
+    if questions:
+        steps.append("Settle the questions that narrow the range most (Risks and questions sheet), starting with: "
+                     + " and ".join(f"“{q['question']}”" for q in questions[:2]))
+    if res["sow_total"] is not None:
+        differ = [c for c in res["comparison"] if c["diff"]]
+        steps.append("Compare with the scope of work on the Against SOW sheet"
+                     + (f": {plural(len(differ), 'line')} {'differs' if len(differ) == 1 else 'differ'} from the estimate."
+                        if differ else "."))
+    steps.append("Once the questions are answered or the spec moves on, say “estimate this project” again.")
+    for i, step in enumerate(steps[:3], 1):
+        r += 1
+        merged(o, r, 4, f"{i}.  {step}", full)
+    if est.get("sources"):
+        r += 2
+        merged(o, r, 4, "Sources: " + "; ".join(est["sources"]), full, color=GREY, size=9)
 
-    # Summary
-    s = wb.active
-    s.title = "Summary"
-    s.column_dimensions["A"].width = 34
-    s.column_dimensions["B"].width = 16
-    s.column_dimensions["C"].width = 16
-    s.column_dimensions["D"].width = 70
-    rows = [
-        (f"Estimate: {est['project']}", "", "", "", "title"),
-        (internal, "", "", "", "warn"),
-        ("",),
-        ("Platform", est["platform"]),
-        ("Date", est["date"]),
-        ("Counted from", est["basis"]),
-        ("Sources", "; ".join(est.get("sources", []))),
-        ("",),
-        ("Mandays", "Low", "High", "", "head"),
-        ("Building blocks", res["build"][0], res["build"][1]),
-        ("Other work", res["other"][0], res["other"][1]),
-        ("Total, as understood today", low, high, "", "total"),
-    ]
-    partial = res["partial"]
-    if partial:
-        n, m = len(res["build_unpriced"]), res["build_lines"]
-        shares = any(l["pct"] and l["priced"] for l in res["lines"])
-        rows[-3:] = [
-            ("The build is not priced", "", "", f"{n} of {m} building-block lines have no rate yet, so there is no "
-             "total for the project: the figures below are what is priced so far", "warn"),
-            ("Building blocks, priced lines only", res["build"][0], res["build"][1], f"{m - n} of {m} lines"),
-            ("Other work", res["other"][0], res["other"][1],
-             "Shares of the building blocks are understated: they cover the priced lines only" if shares else ""),
-            ("Priced so far (not a project figure)", low, high, "Leaves out the lines not priced", "total")]
-        rows.append(("Lines not priced (no rate or share set)", len(res["unpriced"]), "",
-                     ", ".join(l["id"] for l in res["unpriced"]) + ": left out of the figures above"))
-    elif res["unpriced"]:
-        rows[-1] = ("Total of the priced lines", low, high, "Not the whole project: see the lines not priced", "total")
-        rows.append(("Lines not priced (no rate or share set)", len(res["unpriced"]), "",
-                     ", ".join(l["id"] for l in res["unpriced"]) + ": left out of the totals"))
-    if any(r["sized"] for r in res["risks"]):
-        rows += [("Open questions, if answered the costly way", res["risk"][0], res["risk"][1])]
-        if not partial:
-            rows += [("Total with open questions", low, high + res["risk"][1], "", "total")]
-    if co.get("day_rate") and partial:
-        cur = (co.get("currency") or "").strip()
-        rows += [(f"Cost at {cur} {co['day_rate']:,} a day".replace("  ", " "), "", "",
-                  "Not worked out: the build is not priced")]
-    elif co.get("day_rate"):
-        cur = (co.get("currency") or "").strip()
-        top = high + res["risk"][1]
-        rows += [(f"Cost at {cur} {co['day_rate']:,} a day".replace("  ", " "), round(low * co["day_rate"]), round(top * co["day_rate"]),
-                  "; ".join(x for x in ("Priced lines only" if res["unpriced"] else "",
-                                        "Low end to the high end including open questions" if res["risk"][1] else "") if x))]
-    if res["sow_total"] is not None and partial:
-        blocked = [c for c in res["comparison"] if c["verdict"].startswith("Cannot compare") and c["ref"] != "–"]
-        rows += [("Scope of work, lines that can be compared", res["sow_covered"], "",
-                  "Compare line by line on the Against SOW sheet"
-                  + (f"; {len(blocked)} line(s) cannot be compared until the build is priced: "
-                     + ", ".join(str(c["ref"]) for c in blocked) if blocked else "")),
-                 ("Scope of work, all lines", res["sow_total"], "", est["sow"].get("source", ""))]
-    elif res["sow_total"] is not None:
-        rows += [("Scope of work, lines this estimate prices", res["sow_covered"], "", "Compare this with the total above"),
-                 ("Scope of work, all lines", res["sow_total"], "", est["sow"].get("source", ""))]
-    rows += [("",), ("Confidence", res["confidence"].capitalize(), "", "", "total")]
-    rows += [("", "", "", r) for r in res["reasons"]]
-    rows += [("",), ("Calibration", "", "", "", "head"),
-             ("Delivered projects logged on this platform", len(res["projects_logged"])),
-             ("Building blocks used", len(res["blocks_used"])),
-             ("… of which have no rate in the knowledge base", len(res["blocks_without_rate"]), "",
-              ", ".join(res["blocks_without_rate"])),
-             ("",), ("What makes the range wide", "Mandays of range", "", "", "head")]
-    rows += [(f"{k}  {name}", v) for k, name, v in res["drivers"][:6]]
-    for r, row in enumerate(rows, 1):
-        style = row[4] if len(row) > 4 else ""
-        for c, value in enumerate(row[:4], 1):
-            cell = s.cell(row=r, column=c, value=round(value, 1) if isinstance(value, float) else value)
-            cell.alignment = wrap
-            if style == "title":
-                cell.font = Font(bold=True, size=14)
-            elif style == "warn" and c == 1:
-                cell.font, cell.fill = bold, warn_fill
-            elif style == "head":
-                cell.font, cell.fill = Font(bold=True, color="FFFFFF"), header_fill
-            elif style == "total":
-                cell.font, cell.fill = bold, total_fill
-    s.oddHeader.center.text = internal
+    # ------------------------------------------------ Lines: every line, by group, readable name first
+    cols = ("ID", "Item", "What was counted", "Rate per unit", "Mandays low", "Mandays high", "Status", "SOW line", "Notes")
+    e = sheet("Lines", (6, 36, 38, 13, 13, 13, 24, 9, 46), freeze="C2")
+    heads(e, 1, cols, right=(4, 5, 6), indent=(7,))
 
-    # Estimate lines
-    e = wb.create_sheet("Estimate")
-    cols = [("ID", 7), ("Group", 22), ("Item", 40), ("Block", 8), ("Building block", 28), ("Count", 8),
-            ("Rate low", 9), ("Rate high", 9), ("Rate from", 26), ("MD low", 9), ("MD high", 9), ("SOW ref", 9),
-            ("Notes", 50)]
-    rows, fills = [], {}
-    for kind, title in (("block", "Building blocks"), ("other", "Other work")):
-        part = [l for l in res["lines"] if (l["kind"] == "block") == (kind == "block")]
+    def counted(l):
+        code = l.get("block") or l.get("other") or ""
+        if l["kind"] == "block":
+            text = f"{num(l['count'])} × {l['block_name'] or l['block']}"
+            code = code if l["block_name"] else ""
+        elif l["pct"]:
+            text = f"Share of the build: {span(*l['pct'], unit='%')}"
+        elif l["kind"] == "md":
+            text = "Lead developer's figure"
+        elif l["priced"]:
+            text = f"Fixed: {span(l['low'], l['high'], ' MD')}"
+        else:
+            text = "Share or mandays not set"
+        return rich((text, INK, 11, False), (f"   {code}" if code else "", GREY, 9, False))
+
+    def status(l):
+        unread = "cannot be read" in l["rate_from"]
+        if l["kind"] == "block":
+            if l["priced"]:
+                return ("Priced, provisional rate", GREEN) if l["rate_from"].startswith("provisional") else ("Priced", GREEN)
+            return ("Rate can't be read", RED) if unread else ("Needs a rate", ORANGE)
+        if l["pct"]:
+            if not l["priced"]:
+                return "Not priced: the build isn't", ORANGE
+            return ("Understated", ORANGE) if build_unpriced else ("Share of the build", GREEN)
+        if not l["priced"]:
+            return ("Share can't be read", RED) if unread else ("Needs a share", ORANGE)
+        return "Priced", GREEN
+
+    def line_row(r, l):
+        put(e, r, 1, l["id"], color=GREY, size=9)
+        put(e, r, 2, l["item"])
+        put(e, r, 3, counted(l))
+        if l["kind"] == "block":
+            if l["priced"]:
+                put(e, r, 4, span(l["rate_low"], l["rate_high"], " MD"), align="right")
+            else:
+                put(e, r, 4, "needs a rate", color=ORANGE, align="right")
+        for c, v in ((5, l["low"]), (6, l["high"])):
+            put(e, r, c, v if l["priced"] else DASH, color=INK if l["priced"] else GREY)
+        word, tone = status(l)
+        put(e, r, 7, word, color=tone, bold=True, indent=1)
+        put(e, r, 8, str(l["sow_ref"]) if l.get("sow_ref") is not None else "", color=GREY)
+        notes = [l.get("note"), l.get("rate_note")]
+        if "cannot be read" in l["rate_from"]:
+            notes.append(l["rate_from"][0].upper() + l["rate_from"][1:])
+        if l["pct"] and l["priced"] and build_unpriced:
+            notes.append("A share of the priced building blocks only, until the build is priced.")
+        put(e, r, 9, " ".join(x for x in notes if x), color=GREY)
+        edge(e, r, len(cols))
+
+    r = 1
+    for part, title in ((build, "Building blocks"), (other, "Other work")):
         if not part:
             continue
+        groups = {}
         for l in part:
-            notes = " ".join(x for x in (l.get("note"), l.get("rate_note")) if x)
-            rows.append([l["id"], l.get("group", ""), l["item"], l.get("block", ""), l["block_name"], l.get("count", ""),
-                         l["rate_low"] if l["rate_low"] is not None else "", l["rate_high"] if l["rate_high"] is not None else "",
-                         l["rate_from"], md(l["low"]) if l["priced"] else "", md(l["high"]) if l["priced"] else "",
-                         l.get("sow_ref", ""), notes])
-        fills[len(rows)] = total_fill
-        rows.append(["", "", f"Subtotal: {title.lower()}", "", "", "", "", "", "", md(sum(l["low"] for l in part)),
-                     md(sum(l["high"] for l in part)), "", ""])
-    fills[len(rows)] = total_fill
-    rows.append(["", "", "Priced so far (the build is not priced)" if res["partial"] else
-                 "Total of the priced lines" if res["unpriced"] else "Total, as understood today", "", "", "", "",
-                 "", "", md(low), md(high), "", ""])
-    table(e, cols, rows, fills=fills)
+            groups.setdefault(l.get("group") or title, []).append(l)
+        for name, members in groups.items():
+            r += 1
+            put(e, r, 2, name, bold=True, wrap=False)
+            put(e, r, 3, plural(len(members), "line"), color=GREY, size=9)
+            edge(e, r, len(cols), bottom=HEAD_LINE)
+            for l in members:
+                r += 1
+                line_row(r, l)
+        r += 1
+        priced = [l for l in part if l["priced"]]
+        put(e, r, 2, f"Subtotal: {title.lower()}" + (", priced lines only" if len(priced) < len(part) else ""))
+        for c, key in ((5, "low"), (6, "high")):
+            put(e, r, c, sum(l[key] for l in priced) if priced else DASH)
+        total_row(e, r, len(cols))
+    r += 1
+    put(e, r, 2, "Nothing priced yet" if nothing else "Priced so far (the build is not priced)" if build_unpriced
+        else "Total of the priced lines" if unpriced else "Total")
+    for c, v in ((5, low), (6, high)):
+        put(e, r, c, DASH if nothing else v)
+    total_row(e, r, len(cols))
+    e.cell(row=r, column=2).font = Font(name=XL_FONT, size=12, bold=True, color=INK)
 
-    # Against the scope of work
+    # ------------------------------------------------ Rates needed: a form for the lead developer
+    if need:
+        rn = sheet(RATES_SHEET, (42, 34, 52, 15, 15), titles="1:3", freeze="A4")
+        put(rn, 1, 1, f"Rates needed for {est['platform']}", bold=True, size=15, wrap=False)
+        rn.row_dimensions[1].height = 24
+        merged(rn, 2, 5, "Fill in a low and high figure per unit, then tell Claude 'save these rates' and the estimate "
+                         "is priced next time.", 158, color=GREY)
+        heads(rn, 3, ("Building block", "What drives the effort", "Used in this project") + RATE_HEADS, right=(4, 5))
+        check = DataValidation(type="decimal", operator="greaterThanOrEqual", formula1="0", allow_blank=True,
+                               error="Write mandays per unit as a number, such as 1.5", errorTitle="Mandays per unit")
+        rn.add_data_validation(check)
+        thin = Side(style="thin", color=HEAD_LINE)
+        for r, (code, members) in enumerate(sorted(need.items()), 4):
+            known = res["blocks"].get(code) or {}
+            put(rn, r, 1, rich((known.get("name") or code, INK, 11, False), (f"   {code}" if known.get("name") else "", GREY, 9, False)))
+            put(rn, r, 2, known.get("drivers", ""), color=GREY)
+            total = sum(l["count"] for l in members)
+            used = (f"{num(total)} for {members[0]['item']}" if len(members) == 1 else
+                    f"{num(total)} in all: " + "; ".join(f"{l['item']} ({num(l['count'])})" for l in members))
+            put(rn, r, 3, used)
+            edge(rn, r, 3)
+            for c in (4, 5):
+                cell = put(rn, r, c, None, fill=INPUT_FILL, align="right")
+                cell.border = Border(left=thin, right=thin, top=thin, bottom=thin)
+                check.add(cell.coordinate)
+
+    # ------------------------------------------------ Against SOW
     if res["comparison"]:
-        w = wb.create_sheet("Against SOW")
-        blank = lambda c: "not priced" in c["verdict"]
-        rows = [[c["ref"], c["item"], c["sow"] if c["sow"] is not None else "", "" if blank(c) else md(c["low"]),
-                 "" if blank(c) else md(c["high"]), c["verdict"], c["lines"]]
-                for c in res["comparison"]]
-        fills = {i: warn_fill for i, c in enumerate(res["comparison"]) if c["diff"]}
-        fills[len(rows)] = total_fill
-        rows.append(["", "Priced so far (the build is not priced)" if res["partial"] else "Total of the lines this estimate prices",
-                     res["sow_covered"], md(low), md(high), "", ""])
-        table(w, [("SOW ref", 9), ("Scope of work item", 44), ("SOW MD", 9), ("Estimate low", 12), ("Estimate high", 12),
-                  ("Difference", 46), ("Estimate lines", 18)], rows, fills=fills)
+        w = sheet("Against SOW", (9, 48, 11, 13, 13, 46, 18))
+        heads(w, 1, ("SOW line", "Scope of work item", "Sold (MD)", "Estimate low", "Estimate high", "Difference",
+                     "Estimate lines"), right=(3, 4, 5), indent=(6,))
+        compared = [c for c in res["comparison"] if not waiting(c)]
+        later = [c for c in res["comparison"] if waiting(c)]
 
-    # Uncertainty
-    u = wb.create_sheet("Uncertainty")
-    rows = [["Confidence", "", res["confidence"].capitalize(), "", "", ""]]
-    rows += [["Why", "", r, "", "", ""] for r in res["reasons"]]
-    if res["reading"]:
-        rows.append(["How to read the total", "", res["reading"], "", "", ""])
-    rows += [["Open question, sized" if r["sized"] else "Open question, not sized", r["id"], r["item"],
-              r["low"] if r["sized"] else "", r["high"] if r["sized"] else "", r.get("note", "")] for r in res["risks"]]
-    rows += [["Line not priced", l["id"], l["item"], "", "", l["rate_from"]] for l in res["unpriced"]]
-    sized = {r["id"] for r in res["risks"]}
-    rows += [["Open register item", it.get("id", ""), it.get("finding", ""), "", "",
-              f"{it.get('severity', '')} severity" + (f", {it['effort_impact']} effort impact" if it.get("effort_impact") else "")]
-             for it in res["register_flagged"] if it.get("id") not in sized]
-    rows += [["Gap pattern that applies", g.get("id", ""), g.get("why", ""), "", "", ""] for g in est.get("gap_patterns", [])]
-    rows += [["Building block with no rate yet", b, (res["blocks"].get(b) or {}).get("name", ""), "", "",
-              "Set it in building-blocks.md to price these lines every time"] for b in res["blocks_without_rate"]]
-    table(u, [("What", 30), ("Ref", 9), ("Detail", 70), ("MD low", 9), ("MD high", 9), ("Notes", 40)], rows)
+        def tone(verdict):
+            if "below" in verdict or verdict.startswith("Not in the scope"):
+                return ORANGE
+            return GREEN if "above" in verdict or verdict.startswith("Within") else GREY
 
-    a = wb.create_sheet("Assumptions")
-    table(a, [("#", 5), ("Assumption", 110)], [[i, t] for i, t in enumerate(est.get("assumptions", []), 1)])
+        def ids(c):
+            """The estimate lines of a SOW line; a long run of them in short."""
+            got = [x for x in c["lines"].split(", ") if x]
+            return c["lines"] if len(got) <= 6 else f"{got[0]} … {got[-1]} ({len(got)} lines)"
 
-    q = wb.create_sheet("Questions")
-    table(q, [("#", 5), ("Question that would narrow the range", 80), ("From", 12), ("Narrows", 18),
-              ("Mandays of range it covers", 14)],
-          [[i, x["question"], x.get("source", ""), ", ".join(x.get("narrows", [])), x["addresses"]]
-           for i, x in enumerate(res["questions"], 1)])
+        def sold(c):
+            return c["sow"] if isinstance(c["sow"], (int, float)) else DASH if c["ref"] == "–" else ""
 
+        r = 1
+        for c in compared:
+            r += 1
+            put(w, r, 1, str(c["ref"]), color=GREY)
+            put(w, r, 2, c["item"])
+            put(w, r, 3, sold(c), color=GREY if sold(c) == DASH else INK)
+            for col, key in ((4, "low"), (5, "high")):
+                put(w, r, col, c[key] if c["lines"] else DASH, color=INK if c["lines"] else GREY)
+            verdict = c["verdict"].replace("Scope of work is", "Sold")
+            put(w, r, 6, verdict, color=tone(c["verdict"]), bold=tone(c["verdict"]) != GREY, indent=1)
+            put(w, r, 7, ids(c), color=GREY, size=9)
+            edge(w, r, 7)
+        if compared:
+            r += 1
+            put(w, r, 2, "Total of the lines compared")
+            put(w, r, 3, sum(c["sow"] for c in compared if isinstance(c["sow"], (int, float))))
+            put(w, r, 4, sum(c["low"] for c in compared))
+            put(w, r, 5, sum(c["high"] for c in compared))
+            total_row(w, r, 7)
+        if later:
+            r += 2
+            put(w, r, 2, "Can't be compared yet", color=GREY, bold=True, fill=HEAD_FILL, wrap=False)
+            for col in range(1, 8):
+                w.cell(row=r, column=col).fill = PatternFill("solid", fgColor=HEAD_FILL)
+            edge(w, r, 7, bottom=HEAD_LINE)
+            for c in later:
+                r += 1
+                missing = re.match(r"Cannot compare: (.+) not priced", c["verdict"])
+                if c["ref"] == "–":
+                    why = "Not in the scope of work, and not priced yet"
+                elif missing:
+                    k = len(missing.group(1).split(", "))
+                    why = f"Waiting for rates: {plural(k, 'of its lines', 'of its lines')} {'needs' if k == 1 else 'need'} one"
+                else:
+                    why = "A share of the build, which is not all priced yet"
+                put(w, r, 1, str(c["ref"]), color=GREY)
+                put(w, r, 2, c["item"])
+                put(w, r, 3, sold(c), color=GREY if sold(c) == DASH else INK)
+                put(w, r, 4, DASH, color=GREY)
+                put(w, r, 5, DASH, color=GREY)
+                put(w, r, 6, why, color=GREY, indent=1)
+                put(w, r, 7, ids(c), color=GREY, size=9)
+                edge(w, r, 7)
+        if res["sow_total"] is not None:
+            r += 1
+            put(w, r, 2, "Scope of work, all lines")
+            put(w, r, 3, res["sow_total"])
+            total_row(w, r, 7)
+
+    # ------------------------------------------------ Risks and questions
+    q = sheet("Risks and questions", (9, 72, 15, 17, 16))
+    put(q, 1, 1, "Risks and questions", bold=True, size=15, wrap=False)
+    q.row_dimensions[1].height = 24
+    r = 1
+
+    def section(title, names, right=()):
+        nonlocal r
+        r += 2
+        put(q, r, 1, title, bold=True, size=13, wrap=False)
+        q.row_dimensions[r].height = 20
+        r += 1
+        heads(q, r, names, right=right)
+
+    def none_listed(text):
+        nonlocal r
+        r += 1
+        put(q, r, 2, text, color=GREY)
+
+    section("Questions that would narrow the range", ("#", "Question", "From", "Mandays of range it covers", ""), right=(4,))
+    for i, x in enumerate(res["questions"], 1):
+        r += 1
+        put(q, r, 1, i, color=GREY, align="left")
+        put(q, r, 2, x["question"])
+        put(q, r, 3, x.get("source", ""), color=GREY)
+        put(q, r, 4, x["addresses"] if x["addresses"] else DASH, color=INK if x["addresses"] else GREY)
+        edge(q, r, 5)
+    if not res["questions"]:
+        none_listed("None listed.")
+    section("Open questions that could add work", ("ID", "What is open", "Severity", "Effort impact", "Adds up to (MD)"),
+            right=(5,))
+    flagged = {it.get("id"): it for it in res["register_flagged"]}
+    items = [(x["id"], x["item"] + (f" ({x['note']})" if x.get("note") else ""), flagged.get(x["id"], {}),
+              x["high"] if x["sized"] else "not sized") for x in risks]
+    items += [(it.get("id", ""), it.get("finding", ""), it, "not sized") for it in res["register_flagged"]
+              if it.get("id") not in {x["id"] for x in risks}]
+    for rid, text, it, adds in items:
+        r += 1
+        put(q, r, 1, rid, color=GREY)
+        put(q, r, 2, text)
+        sev = it.get("severity") or DASH
+        put(q, r, 3, sev, color=ORANGE if sev == "high" else GREY, bold=sev == "high")
+        put(q, r, 4, it.get("effort_impact") or DASH, color=GREY)
+        put(q, r, 5, adds, color=GREY if adds == "not sized" else INK, align="right")
+        edge(q, r, 5)
+    if not items:
+        none_listed("None open.")
+    section("Gap patterns that apply", ("ID", "Why it applies", "", "", ""))
+    for g in est.get("gap_patterns", []):
+        r += 1
+        put(q, r, 1, g.get("id", ""), color=GREY)
+        put(q, r, 2, g.get("why", ""))
+        edge(q, r, 5)
+    if not est.get("gap_patterns"):
+        none_listed("None listed.")
+
+    # ------------------------------------------------ Assumptions
+    a = sheet("Assumptions", (6, 120))
+    heads(a, 1, ("#", "Assumption"))
+    for i, text in enumerate(est.get("assumptions", []), 1):
+        put(a, i + 1, 1, i, color=GREY, align="left")
+        put(a, i + 1, 2, text)
+        edge(a, i + 1, 2)
+
+    wb.active = 0
     wb.save(out)
+
+
+def read_rates_sheet(path):
+    """The rates a lead developer filled in on a returned workbook's Rates needed sheet."""
+    from openpyxl import load_workbook
+
+    try:
+        wb = load_workbook(path, data_only=True)
+    except (OSError, ValueError, KeyError) as e:
+        sys.exit(f"Cannot read {path}: {e}")
+    if RATES_SHEET not in wb.sheetnames:
+        sys.exit(f"{Path(path).name} has no '{RATES_SHEET}' sheet: every building block of that estimate had a rate.")
+    ws = wb[RATES_SHEET]
+    m = re.match(r"Rates needed for (.+)", str(ws["A1"].value or ""))
+    out = {"platform": m.group(1).strip() if m else "", "rates": [], "empty": [], "problems": []}
+    rows = list(ws.iter_rows(values_only=True))
+    head = next((i for i, row in enumerate(rows) if RATE_HEADS[0] in row), None)
+    if head is None:
+        sys.exit(f"The '{RATES_SHEET}' sheet of {Path(path).name} has no '{RATE_HEADS[0]}' column.")
+    col_low, col_high = rows[head].index(RATE_HEADS[0]), rows[head].index(RATE_HEADS[1])
+
+    def figure(value, code):
+        if value is None or str(value).strip() == "":
+            return None
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return float(value), float(value)
+        got = parse_rate(str(value))
+        if got is None:
+            out["problems"].append(f"{code}: '{value}' is not a number (write decimals with a point)")
+        return got
+
+    for row in rows[head + 1:]:
+        found = re.search(r"(BB-\d+)\s*$", str(row[0] or ""))
+        if not found:
+            continue
+        code = found.group(1)
+        name = str(row[0])[:found.start()].strip()
+        drivers = str(row[1] or "").strip()
+        before = len(out["problems"])
+        lo, hi = figure(row[col_low], code), figure(row[col_high], code)
+        if len(out["problems"]) > before:
+            continue
+        if lo is None and hi is None:
+            out["empty"].append({"block": code, "name": name})
+            continue
+        lo, hi = lo or hi, hi or lo
+        if lo[0] > hi[1]:
+            out["problems"].append(f"{code}: the low figure {num(lo[0])} is above the high figure {num(hi[1])}")
+            continue
+        out["rates"].append({"block": code, "name": name, "drivers": drivers, "low": lo[0], "high": hi[1],
+                             "rate": span(lo[0], hi[1])})
+    return out
 
 
 # ---------------------------------------------------------------- commands
@@ -956,6 +1341,28 @@ def cmd_weeks(a):
     print(f"Confidence of the estimate: {res['confidence']}.")
 
 
+def cmd_rates_from(a):
+    found = read_rates_sheet(a.workbook)
+    if a.json:
+        print(json.dumps(found, indent=2, ensure_ascii=False))
+        return
+    name = Path(a.workbook).name
+    if found["rates"]:
+        print(f"Rates filled in on {name}" + (f", for {found['platform']}" if found["platform"] else "") + ":")
+        print("| ID | Building block | What drives the effort | Rate (MD) | Confidence |")
+        for x in found["rates"]:
+            print(f"| {x['block']} | {x['name']} | {x['drivers']} | {x['rate']} | low |")
+    else:
+        print(f"No rates are filled in on {name} yet.")
+    if found["empty"]:
+        print("Not filled in: " + ", ".join(f"{x['block']} {x['name']}".strip() for x in found["empty"]))
+    for problem in found["problems"]:
+        print(f"Not read: {problem}")
+    if found["rates"]:
+        print("To save them, put each rate in the Rate (MD) cell of its row in knowledge/building-blocks.md, "
+              "low confidence, once the user agrees; then render the estimate again.")
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -977,6 +1384,10 @@ def main():
     w.add_argument("--team", type=float, required=True, help="people working on it at the same time")
     w.add_argument("--days", type=float, default=5, help="working days a week per person (default 5)")
     w.set_defaults(fn=cmd_weeks)
+    f = sub.add_parser("rates-from")
+    f.add_argument("workbook", help="an estimate's Excel file with its Rates needed sheet filled in")
+    f.add_argument("--json", action="store_true", help="print the rates as JSON")
+    f.set_defaults(fn=cmd_rates_from)
     a = ap.parse_args()
     a.fn(a)
 

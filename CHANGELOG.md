@@ -202,6 +202,14 @@ See [docs/maintaining.md](docs/maintaining.md).
 - **Versions kept at a live session read "v1.4 as presented 6 Nov 19:00"** on the page that lists every
   mock-up, which also explains in plain words how to let the room comment.
 - **In a live session each comment is finished with its own note.**
+- **The estimate's Excel file is easier to read and prints properly.** It opens on a one-page **Overview**
+  that says the answer in one sentence (the likely effort, or that the build is not priced yet), with each
+  figure explained on its own row, the confidence, and what to do next. The **Lines** sheet groups the
+  lines and shows what was counted and each line's status in plain words. A new **Rates needed** sheet is a
+  form the lead developer fills in; say "save these rates" and Blueprint reads it
+  (`estimate.py rates-from`) and saves the rates to the knowledge base once you agree. **Risks and
+  questions** replaces the Uncertainty and Questions sheets. Every sheet prints landscape, one page wide,
+  with its headings repeated and marked internal: 10 pages for a typical estimate instead of 28.
 - **Every skill ends the same way:** what was made, where it is, who it is for (the client or internal), and
   the next step in the words to say. The documentation check requires it.
 - **The estimate, review and requirements-document skills are shorter.** Exact options come from each

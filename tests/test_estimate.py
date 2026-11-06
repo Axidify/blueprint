@@ -23,6 +23,7 @@ PLATFORM = "Sample Platform"
 STARTER = support.ROOT / "templates" / "knowledge"
 SAMPLE_ESTIMATE = sorted((support.EXAMPLE / "estimates").glob("*.json"))[-1]
 INTERNAL = "Internal: not for the client"
+RATES = "Rates needed"
 
 BLOCKS = """# Building blocks for estimating
 
@@ -911,6 +912,15 @@ def test_render_reports_the_figures(rendered, tmp_path):
     assert not any("Total" in line for line in out), "with the build not priced, nothing reads as a total"
 
 
+def overview_rows(wb):
+    """The Overview sheet as {first-column text: (low, high, what it means)}."""
+    return {r[0]: tuple(r[1:4]) for r in sheet_rows(wb["Overview"]) if r[0]}
+
+
+def overview_text(wb):
+    return [str(r[0]) for r in sheet_rows(wb["Overview"]) if r[0]]
+
+
 def test_a_priced_build_still_gives_a_total(tmp_path, kb, run):
     """Only an unpriced building block takes the total away: an unpriced item of other work leaves it, said so."""
     est = full_estimate()
@@ -920,124 +930,269 @@ def test_a_priced_build_still_gives_a_total(tmp_path, kb, run):
     assert "  Total: 16 – 33 MD" in out and "  With open questions answered the costly way: up to 37 MD" in out
     assert "  Scope of work: 16 MD for the lines this estimate prices (16 MD in all), against 16 – 33 MD" in out
     assert not any("build is not priced" in line for line in out)
-    summary = {r[0]: tuple(r[1:4]) for r in sheet_rows(load_workbook(path.with_suffix(".xlsx"))["Summary"]) if r[0]}
-    assert summary["Total, as understood today"][:2] == (16, 33)
+    wb = load_workbook(path.with_suffix(".xlsx"))
+    summary = overview_rows(wb)
+    assert summary["Total"][:2] == (16, 33) and summary["Total with open questions"][:2] == (16, 37)
+    assert wb["Overview"]["A4"].value == "Likely effort: 16 – 33 mandays (confidence: medium)", "the headline is the answer"
+    assert wb["Overview"]["A4"].font.color.rgb.endswith("1F5FBF"), "in the one accent colour"
+    assert RATES not in wb.sheetnames, "every building block has a rate: nothing to ask for"
 
 
-def test_workbook_sheets_are_all_marked_internal(rendered):
+def test_priced_lines_with_other_work_not_priced_say_it_is_not_the_whole_project(tmp_path, kb, run):
+    est = estimate_of(CALIBRATED, {"id": "L02", "item": "Internal testing", "other": "OW-03"})
+    path = full_project(tmp_path / "project", est)
+    run(kb, "render", tmp_path / "project")
+    wb = load_workbook(path.with_suffix(".xlsx"))
+    assert wb["Overview"]["A4"].value == ("Priced lines: 10 – 20 mandays (confidence: low). 1 item of other work has no "
+                                          "share yet, so this is not the whole project.")
+    summary = overview_rows(wb)
+    assert summary["Total of the priced lines"] == (10, 20, "Leaves out 1 item of other work with no share set")
+    assert "Total" not in summary
+    assert "1.  Ask the lead developer for the shares for 1 item of other work (Lines sheet)." in overview_text(wb)
+
+
+def test_workbook_sheets_are_all_marked_internal_and_print_well(rendered):
     wb = rendered[1]
-    assert wb.sheetnames == ["Summary", "Estimate", "Against SOW", "Uncertainty", "Assumptions", "Questions"]
+    assert wb.sheetnames == ["Overview", "Lines", RATES, "Against SOW", "Risks and questions", "Assumptions"]
+    assert wb.active.title == "Overview", "it opens on the answer"
     for ws in wb:
         assert ws.oddHeader.center.text == INTERNAL, f"{ws.title} must print with the internal warning on every page"
-    assert wb["Summary"]["A1"].value == "Estimate: Equipment Booking System" and wb["Summary"]["A2"].value == INTERNAL
+        assert ws.oddFooter.center.text == "Page &P of &N"
+        assert ws.page_setup.orientation == "landscape", ws.title
+        assert ws.sheet_properties.pageSetUpPr.fitToPage and ws.page_setup.fitToWidth == 1, f"{ws.title}: one page wide"
+        assert ws.print_title_rows, f"{ws.title} repeats its header rows on every printed page"
+        assert ws.freeze_panes, f"{ws.title} keeps its header in view"
+        assert not ws.sheet_view.showGridLines
+    assert wb["Overview"].page_setup.fitToHeight == 1, "the overview prints on one page"
+    assert not wb["Lines"].merged_cells.ranges, "nothing merged on the Lines sheet, so it can be sorted"
+    assert wb["Overview"]["A1"].value == "Estimate · Equipment Booking System"
+    assert wb["Overview"]["A2"].value == f"{PLATFORM} · counted from spec v0.1 · 6 November 2026 · {INTERNAL}"
 
 
-def test_summary_sheet(rendered):
-    summary = {r[0]: tuple(r[1:4]) for r in sheet_rows(rendered[1]["Summary"]) if r[0]}
-    assert summary["The build is not priced"] == ("", "", "1 of 2 building-block lines have no rate yet, so there is no "
-                                                  "total for the project: the figures below are what is priced so far")
-    assert summary["Building blocks, priced lines only"] == (10, 20, "1 of 2 lines")
-    assert summary["Other work"] == (4, 9, "Shares of the building blocks are understated: they cover the priced lines only")
-    assert summary["Priced so far (not a project figure)"] == (14, 29, "Leaves out the lines not priced")
-    assert summary["Lines not priced (no rate or share set)"] == (1, "", "L02: left out of the figures above")
-    assert summary["Open questions, if answered the costly way"] == (0, 4, "")
+def test_overview_leads_with_the_build_not_priced(rendered):
+    wb = rendered[1]
+    assert wb["Overview"]["A4"].value == ("The build is not priced yet: 1 of 2 building-block lines need a rate, so there "
+                                          "is no project total.")
+    assert wb["Overview"]["A4"].font.color.rgb.endswith("C93400"), "in the needs-attention colour"
+    summary = overview_rows(wb)
+    assert summary["Mandays"] == ("Low", "High", "What it means")
+    assert summary["Building blocks, priced lines"] == (10, 20, "1 of 2 lines has a rate; 1 needs one (Rates needed sheet)")
+    assert summary["Other work"] == (4, 9, "2 items around the build: project management, testing and the like; shares "
+                                           "of the build are understated until the build is priced")
+    assert summary["Priced so far"] == (14, 29, "Not a figure for the project: it leaves out the lines that need a rate")
+    assert summary["Open questions, the costly way"] == (
+        0, 4, "Up to 4 MD more if 1 sized question goes the costly way; widens the high end only; 1 more not sized yet")
+    assert summary["Scope of work sold"] == (16, "", "All 3 lines of the scope of work; the Against SOW sheet compares "
+                                                     "them line by line")
+    assert summary["… of which can be compared now"] == (5, "", "2 lines can't be compared until their lines are priced")
     assert not any(str(label).startswith("Total") for label in summary), "no total while the build is not priced"
-    assert summary["Scope of work, lines that can be compared"] == (
-        5, "", "Compare line by line on the Against SOW sheet; 2 line(s) cannot be compared until the build is priced: 2, 3")
-    assert summary["Scope of work, all lines"] == (16, "", "docs/2026-11-02 SOW.xlsx")
-    assert summary["Confidence"][0] == "Low"
-    assert summary["Delivered projects logged on this platform"][0] == 3
-    assert summary["Building blocks used"][0] == 2
-    assert summary["… of which have no rate in the knowledge base"] == (1, "", "BB-07")
-    assert summary["L01  Item L01"][0] == 10, "the widest line"
-    assert "Total, as understood today" not in summary, "with a line not priced, the total must not read as the whole project"
     assert not any(str(label).startswith("Cost at") for label in summary), "no day rate in the company profile, no cost"
 
 
-def test_estimate_sheet(rendered):
-    rows = sheet_rows(rendered[1]["Estimate"])
-    assert rows[0] == ["ID", "Group", "Item", "Block", "Building block", "Count", "Rate low", "Rate high", "Rate from",
-                       "MD low", "MD high", "SOW ref", "Notes"]
-    assert rows[1] == ["L01", "Lists", "Item L01", "BB-04", "List with filters", 5, 2, 4,
-                       "knowledge base (medium confidence)", 10, 20, "1", "Five lists."]
-    assert rows[2] == ["L02", "Integration", "Item L02", "BB-07", "Integration, per endpoint", 2, "", "",
-                       "no rate set: not priced", "", "", "2", ""], "a line not priced shows no mandays, not zero"
-    assert [(r[0] or r[2], r[9], r[10]) for r in rows[3:]] == [
-        ("Subtotal: building blocks", 10, 20), ("L03", 3, 6), ("L04", 1, 3), ("Subtotal: other work", 4, 9),
-        ("Priced so far (the build is not priced)", 14, 29)]
-    assert rows[5][8] == "10 – 15% of building blocks, knowledge base, of the priced ones only: understated while 1 are not priced"
+def test_overview_explains_each_figure_on_its_own_row(rendered):
+    """The explanation sits beside its figures, never on a row of its own in a far column."""
+    figures = [row for row in sheet_rows(rendered[1]["Overview"]) if isinstance(row[1], (int, float)) or row[1] == "—"]
+    assert len(figures) == 6
+    for row in figures:
+        assert row[0] and row[3], f"{row[0]}: a figure needs its label and what it means on the same row"
+
+
+def test_overview_has_confidence_and_next_steps_without_lists_of_ids(rendered):
+    text = overview_text(rendered[1])
+    i = text.index("Confidence: Low")
+    assert text[i + 1:i + 4] == [
+        "•  1 of 4 lines have no rate or share set and are not priced: the total leaves them out, so it is not the whole project.",
+        "•  23% of the priced mandays use low-confidence rates or the lead developer's figures for this estimate, not "
+        "rates calibrated from delivered projects.",
+        "•  1 high-severity register item is still open."]
+    j = text.index("What to do next")
+    assert text[j + 1:j + 4] == [
+        "1.  Ask the lead developer for the rates on the Rates needed sheet (1 building block).",
+        "2.  Settle the questions that narrow the range most (Risks and questions sheet), starting with: "
+        "“May two bookings overlap?” and “Which systems must it exchange data with?”",
+        "3.  Compare with the scope of work on the Against SOW sheet: 2 lines differ from the estimate."]
+    whole = " ".join(str(c) for r in sheet_rows(rendered[1]["Overview"]) for c in r)
+    assert not re.search(r"\b(L\d{2}|BB-\d+|OW-\d+|K\d{2})\b", whole), "the overview points to sheets, not to line ids"
+
+
+def test_lines_sheet(rendered):
+    rows = sheet_rows(rendered[1]["Lines"])
+    assert rows[0] == ["ID", "Item", "What was counted", "Rate per unit", "Mandays low", "Mandays high", "Status",
+                       "SOW line", "Notes"]
+    assert rows[1][1:3] == ["Lists", "1 line"], "a group header"
+    assert rows[2] == ["L01", "Item L01", "5 × List with filters   BB-04", "2–4 MD", 10, 20, "Priced", "1", "Five lists."]
+    assert rows[3][1] == "Integration"
+    assert rows[4] == ["L02", "Item L02", "2 × Integration, per endpoint   BB-07", "needs a rate", "—", "—", "Needs a rate",
+                       "2", ""], "a line not priced shows a dash, not zero"
+    assert rows[5][1:6] == ["Subtotal: building blocks, priced lines only", "", "", 10, 20]
+    assert rows[6][1:3] == ["Other work", "2 lines"]
+    assert rows[7] == ["L03", "Item L03", "Lead developer's figure", "", 3, 6, "Priced", "", "Given by the lead developer."]
+    assert rows[8] == ["L04", "Project management", "Share of the build: 10–15%   OW-01", "", 1, 3, "Understated", "3",
+                       "A share of the priced building blocks only, until the build is priced."]
+    assert [r[1:6] for r in rows[9:]] == [["Subtotal: other work", "", "", 4, 9],
+                                          ["Priced so far (the build is not priced)", "", "", 14, 29]]
+    sheet = rendered[1]["Lines"]
+    assert sheet["D5"].font.color.rgb.endswith("C93400") and sheet["G3"].font.color.rgb.endswith("248A3D")
+
+
+def test_rates_needed_sheet_is_a_form_for_the_lead_developer(rendered):
+    sheet = rendered[1][RATES]
+    rows = sheet_rows(sheet)
+    assert rows[0][0] == f"Rates needed for {PLATFORM}"
+    assert rows[1][0].startswith("Fill in a low and high figure per unit, then tell Claude 'save these rates'")
+    assert rows[2] == ["Building block", "What drives the effort", "Used in this project", "Low MD per unit", "High MD per unit"]
+    assert rows[3] == ["Integration, per endpoint   BB-07", "Mapping", "2 for Item L02", "", ""], "the input cells are empty"
+    assert len(rows) == 4
+    for cell in (sheet["D4"], sheet["E4"]):
+        assert cell.fill.fgColor.rgb.endswith("FFF2CC") and cell.border.left.style == "thin", "they read as a form"
+
+
+def test_rates_needed_lists_each_block_once_with_all_its_lines(tmp_path, kb, run):
+    est = estimate_of(block("L01", "BB-07", count=2, item="Payroll export"), block("L02", "BB-07", count=3, item="HR lookup"),
+                      block("L03", "BB-05"), block("L04", "BB-04", count=5))
+    path = full_project(tmp_path / "project", est)
+    run(kb, "render", tmp_path / "project")
+    rows = sheet_rows(load_workbook(path.with_suffix(".xlsx"))[RATES])[3:]
+    assert [r[:3] for r in rows] == [["Integration, per endpoint   BB-07", "Mapping", "5 in all: Payroll export (2); HR lookup (3)"]]
 
 
 def test_against_sow_sheet(rendered):
     rows = sheet_rows(rendered[1]["Against SOW"])
-    assert rows[0] == ["SOW ref", "Scope of work item", "SOW MD", "Estimate low", "Estimate high", "Difference", "Estimate lines"]
-    assert rows[1] == ["1", "Forms and lists", 5, 10, 20, "Scope of work is 5 MD below the low end", "L01"]
-    assert rows[2] == ["–", "Item L03", "", 3, 6, "Not in the scope of work", "L03"]
-    assert {r[0]: r[5] for r in rows[3:5]} == {
-        "2": "Cannot compare: L02 not priced",
-        "3": "Cannot compare yet: L04 is a share of building blocks that are not all priced"}, "a share of too little is not compared"
-    assert rows[5] == ["", "Priced so far (the build is not priced)", 5, 14, 29, "", ""]
+    assert rows[0] == ["SOW line", "Scope of work item", "Sold (MD)", "Estimate low", "Estimate high", "Difference", "Estimate lines"]
+    assert rows[1] == ["1", "Forms and lists", 5, 10, 20, "Sold 5 MD below the low end", "L01"]
+    assert rows[2] == ["–", "Item L03", "—", 3, 6, "Not in the scope of work", "L03"]
+    assert rows[3][1:5] == ["Total of the lines compared", 5, 13, 26]
+    assert rows[5][1] == "Can't be compared yet", "lines that wait for rates are grouped at the bottom"
+    assert rows[6] == ["2", "Integration", 9, "—", "—", "Waiting for rates: 1 of its lines needs one", "L02"]
+    assert rows[7] == ["3", "Project management", 2, "—", "—", "A share of the build, which is not all priced yet", "L04"]
+    assert rows[8][1:3] == ["Scope of work, all lines", 16]
 
 
-def test_uncertainty_sheet(rendered):
-    rows = sheet_rows(rendered[1]["Uncertainty"])
-    assert [(r[0], r[1]) for r in rows[1:] if r[0] != "Why"] == [
-        ("Confidence", ""), ("Open question, sized", "R-001"), ("Open question, not sized", "K02"),
-        ("Line not priced", "L02"), ("Open register item", "R-002"), ("Gap pattern that applies", "GP-02"),
-        ("Building block with no rate yet", "BB-07")], "R-001 is sized as an open question, so it is not listed twice"
-    by_ref = {r[1]: r for r in rows if r[1]}
-    assert by_ref["R-001"][2:5] == ["Overlapping bookings need a rule", 0, 4]
-    assert by_ref["K02"][3:5] == ["", ""]
-    assert by_ref["R-002"][2:] == ["No e-mail is listed for the Storekeeper.", "", "", "medium severity, high effort impact"]
-    assert len([r for r in rows if r[0] == "Why"]) == 3
+def test_risks_and_questions_sheet(rendered):
+    rows = sheet_rows(rendered[1]["Risks and questions"])
+    titles = [r[0] for r in rows if r[0] in ("Questions that would narrow the range", "Open questions that could add work",
+                                             "Gap patterns that apply")]
+    assert len(titles) == 3
+    by_first = {r[0]: r for r in rows if r[0]}
+    assert by_first[1] == [1, "May two bookings overlap?", "R-001", 14, ""], "ranked by the mandays of range they cover"
+    assert by_first[2] == [2, "Which systems must it exchange data with?", "GP-10", "—", ""]
+    assert by_first["R-001"][1] == "Overlapping bookings need a rule" and by_first["R-001"][4] == 4
+    assert by_first["K02"][1:] == ["Reports may grow", "—", "—", "not sized"]
+    assert by_first["R-002"][1:] == ["No e-mail is listed for the Storekeeper.", "medium", "high", "not sized"]
+    assert by_first["GP-02"][1] == "No rule for overlapping bookings."
+    assert [r[0] for r in rows].count("R-001") == 1, "a sized register item is listed once"
+    text = " ".join(str(c) for r in rows for c in r)
+    assert "Confidence" not in text and "not priced" not in text.lower(), "said on the Overview and Lines sheets already"
 
 
-def test_assumptions_and_questions_sheets(rendered):
-    assert sheet_rows(rendered[1]["Assumptions"])[1:] == [[1, "One approval level."]]
-    assert sheet_rows(rendered[1]["Questions"])[1:] == [
-        [1, "May two bookings overlap?", "R-001", "R-001, L01", 14],
-        [2, "Which systems must it exchange data with?", "GP-10", "L02", 0]]
+def test_assumptions_sheet(rendered):
+    assert sheet_rows(rendered[1]["Assumptions"]) == [["#", "Assumption"], [1, "One approval level."]]
 
 
 def test_no_scope_of_work_no_sheet_for_it(tmp_path, kb, run):
     path = full_project(tmp_path / "project", estimate_of(CALIBRATED))
     out = run(kb, "render", tmp_path / "project")
     wb = load_workbook(path.with_suffix(".xlsx"))
-    assert wb.sheetnames == ["Summary", "Estimate", "Uncertainty", "Assumptions", "Questions"]
+    assert wb.sheetnames == ["Overview", "Lines", "Risks and questions", "Assumptions"]
     assert "Scope of work" not in out
-    summary = {r[0]: tuple(r[1:4]) for r in sheet_rows(wb["Summary"]) if r[0]}
-    assert summary["Total, as understood today"][:2] == (10, 20)
+    summary = overview_rows(wb)
+    assert summary["Total"][:2] == (10, 20)
     assert "Total with open questions" not in summary
+    assert not any("Against SOW" in line for line in overview_text(wb))
 
 
 def test_cost_uses_the_company_day_rate(tmp_path, kb, run, temp_workspace):
     (temp_workspace / "company.yaml").write_text("name: Sample Company\nday_rate: 1000\ncurrency: XYZ\n", encoding="utf-8")
     path = full_project(tmp_path / "project")
     run(kb, "render", tmp_path / "project")
-    summary = {r[0]: tuple(r[1:4]) for r in sheet_rows(load_workbook(path.with_suffix(".xlsx"))["Summary"]) if r[0]}
-    assert summary["Cost at XYZ 1,000 a day"] == ("", "", "Not worked out: the build is not priced")
+    summary = overview_rows(load_workbook(path.with_suffix(".xlsx")))
+    assert summary["Cost at XYZ 1,000 a day"] == ("—", "—", "Not worked out: the build is not priced")
     est = full_estimate()
     est["lines"][1] = fixed("L02", 2, 4, sow_ref="2")
     path = full_project(tmp_path / "priced", est)
     run(kb, "render", tmp_path / "priced")
-    summary = {r[0]: tuple(r[1:4]) for r in sheet_rows(load_workbook(path.with_suffix(".xlsx"))["Summary"]) if r[0]}
+    wb = load_workbook(path.with_suffix(".xlsx"))
+    summary = overview_rows(wb)
     assert summary["Cost at XYZ 1,000 a day"] == (16000, 37000, "Low end to the high end including open questions")
+    cost = next(r for r in wb["Overview"].iter_rows() if r[0].value == "Cost at XYZ 1,000 a day")
+    assert cost[1].number_format == "#,##0"
 
 
 def test_risk_with_a_low_end_still_widens_the_high_end_only(tmp_path, kb, run):
     est = estimate_of(CALIBRATED, risks=[{"item": "A second approval level", "md": [2, 4]}])
     path = full_project(tmp_path / "project", est)
     run(kb, "render", tmp_path / "project")
-    summary = {r[0]: tuple(r[1:3]) for r in sheet_rows(load_workbook(path.with_suffix(".xlsx"))["Summary"]) if r[0]}
-    assert summary["Total with open questions"] == (10, 24)
+    summary = overview_rows(load_workbook(path.with_suffix(".xlsx")))
+    assert summary["Total with open questions"][:2] == (10, 24)
 
 
 def test_share_of_an_unpriced_build_is_shown_as_not_priced(tmp_path, kb, run):
     est = estimate_of(block("L01", "BB-07", count=4), {"id": "L02", "item": "Project management", "other": "OW-01"})
     path = full_project(tmp_path / "project", est)
     run(kb, "render", tmp_path / "project")
-    summary = {r[0]: tuple(r[1:4]) for r in sheet_rows(load_workbook(path.with_suffix(".xlsx"))["Summary"]) if r[0]}
-    assert summary["Lines not priced (no rate or share set)"] == (2, "", "L01, L02: left out of the totals")
+    wb = load_workbook(path.with_suffix(".xlsx"))
+    assert wb["Overview"]["A4"].value == ("Nothing is priced yet: none of the 2 lines has a rate or share, so this is a "
+                                          "count only.")
+    summary = overview_rows(wb)
+    assert summary["Building blocks"] == ("—", "—", "1 line counted, none priced yet")
+    assert summary["Other work"][:2] == ("—", "—")
+    assert not any(str(label).startswith(("Total", "Priced so far")) for label in summary)
+    lines = {r[0]: r for r in sheet_rows(wb["Lines"]) if r[0]}
+    assert lines["L02"][4:7] == ["—", "—", "Not priced: the build isn't"]
+    assert [r[1:6] for r in sheet_rows(wb["Lines"]) if r[1] == "Nothing priced yet"] == [["Nothing priced yet", "", "", "—", "—"]]
+
+
+# ====================================================================== the commands: rates-from
+def fill_rates(path, figures):
+    """The lead developer's part: type figures into the Rates needed sheet and save it."""
+    wb = load_workbook(path)
+    for row in wb[RATES].iter_rows(min_row=4):
+        code = re.search(r"BB-\d+", str(row[0].value)).group(0)
+        if code in figures:
+            row[3].value, row[4].value = figures[code]
+    wb.save(path)
+
+
+def test_rates_from_reads_a_filled_in_sheet(tmp_path, run):
+    blocks = BLOCKS.replace("| BB-08 | Dashboard | Status counts | 6 | – |", "| BB-08 | Dashboard | Status counts | TBD | – |")
+    blocks = blocks.replace("| BB-01 | Simple form | Fields | 4 | high |", "| BB-01 | Simple form | Fields | TBD | – |")
+    knowledge = write_knowledge(tmp_path / "knowledge", blocks=blocks)
+    path = full_project(tmp_path / "project", estimate_of(block("L01", "BB-07", count=2), block("L02", "BB-08"),
+                                                          block("L03", "BB-01")))
+    run(knowledge, "render", tmp_path / "project")
+    xlsx = path.with_suffix(".xlsx")
+    fill_rates(xlsx, {"BB-07": (1.5, 3), "BB-08": ("2", None)})
+    out = run(knowledge, "rates-from", xlsx).splitlines()
+    assert out[0] == f"Rates filled in on {xlsx.name}, for {PLATFORM}:"
+    assert out[1] == "| ID | Building block | What drives the effort | Rate (MD) | Confidence |"
+    assert out[2:4] == ["| BB-07 | Integration, per endpoint | Mapping | 1.5–3 | low |",
+                        "| BB-08 | Dashboard | Status counts | 2 | low |"], "one figure alone is used for both ends"
+    assert "Not filled in: BB-01 Simple form" in out
+    found = json.loads(run(knowledge, "rates-from", xlsx, "--json"))
+    assert found["platform"] == PLATFORM and found["empty"] == [{"block": "BB-01", "name": "Simple form"}]
+    assert [(x["block"], x["low"], x["high"]) for x in found["rates"]] == [("BB-07", 1.5, 3), ("BB-08", 2, 2)]
+    assert load_workbook(xlsx)[RATES]["D5"].value == 1.5, "reading changes nothing"
+    assert "| BB-01 | Simple form | Fields | TBD | – |" in (knowledge / "building-blocks.md").read_text(encoding="utf-8")
+
+
+def test_rates_from_reports_what_it_cannot_read(tmp_path, kb, run):
+    path = full_project(tmp_path / "project", estimate_of(block("L01", "BB-07")))
+    run(kb, "render", tmp_path / "project")
+    xlsx = path.with_suffix(".xlsx")
+    fill_rates(xlsx, {"BB-07": ("1,5", 2)})
+    found = json.loads(run(kb, "rates-from", xlsx, "--json"))
+    assert found["rates"] == [] and found["empty"] == []
+    assert found["problems"] == ["BB-07: '1,5' is not a number (write decimals with a point)"]
+    fill_rates(xlsx, {"BB-07": (4, 2)})
+    found = json.loads(run(kb, "rates-from", xlsx, "--json"))
+    assert found["problems"] == ["BB-07: the low figure 4 is above the high figure 2"]
+
+
+def test_rates_from_needs_the_sheet(tmp_path, kb, run):
+    path = full_project(tmp_path / "project", estimate_of(CALIBRATED))
+    run(kb, "render", tmp_path / "project")
+    with pytest.raises(SystemExit, match="has no 'Rates needed' sheet"):
+        run(kb, "rates-from", path.with_suffix(".xlsx"))
 
 
 def test_estimate_that_fails_the_checks_is_not_rendered(tmp_path, kb, run, capsys):
@@ -1098,8 +1253,8 @@ def test_render_of_the_sample_with_no_rates_is_a_count_only(tmp_path, run):
     assert "  Nothing is priced: none of the 13 lines has a rate or share. This is a count only." in out
     assert "Total" not in out and "Building blocks:" not in out
     wb = load_workbook(project / "estimates" / SAMPLE_ESTIMATE.with_suffix(".xlsx").name)
-    lines = [r for r in sheet_rows(wb["Estimate"])[1:] if r[0]]
-    assert len(lines) == 13 and all(r[9] == "" and r[10] == "" for r in lines), "no mandays against any line"
+    lines = [r for r in sheet_rows(wb["Lines"])[1:] if r[0]]
+    assert len(lines) == 13 and all(r[4] == "—" and r[5] == "—" for r in lines), "no mandays against any line"
 
 
 # ====================================================================== estimates stay internal
@@ -1194,7 +1349,7 @@ def test_the_note_on_reading_the_total_is_printed_and_in_the_excel_file(tmp_path
     path.write_text(json.dumps(est), encoding="utf-8")
     out = run(kb, "render", tmp_path / "project")
     assert "With 6 lines that each have a range" in out
-    sheet = load_workbook(path.with_suffix(".xlsx"))["Uncertainty"]
-    notes = [row[2] for row in sheet.iter_rows(values_only=True) if row[0] == "How to read the total"]
-    assert len(notes) == 1 and notes[0].startswith("The total adds the low end of every line")
+    sheet = load_workbook(path.with_suffix(".xlsx"))["Overview"]
+    assert sheet["A4"].value == "Likely effort: 12 – 24 mandays (confidence: low)"
+    assert sheet["A5"].value.startswith("The total adds the low end of every line"), "right under the headline"
 

@@ -312,6 +312,7 @@ python -I tools/estimate.py blocks    "Joget DX"
 python -I tools/estimate.py inventory projects/<slug>
 python -I tools/estimate.py render    projects/<slug> ["<estimate.json>"]
 python -I tools/estimate.py weeks     projects/<slug> --team 2 ["<estimate.json>"]
+python -I tools/estimate.py rates-from "<estimate.xlsx>" [--json]
 ```
 `blocks` lists the building blocks and rates for a platform, the shares set for other work, and how many
 delivered projects they rest on. `inventory` lists what a project has to count from: documents, screens,
@@ -321,7 +322,10 @@ it; lines with no rate or share are listed as not priced and left out of the tot
 block has no rate, it gives no total at all: it says the build is not priced and shows what is priced so
 far, and lists the scope-of-work lines that cannot be compared yet. `weeks` turns the
 estimate into working weeks for a team size (`--days` sets the working days a week, default 5), for
-drafting the project timeline. `render` and `weeks` take the newest file in `estimates/` (by the date its name starts with, then by
+drafting the project timeline. `rates-from` reads the figures a lead developer filled in on the
+*Rates needed* sheet of an estimate's Excel file and prints them as rows for `knowledge/building-blocks.md`
+(low confidence), with the blocks left empty and any figure it could not read; `--json` prints the same
+for Claude. It changes nothing: the rates are saved only after you agree. `render` and `weeks` take the newest file in `estimates/` (by the date its name starts with, then by
 version number, so "spec v0.10" is newer than "spec v0.9") unless you name
 one. Add `--knowledge <folder>` before the command to use another knowledge base.
 See [Estimates](estimates.md).

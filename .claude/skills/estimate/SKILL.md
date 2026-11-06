@@ -52,10 +52,17 @@ lead developer for its mandays and say the knowledge base may lack that block.
 
 ## 3. Rates, other work and what could move it
 
-- A block with a rate in the knowledge base uses it automatically. For blocks with **no rate**, show the
-  lead developer one table (block, count, what drives it) and ask for a low and a high figure per unit; put
-  it on the line as a provisional `rate` with who set it. Use calibration notes and actuals to inform the
-  conversation, never to make up the answer. A block they give no rate for stays not priced.
+- A block with a rate in the knowledge base uses it automatically. For blocks with **no rate**, ask the
+  lead developer for a low and a high figure per unit: in chat (one table: block, count, what drives it),
+  or by sending them the Excel file, whose *Rates needed* sheet is that table with cells to fill in. Put a
+  figure given for this estimate only on the line as a provisional `rate` with who set it. Use calibration
+  notes and actuals to inform the conversation, never to make up the answer. A block they give no rate for
+  stays not priced.
+- **The Rates needed sheet comes back** ("save these rates", or a returned estimate Excel file in the inbox):
+  run `estimate.py rates-from "<file>"` (`--json` for the figures as data). Show the user the rows it gives,
+  the blocks left empty and anything it could not read. Only after they agree, put each rate in the
+  `Rate (MD)` cell of its row in `knowledge/building-blocks.md` for that platform, low confidence (it is
+  shared; no client content). Then render the estimate again and lead with the new figures.
 - **Other work** (project management, testing, UAT support, training, documentation, warranty): one line
   per item that applies, from the "Other work" table; an item with nothing set is listed, not priced. If
   there is no such table, say so and state in the assumptions which work the estimate leaves out.
@@ -102,7 +109,8 @@ Tell the lead developer, short and plain:
   understated, and ask for the missing rates before anyone quotes a figure (and which SOW lines cannot be
   compared yet). Nothing priced: it is a count; say what would turn it into mandays.
 - **Where and for whom:** the Excel file in the project's estimates folder, **internal**, never sent to the
-  client. `Project overview.html` lists it as Internal (never a figure of it).
+  client. It opens on the *Overview* sheet (the answer on one page); while rates are missing, its *Rates
+  needed* sheet is the form to send the lead developer. `Project overview.html` lists it as Internal (never a figure of it).
 - **Offer, and do only what the user agrees to:** save the lead developer's rates and shares in
   `knowledge/building-blocks.md` as low-confidence figures (an "Other work" table from
   `templates/knowledge/building-blocks.md` if missing, or a new block): it is shared, so only after they

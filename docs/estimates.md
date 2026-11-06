@@ -45,16 +45,26 @@ asked twice. It changes the knowledge base only after you agree.
 
 `projects/<name>/estimates/<date> estimate from <basis>.json` is the source; the Excel file with the same
 name is the copy to read. To change an estimate, tell Blueprint what to change (a count, a rate, an
-assumption) rather than editing the Excel file: it is rewritten every time.
+assumption) rather than editing the Excel file: it is rewritten every time. Every sheet is marked
+*Internal: not for the client*, prints landscape and one page wide, and repeats its headings on each page.
 
-| Sheet | Contents |
+| Sheet | What it is for |
 |---|---|
-| Summary | The total range (or, while the build is not priced, that it is not and what is priced so far), the lines not priced, the range if the open questions are answered the costly way, the cost at your day rate, the confidence level and its reasons, how well the rates are calibrated, and the lines that make the range widest |
-| Estimate | Every line: building block, count, rate range and where the rate comes from, mandays low and high, the scope-of-work line it belongs to, and what was counted |
-| Against SOW | Each scope-of-work line beside the estimate's range for it, largest differences first; work that is not in the scope of work; scope-of-work lines the estimate does not cover |
-| Uncertainty | Open questions (sized in mandays when the lead developer has sized them), lines not priced, open register items that can move the estimate, the gap patterns the project is exposed to, building blocks with no rate yet |
+| Overview | The answer on one page. One headline sentence: the likely effort as a range with its confidence, or, while the build is not priced, that it is not and how many building-block lines need a rate. Then the figures, each with what it means on the same row (building blocks, other work, priced so far or the total, open questions, the cost at your day rate once the build is priced, the scope of work sold), the confidence with its reasons, and what to do next |
+| Lines | Every line, grouped as in the estimate: the item, what was counted ("4 × E-mail notification, per event"), the rate per unit, mandays low and high (a dash when not priced), its status as a coloured word (*Priced*, *Needs a rate*, *Understated* …), the scope-of-work line and notes. Subtotals for building blocks and other work, then the total or what is priced so far |
+| Rates needed | Only while building blocks have no rate: one row per block, what drives its effort, what this project uses it for, and two empty yellow cells for a low and a high figure per unit. A form for the lead developer |
+| Against SOW | Only with a scope of work: each line's sold mandays beside the estimate's range and the difference in words, largest first, with the total of the lines compared. Lines that cannot be compared yet are grouped at the bottom with the reason |
+| Risks and questions | The questions that would narrow the range, the ones covering the most mandays first; the open questions that could add work, with severity, effort impact and size; the gap patterns that apply |
 | Assumptions | Everything the figures depend on, including what is left out |
-| Questions | The questions that would narrow the range, the ones covering the most mandays first |
+
+### Getting the missing rates
+
+Send the Excel file (or just its *Rates needed* sheet) to the lead developer. They fill in a low and a high
+figure per unit for each building block (one figure is fine), and send it back. Drop it in the project or
+the inbox and tell Blueprint "save these rates": it reads them with `estimate.py rates-from`, shows you what
+it would write in `knowledge/building-blocks.md`, saves them only after you agree, and renders the estimate
+again, now priced. The rates are shared by everyone using the workspace, so the next estimate on that
+platform is priced too.
 
 ## How the figures are worked out
 
