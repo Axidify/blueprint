@@ -56,6 +56,14 @@ The start menu checks your setup, shows each project and what to do next, and as
 You never need to remember a command: say what you want in your own words, for example
 "review this requirements document" or "build a mock-up from the brief".
 
+New to Blueprint? Say **"give me a tour"**: ten minutes on a made-up sample project, with nothing touching
+your projects or client documents.
+
+Each project folder has a **`Project overview.html`**: every document in the order of the process, who it
+is for (the client, or internal) and the next step. Once a project has a mock-up, **Open the mock-up** sits
+beside it. If you set up Blueprint before this page existed, run `setup.cmd` (`setup.sh` on a Mac) once more
+so the shortcut can find Blueprint.
+
 ## Your first project
 
 1. Put the client's brief, SOW or draft requirements in the **`inbox/`** folder.
@@ -68,14 +76,56 @@ See [Workflow](workflow.md) for the full journey from brief to sign-off.
 
 ## Presenting a mock-up
 
-Double-click **`present.cmd`**, type the project name, and the mock-up opens in your browser. During the
-session, press **Feedback** in the bottom-right corner (or F2), click anything on the screen and type the
+Double-click **`present.cmd`** and your browser opens a page listing every mock-up: click the project (or
+one of its earlier versions). In Claude, "open the mock-up for …" does the same. During the
+session, use the dark bar in the bottom-right corner. It is yours, not part of the client's system, and it
+never appears in the document's pictures: it shows which mock-up version is open, **View as** switches the
+role you are signed in as, and **Feedback** (or F2) starts commenting. The arrows at its left fold it away
+to one small button when it is in the way, and while the Feedback panel is open the screen makes room for
+it. Click anything on the screen and type the
 client's comment. Comments are saved to the project automatically. Afterwards, say
 **"apply the feedback"**.
 
 Buttons such as Approve or Reject move the sample record to its next status when the mock-up was built
-that way, so you can act the process out: approve as the manager, switch role, and see it approved. To
-start the walk-through again, reload the page (F5): the sample data goes back to how it was.
+that way, so you can act the process out: approve as the manager, switch role, and see it approved.
+**Submit** on a new form adds the request to the lists: fill in what you like (the rest is filled with
+sample values), submit, switch to the manager and it is waiting there.
+
+The walk-through is kept: reloading the page or pressing **Update ready** does not lose it, and when people
+in the room have the mock-up open on their own laptops, what one of them submits or approves shows on every
+screen within a few seconds (each keeps their own role). To start again, press **Reset sample data** on the
+bar: it asks first, then puts the sample data back for everyone.
+
+Parts of a screen that would be custom development on the project's platform carry a small grey tag
+**Custom development** (hover it to see what it takes), so nobody takes them for standard. Switch
+**Custom work** off on the bar to hide the tags; they never appear in the document's pictures.
+
+A few things behave as the real system would, so they can be shown and not just described:
+
+- **Required fields.** The main button of a form, or a dialog's confirm button, first marks the required
+  fields left empty. You are not made to fill in a whole form: press the same button again and it goes on.
+- **Files and signatures.** Clicking a file field attaches a sample file; clicking a signature field signs
+  as the person you are signed in as.
+- **Dialogs** close with Cancel, Esc or a click outside them, and the browser's Back button goes to the
+  screen before.
+- **Lists** keep their filters while you open a record and come back.
+
+When the spec changes while a mock-up is open, the bar offers **Update ready**. Nothing reloads by itself:
+press it when you are ready and you stay on the same screen.
+
+**A live session.** To have comments acted on while the client is still in the room, say "run a live
+session for …" in Claude. Comments collect as they are typed and nothing interrupts you. When you are ready,
+say "go": Claude shows you one list of proposed changes, with any that add behaviour or go beyond the scope
+of work marked, and makes the ones you approve. Press **Update ready** to show them. The bar says **Live**
+while the session is open, each comment shows what became of it, and "undo that" puts things back.
+
+**Just you looking?** In the Claude app, say "open the mock-up" and it can open in the app's own browser
+pane beside the chat; then simply say what should change.
+
+Pins mark the comments on a screen. Click a pin to see its comment; Ctrl + Enter saves the comment you are
+typing, and Esc backs out of it. A comment can be changed with **Edit** or taken back with **Delete** in the
+Feedback panel, by whoever wrote it (on the same laptop) or by you on the laptop running the mock-up, until
+Claude starts on it; after that, add a new comment instead.
 
 Keep the window that `present.cmd` opened until the session is over: it is what saves the comments. If it
 is closed, the mock-up says in red that a comment was not saved and keeps it in the browser; start

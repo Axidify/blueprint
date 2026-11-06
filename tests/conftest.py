@@ -9,6 +9,7 @@ import pytest
 import support  # also puts tools/ on the import path
 import generate_requirements
 import project as project_tool
+import status
 import workspace
 
 
@@ -30,6 +31,7 @@ def sandbox(tmp_path_factory):
     monkeypatch = pytest.MonkeyPatch()
     real_finish_in_word = generate_requirements.finish_in_word
     folder = point_at(monkeypatch, tmp_path_factory.mktemp("workspace"))
+    monkeypatch.setattr(status, "ROOT", folder)  # the overview page, rebuilt by the tools, reads a project's stage through it
     monkeypatch.setattr(generate_requirements, "finish_in_word", lambda docx_path: (False, generate_requirements.NO_WORD))
     yield types.SimpleNamespace(workspace=folder, finish_in_word=real_finish_in_word)
     monkeypatch.undo()

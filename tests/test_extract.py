@@ -28,7 +28,9 @@ def test_text_is_extracted_with_its_open_items_counted(notes, tmp_path, monkeypa
     meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
     assert meta["counts"]["open_item_markers"] == 2 and [o["line"] for o in meta["open_items"]] == [2, 3]
     assert (out / "images").is_dir()
-    assert "Open-item markers (TBC/TBD/if applicable): 2" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "Open-item markers (TBC, TBD, \"to be confirmed\", \"if applicable\", \"pending\", \"subject to confirmation/change\"): 2" in out
+    assert out.startswith("Extracted notes.txt into ") and "Metadata:" not in out and "{" not in out
 
 
 def test_a_folder_with_other_files_is_refused_and_left_alone(notes, tmp_path, monkeypatch):
@@ -254,3 +256,66 @@ def test_a_document_with_typed_numbers_is_left_as_it_is(example, tmp_path, monke
     assert "## 1 Users and access" in text and "## 1 1 Users and access" not in text
     assert json.loads((out / "meta.json").read_text(encoding="utf-8"))["counts"]["numbered_headings"] == 0
 
+
+
+# ---------------------------------------------------------------------- open items, PDFs
+@pytest.mark.parametrize("line, found", [
+    ("Approval levels: TBC", True),
+    ("The report layout is to be confirmed by Finance.", True),
+    ("Fees are subject to confirmation by the client.", True),
+    ("Rates are subject to change.", True),
+    ("The interface specification is still pending.", True),
+    ("Retention period (pending)", True),
+    ("Pending confirmation from the infrastructure team", True),
+    ("Archiving rules: pending client decision", True),
+    ("| Pending Approval | The manager has not decided yet |", False),
+    ("Status changes from Pending to Approved.", False),
+    ("Subject to the terms of the agreement.", False),
+    ("Changes made by the user are saved.", False),
+])
+def test_open_item_markers_catch_pending_and_subject_to_without_statuses(line, found):
+    assert bool(extract.OPEN_ITEM.search(line)) == found
+
+
+@pytest.mark.parametrize("seen, meant", [
+    ("MicrosoftÂ® Word for Microsoft 365", "Microsoft® Word for Microsoft 365"),
+    ("3-Heights(TM) PDF Producer 4-Heightsâ„¢", "3-Heights(TM) PDF Producer 4-Heights™"),
+    ("Café – plain", "Café – plain"),
+    ("Plain ASCII", "Plain ASCII"),
+])
+def test_pdf_metadata_written_as_utf8_is_read_back_right(seen, meant):
+    assert extract.repaired(seen) == meant
+
+
+def test_a_pdf_is_extracted_with_its_tables_of_figures_rendered(tmp_path, monkeypatch, capsys):
+    """Only pages with pictures, formulas or little text used to be rendered: a manday table came out as one
+    figure per line, with nothing to read its columns from."""
+    import pymupdf
+
+    doc = pymupdf.open()
+    prose = ("The system lets employees apply for leave and lets their managers approve or reject each "
+             "application, with a reason for every rejection. ") * 6
+    figures = "Manday estimate\n" + "\n".join(f"Module {n}\n{n * 1.5:g}\n{n}\n{n * 2}" for n in range(1, 9))
+    for content in (prose, figures):
+        page = doc.new_page()
+        page.insert_textbox(pymupdf.Rect(40, 40, 560, 800), content, fontsize=10)
+    doc.set_metadata({"producer": "MicrosoftÂ® Word", "title": "Leave Request System requirements"})
+    path = tmp_path / "requirements.pdf"
+    doc.save(path)
+    out = tmp_path / "extract"
+    run(monkeypatch, path, out)
+    meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
+    assert meta["metadata"]["producer"] == "Microsoft® Word"
+    assert meta["counts"]["pages"] == 2 and meta["counts"]["pages_rendered"] == 1
+    assert sorted(p.name for p in (out / "pages").iterdir()) == ["p002.png"], "the page of figures, not the prose"
+    said = capsys.readouterr().out
+    assert "2 pages, 1 of them also saved as pictures in pages/" in said
+    assert 'Document properties: title "Leave Request System requirements", producer "Microsoft® Word"' in said
+
+
+def test_a_document_blueprint_generated_says_its_to_be_confirmed_labels_are_its_own(example, tmp_path, monkeypatch, capsys):
+    run(monkeypatch, example.path, tmp_path / "extract")
+    meta = json.loads((tmp_path / "extract" / "meta.json").read_text(encoding="utf-8"))
+    assert meta["generated_by_blueprint"] is True
+    said = capsys.readouterr().out
+    assert "are this generated document's own \"To be confirmed\" labels: each marks something the spec does not say yet" in said

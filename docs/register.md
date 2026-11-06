@@ -15,19 +15,50 @@ client. The skills keep both up to date.
 
 Open items come first, then by severity. The Status column has a drop-down.
 
+Where each item was found shows in two columns: **Document** (the document and its version, such as
+"SRS v1.0", said once) and **Where** (each place on a line of its own, in plain words: "Section 2.1",
+"Figure 5 · page 30", "comment FB-001"). They are written from the item's `source`, which
+`register.json` keeps as it was noted; a note in a style Blueprint does not recognise is shown as it is.
+
 Internal fixes never appear on the client sheet.
 
 ## Statuses
 
 `open` → `asked` → `answered` → `resolved` (or `wont-fix`). When the client answers, type the answer into
 **Client response** in `register.xlsx`, or change the **Status** from its drop-down, save the file and
-tell Blueprint ("the client answered R-012 and R-019"). Blueprint reads the Excel file before it writes
+tell Blueprint ("the client answered R-012 and R-019"). When the client sends the file back with their answers typed in, drop
+it into the inbox (or say "the client answered" and name the file): Blueprint files it in the project's
+`docs/` and reads the answers from that copy (`register.py render --from`), by the same rules. Blueprint reads the Excel file before it writes
 it again, so what you typed goes into the register and is not lost; an answer moves an open question to
 `answered`. Close the file in Excel first, or Blueprint cannot write it. If you and Blueprint both changed
 the same item, it stops and shows the two values so you can say which is right. Resolved client items
 drop out of the Open Issues section at the next generation. Those with an answer move to **Decisions
 made** in the same chapter, with the answer and `resolved_in`, so the document the client signs records
 what was agreed. Write the answer as you want the client to read it.
+
+## Adding and updating items
+
+Blueprint never edits `register.json` by hand. It writes new items to a JSON file (one item, or a list)
+and adds them with `python -I tools/register.py add projects/<slug> --file <items.json>`, or passes them
+on standard input. The tool gives each item the next free ID (an ID in the file is ignored, so IDs are
+never reused or doubled), fills `raised` with today and `status` with `open` where they are missing, and
+checks every item with the same rules as `validate`. One bad item stops the whole batch and nothing is
+written. A file is safer than JSON typed on the command line, where Windows quoting breaks it.
+
+Before writing, `add` compares each new item's question and finding with every item already in the
+register, and with the items before it in the same batch, and names the likely duplicates (`R-047 may be
+a duplicate of R-010 (similarity 0.72, open)`). The comparison counts shared words, so it catches the
+same question asked in other words, not the same idea put entirely differently: it is a hint, and
+Blueprint reads each pair. With `--check` it only checks and reports, and writes nothing, which is how a
+large batch (a document review) is checked before it is added. To check one candidate finding first:
+`python -I tools/register.py similar projects/<slug> "<question or finding>"`.
+
+To answer or close items: `python -I tools/register.py update projects/<slug> R-012 --set status=resolved
+--set answer="..." --set resolved_in="Workshop 2"`. Several IDs can be given at once (`R-012 R-019
+--set status=asked`). Unknown fields and values that are not allowed are refused and nothing changes; an
+empty value (`--set owner=`) removes an optional field. An answer on an open or asked item moves it to
+`answered`, as in Excel, unless the status is set too. Both commands write `register.json` only; render
+the Excel file afterwards.
 
 ## Severity
 
@@ -44,8 +75,8 @@ what was agreed. Write the answer as you want the client to read it.
 | `audience` | `client` (the BA asks the client) or `internal` (your team fixes it) |
 | `severity` | `high`, `medium`, `low` |
 | `category` | A gap pattern ID such as `GP-02`, or a short label such as `consistency`, `hygiene`, `scope`, `generator` |
-| `stage` | `sow`, `workshop-1`, `mockup`, `workshop-2`, `requirements-draft`, `requirements-final`, `development`, `uat` |
-| `source` | Where it was found: section, requirement ID, page or figure |
+| `stage` | `sow`, `workshop-1`, `mockup`, `workshop-2`, `requirements-draft`, `requirements-final` (found in a document the client already signed: a possible change request), `development`, `uat` |
+| `source` | Where it was found: the document and version, then each place (section, requirement ID, page or figure) separated by `;`, e.g. `SRS v1.0 §2.1 (p12); Figure 5 (p30)` |
 | `finding` | What is wrong or missing, stated as fact |
 | `question` | For client items: the question in plain business language |
 | `recommendation` | Optional: your suggested answer or fix |

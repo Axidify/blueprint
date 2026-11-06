@@ -39,6 +39,8 @@ Never write a company or client name into the app's files. Company details come 
   render it with `tools/register.py`. `register.xlsx` is the rendered copy for the BA.
 - `spec/app.yaml` – the project spec (roles, statuses, screens, fields, sample data, requirements). It
   drives both the mock-up and the generated requirements document. Format: `docs/spec-format.md`.
+  `spec/mockup.js` and `spec/mockup.css` – the project's own mock-up code, for what the spec cannot
+  describe (written in live sessions); its behaviour is also written into the spec's requirements.
 - `mockup/` – the built mock-up and screenshots. `feedback/feedback.json` – comments from sessions.
 - `output/` – generated requirements document `.docx`/`.pdf` and a spec snapshot per version; `issued.json` records which
   versions went to the client. Issued versions are locked: change the spec version instead.
@@ -48,6 +50,11 @@ Never write a company or client name into the app's files. Company details come 
 - `mockup/versions/v<version>/` – every mock-up version is kept and can be shown again.
 - `workshops/` – dated workshop agendas (`.json` source) and the two documents rendered from each: the
   agenda for the client and the facilitator notes, which are internal.
+- `uat/` – dated UAT scripts (`.json` source), the testers' workbook `.xlsx` and the client's `.docx`.
+- `changes/` – the change request log (`crs.json`), its internal Excel file and the client's CR notes.
+- `Project overview.html` – every document in process order, who it is for and the next step; rebuilt by
+  the tools whenever they change the project. `Open the mock-up.cmd`/`.command` starts the mock-up from the
+  shared folder.
 - `projects/_archive/<slug>/` – delivered projects, out of the active list (`tools/project.py`).
 
 File new documents with dated names through `tools/project.py file`.
@@ -56,6 +63,8 @@ File new documents with dated names through `tools/project.py file`.
 
 - `gap-patterns.md` – recurring misses and the workshop questions that prevent them.
 - `building-blocks.md` – estimating units and calibrated mandays per platform.
+- `platforms/<product>.md` – what each product of a tech stack does as standard, by configuration, by custom
+  work or not at all, each row checked against the product's own documentation online.
 - `requirements-standard.md` – what a requirements document must contain and the quality rules it must meet.
 - `projects-log.md` and `actuals/<slug>.md` – estimate against actual for every delivered project.
 
@@ -65,22 +74,36 @@ after the user agrees; describe gaps in general terms, without client content.
 ## Skills
 
 - `start` – menu and status for anyone unsure where to begin.
+- `tour` – a guided ten-minute first run on a copy of the made-up sample: review, mock-up, a live change,
+  the requirements document.
 - `new-project` – create a project and file its first documents.
 - `process-inbox` – sort dropped files into projects and run the right next step.
 - `review-requirements` – review a requirements document; findings go into the register.
 - `build-mockup` – brief, notes or an existing requirements document → spec → clickable mock-up.
 - `apply-feedback` – mock-up comments, BA notes or transcripts → spec changes, register items, new version.
+- `client-answers` – the client's answers (a returned register, an e-mail, call notes) → each matched to its
+  register item and recorded, then a spec change, a decision, a follow-up question or a possible CR.
 - `generate-requirements` – spec + screenshots → requirements document in the company's format, then reviewed with `review-requirements`.
 - `document-format` – change the requirements document look and structure, or learn it from a sample; preview before regenerating.
+- `present` – open a mock-up or the page that lists them all; or run a live session, where comments typed
+  in the mock-up reach Claude as they are saved and the changes the presenter approves are made on the spot.
+- `platform-fit` – the project's tech stack → each product looked up in its own documentation online → which
+  features are standard, configuration, custom work or not supported, in the spec and the register.
 - `prep-workshop` – open questions, gaps in the spec and gap patterns → a workshop agenda for the client and
   facilitator notes for the BA, ordered to fit the time.
 - `estimate` – brief, scope of work or spec → manday ranges in building blocks, with assumptions, confidence,
   a line-by-line comparison with the SOW and the questions that narrow the range. Rates and shares come
   from the knowledge base or the lead developer, never invented; the timeline is drafted from the estimate.
+- `uat-scripts` – the signed spec → UAT scenarios (main process as each role, status rules and what is not
+  allowed, field checks, access, notifications, integrations), every requirement covered; a workbook for the
+  client's testers and a Word document.
+- `change-request` – a client request during development or UAT → In scope, Ambiguous (a register question)
+  or New, quoted against the signed version; a new CR sized in building blocks for the team and a note for
+  the client.
 - `close-project` – log actuals and CRs after delivery; feeds gap patterns and building-block rates.
 - `release` – for maintainers: publish a new version of the app (changelog, `VERSION`, tag).
 
-Planned: `price-cr`, a Figma connection.
+Planned: a Figma connection.
 
 ## Tools
 
@@ -88,11 +111,15 @@ Run Python scripts with `python -I tools/<script>.py` (on macOS and Linux: `.ven
 tools/<script>.py`, the environment `setup.sh` makes; wherever these instructions and the skills write
 `python`, use that, and `./setup.sh` and `./present.sh` for `setup.cmd` and `present.cmd`): `doctor.py` (machine check), `status.py`
 (projects and next steps), `new_project.py`, `extract.py` (documents to text and images), `register.py`
-(register validation and Excel), `mockup.py` (build, serve, screenshot, feedback), `generate_requirements.py`,
-`document_format.py` (show, learn, preview the document format), `project.py` (issue, file, archive, check),
+(register validation and Excel), `mockup.py` (build, serve, screenshot, feedback, live session), `generate_requirements.py`,
+`document_format.py` (show, learn, preview the document format), `project.py` (issue, file, archive, find earlier work, match an inbox file to its project, hold a file in the inbox, check),
 `estimate.py` (rates, project inventory, estimate checks and Excel, weeks for the timeline),
 `workshop.py` (what a workshop has to settle, agenda checks and the two workshop documents),
-`check_docs.py`.
+`platform_fit.py` (a spec against what its platform gives, and the platform sheets),
+`overview.py` (each project's overview page and mock-up shortcut), `review_doc.py` (a review as a Word file),
+`uat.py` (UAT draft from the spec, checks, workbook and document, results of a filled-in workbook),
+`change_request.py` (scope check against the signed version, CR log, sizing, client CR note),
+`tour.py` (the tour's scratch copy), `check_docs.py`.
 
 ## Documentation and changelog
 

@@ -1181,6 +1181,24 @@ def test_a_rule_not_yet_given_is_shown_and_warned_about(tmp_path):
     assert "statuses: rules still to be confirmed for Pending Approval" in result.log
 
 
+def test_automatic_moves_a_filtered_drop_down_and_a_related_list_are_described(tmp_path):
+    """`auto` in the status rules, `options_from` with a filter and a list on a detail screen (where_record)."""
+    spec = support.load_spec(support.EXAMPLE)
+    spec["statuses"][2].update(next=["cancelled", "rejected"], auto=["rejected"])
+    form = next(s for s in spec["screens"] if s["id"] == "new-application")
+    next(f for f in form["sections"][0]["fields"] if f["id"] == "leave_type").update(
+        options_from={"list": "leave_types", "field": "name", "where": {"requires_attachment": "No"}}, source="")
+    spec["screens"].append({"id": "leave-type", "type": "detail", "title": "Leave Type", "data": "leave_types", "record": "Annual Leave",
+                            "sections": [{"title": "Leave type", "fields": [{"id": "name", "label": "Name"}]}],
+                            "list": {"data": "applications", "title": "Applications of this type", "where_record": {"leave_type": "name"},
+                                     "columns": [{"field": "id", "label": "Ref No"}, {"field": "status", "label": "Status"}]}})
+    result = support.generate(support.make_project(tmp_path / "auto", spec=spec))
+    assert rows(status_tables(result.doc)[1][1])[3][-1] == "Cancelled, Rejected (automatic)"
+    text = all_text(result.doc)
+    assert "From Leave types where Requires attachment is No" in text
+    assert "Applications of this type" in text and "The applications whose leave type is this leave type's name." in text
+
+
 def test_a_spec_without_status_rules_gets_a_note_not_a_warning(wide):
     """Projects written before status rules existed still generate cleanly; the note says what is missing."""
     assert len(status_tables(wide.doc)[1]) == 1, "no rules table"
@@ -1449,7 +1467,7 @@ def test_the_pdf_gets_its_pictures_back_at_full_size(tmp_path):
     doc.save(str(pdf))
     doc.close()
 
-    assert generate_requirements.sharpen_pdf_pictures(pdf, originals) == 2
+    assert generate_requirements.sharpen_pdf_pictures(pdf, originals) == (2, "")
     doc = pymupdf.open(str(pdf))
     widths = [sorted(img[2] for img in page.get_images(full=True)) for page in doc]
     doc.close()
@@ -1470,9 +1488,11 @@ def test_pictures_that_cannot_be_matched_are_left_alone(tmp_path):
     doc.save(str(pdf))
     doc.close()
     before = pdf.read_bytes()
-    assert generate_requirements.sharpen_pdf_pictures(pdf, [big, big]) == 0, "two figures expected, one in the PDF"
-    assert generate_requirements.sharpen_pdf_pictures(pdf, [other]) == 0, "a picture of another shape would be the wrong one"
-    assert generate_requirements.sharpen_pdf_pictures(pdf, [small]) == 0, "nothing to gain from a picture that is no larger"
+    count, why = generate_requirements.sharpen_pdf_pictures(pdf, [big, big])
+    assert count == 0, "two figures expected, one in the PDF"
+    assert why == "the PDF has 1 wide pictures for 2 figures: the pictures could not be matched to the figures, so the PDF keeps Word's reduced pictures"
+    assert generate_requirements.sharpen_pdf_pictures(pdf, [other]) == (0, "1 picture did not match the shape of its figure, so the PDF keeps Word's reduced version"),         "a picture of another shape would be the wrong one"
+    assert generate_requirements.sharpen_pdf_pictures(pdf, [small]) == (0, "1 picture was already as sharp as the original"),         "nothing to gain from a picture that is no larger"
     assert pdf.read_bytes() == before
 
 
@@ -1507,3 +1527,214 @@ def test_a_company_wording_file_without_the_newer_entries_still_works(temp_works
     result = support.generate(support.make_project(tmp_path / "old-wording"))
     assert support.paragraphs(chapter(result.doc, TITLES["scope"]))[0].startswith("What this version of Leave Request System covers")
 
+
+
+def test_identical_figures_share_one_picture_and_are_both_sharpened(tmp_path):
+    """Word stores two identical screenshots once, so the PDF had one picture fewer than the figures and
+    none of them was put back at full size ("0 of 34"). The shared picture is now replaced once."""
+    pymupdf = pytest.importorskip("pymupdf")
+    from PIL import Image
+
+    big, small = tmp_path / "empty.png", tmp_path / "empty-small.png"
+    Image.new("RGB", (2000, 1000), "#336699").save(big)
+    Image.new("RGB", (400, 200), "#336699").save(small)
+    twin = tmp_path / "empty-again.png"
+    twin.write_bytes(big.read_bytes())  # a second screenshot, byte for byte the same
+    pdf = tmp_path / "doc.pdf"
+    doc = pymupdf.open()
+    for _ in range(2):
+        doc.new_page().insert_image(pymupdf.Rect(90, 100, 498, 304), filename=str(small))
+    doc.save(str(pdf))
+    doc.close()
+    doc = pymupdf.open(str(pdf))
+    assert len({img[0] for page in doc for img in page.get_images(full=True)}) == 1, "one picture, used on both pages"
+    doc.close()
+
+    assert generate_requirements.sharpen_pdf_pictures(pdf, [big, twin]) == (2, "")
+    doc = pymupdf.open(str(pdf))
+    assert [[img[2] for img in page.get_images(full=True)] for page in doc] == [[2000], [2000]]
+    doc.close()
+
+
+def test_one_picture_for_figures_that_differ_is_left_alone_with_the_reason(tmp_path):
+    pymupdf = pytest.importorskip("pymupdf")
+    from PIL import Image
+
+    small, one, two = tmp_path / "small.png", tmp_path / "one.png", tmp_path / "two.png"
+    Image.new("RGB", (400, 200), "#336699").save(small)
+    Image.new("RGB", (2000, 1000), "#336699").save(one)
+    Image.new("RGB", (2000, 1000), "#993333").save(two)
+    pdf = tmp_path / "doc.pdf"
+    doc = pymupdf.open()
+    for _ in range(2):
+        doc.new_page().insert_image(pymupdf.Rect(90, 100, 498, 304), filename=str(small))
+    doc.save(str(pdf))
+    doc.close()
+    before = pdf.read_bytes()
+    assert generate_requirements.sharpen_pdf_pictures(pdf, [one, two]) == (
+        0, "the pictures could not be matched to the figures, so the PDF keeps Word's reduced pictures")
+    assert pdf.read_bytes() == before
+
+
+def test_the_pdf_step_says_why_pictures_were_not_sharpened(tmp_path, monkeypatch):
+    project = support.make_project(tmp_path / "unsharp")
+
+    def word(docx_path):
+        docx_path.with_suffix(".pdf").write_bytes(b"")
+        return True, ""
+
+    monkeypatch.setattr(generate_requirements, "finish_in_word", word)
+    monkeypatch.setattr(generate_requirements, "add_signature_fields", lambda pdf, signers: len(signers))
+    monkeypatch.setattr(generate_requirements, "sharpen_pdf_pictures", lambda pdf, pictures: (0, "the PDF has 7 wide pictures for 8 figures: "
+                        "the pictures could not be matched to the figures, so the PDF keeps Word's reduced pictures"))
+    log = support.generate(project).log
+    assert "and 0 of 8 pictures at full size" in log
+    assert "Pictures: the PDF has 7 wide pictures for 8 figures: the pictures could not be matched to the figures" in log
+
+
+# ====================================================================== team-only text
+def test_team_only_text_anywhere_in_the_document_is_warned_about(tmp_path):
+    """Found in a generated document: a status meaning that began "Proposed:" and named a register item and a
+    requirement id of the client's original document, a screen description about the mock-up, and mock-up
+    comment ids (from the register's resolved_in) under Decisions made. Each is named with where it is."""
+    spec = support.load_spec(support.WIDE)
+    spec["statuses"][0]["meaning"] = "Proposed: saved but not sent. Not in the SRS; to be confirmed (R-010, FR-REM-002)."
+    spec["screens"][1]["description"] = "Lists bookings; the mock-up shows the table only."
+    spec["overview"] = ["The proposed system replaces a paper form.", "See {ref:req:FR-BKG-001} and FR-BKG-001.2."]
+    spec["glossary"][0]["meaning"] = "As FR-BKG-001.9 says."
+    project = support.make_project(tmp_path / "team-only", support.WIDE, spec=spec)
+    register = json.loads((project / "register.json").read_text(encoding="utf-8"))
+    register["items"][2]["resolved_in"] = "FB-001"
+    register["items"][2]["answer"] = "Seven years, see R-004."
+    (project / "register.json").write_text(json.dumps(register), encoding="utf-8")
+    log = support.generate(project).log
+    assert "status Draft: says 'proposed' ('Proposed: saved but not sent" in log
+    assert "status Draft: names R-010, which is not among the decisions needed in this document" in log
+    assert "status Draft: names FR-REM-002, which is not a requirement in this spec" in log
+    assert "screen my-bookings: mentions the mock-up ('Lists bookings; the mock-up shows the table only.')" in log
+    assert "glossary Restricted equipment: names FR-BKG-001.9, which is not a requirement in this spec" in log
+    assert "register R-003, resolved_in: names the mock-up comment FB-001" in log
+    assert "register R-003, answer: names R-004, an internal register item the client never sees" in log
+    assert "overview" not in log, "'the proposed system', a {ref:req:...} and an id of this spec are fine"
+    assert "7 WARNING(S)" in log
+
+
+def test_the_timeline_may_speak_of_the_mock_up(wide):
+    assert any("Mock-up" in it.get("name", "") for st in wide.spec["timeline"]["stages"] for it in st["items"])
+    assert "WARNING" not in wide.log
+
+
+def test_team_notes_on_their_own():
+    known = {"FR-A-001", "FR-A-001.1"}
+    assert generate_requirements.team_notes("Shown in the mockup.", known) == [
+        "mentions the mock-up ('Shown in the mockup.'); the document should describe the real system"]
+    assert generate_requirements.team_notes("Kept for R-001, see FR-A-001.1 and {ref:req:FR-B-002}.", known, listed={"R-001"}) == []
+    assert generate_requirements.team_notes("Mock-up review, proposed date", known, system=False) == []
+    assert generate_requirements.team_notes("Agreed in FB-012", known, system=False) == [
+        "names the mock-up comment FB-012, which the client cannot look up; say in words what was agreed"]
+
+
+# ====================================================================== where a decision applies
+def test_a_decision_points_at_this_documents_requirements_never_at_another_documents(tmp_path):
+    """The register's source names where an item was found, often in the client's original document: its
+    requirement ids were printed in Decisions needed, pointing at the wrong requirement or at none."""
+    project = support.make_project(tmp_path / "sources", support.WIDE)
+    register = json.loads((project / "register.json").read_text(encoding="utf-8"))
+    register["items"][0]["source"] = "FR-HQ-001.7"  # R-001 is linked to FR-BKG-001.2 with `tbc` in the spec
+    register["items"][1]["source"] = "FR-LR-001.16, FR-BKG-002.2, FR-BKG-002.8"
+    (project / "register.json").write_text(json.dumps(register), encoding="utf-8")
+    result = support.generate(project)
+    table = rows(support.table_starting(chapter(result.doc, TITLES["decisions"]), "ID", nth=0))
+    assert table[1][1].endswith("overlapping dates?  FR-BKG-001.2"), "where the spec links it with tbc"
+    assert table[2][1].endswith("approved?  FR-BKG-002.2"), "only the ids this spec has"
+    text = all_text(result.doc)
+    assert "FR-HQ" not in text and "FR-LR" not in text and "FR-BKG-002.8" not in text
+    assert "Note: the register's source for R-002 (FR-LR-001.16, FR-BKG-002.8) names requirement ids that are not in this spec" in result.log
+    assert "WARNING" not in result.log
+
+
+# ====================================================================== parts still missing
+def test_parts_the_standard_asks_for_are_listed_before_issuing(example, wide):
+    assert "2 PART(S) MISSING - add these to the spec before issuing:" in example.log
+    assert "- timeline: none in the spec" in example.log
+    assert "- sign-off: nobody is named, so the forms are blank" in example.log
+    assert "1 PART(S) MISSING" in wide.log and "- scope: nothing says what is in scope, out of scope and assumed" in wide.log
+
+
+def test_empty_scope_lists_no_nfrs_and_unnamed_signatories_are_listed(tmp_path):
+    spec = support.load_spec(support.WIDE)
+    spec["scope"] = {"in_scope": ["Bookings."], "out_of_scope": [], "assumptions": []}
+    spec.pop("nfr")
+    spec["signoff"][1]["name"] = "TBC"
+    spec["signoff"][2]["name"] = ""
+    log = support.generate(support.make_project(tmp_path / "gaps", support.WIDE, spec=spec)).log
+    for said in ("scope: nothing listed as out of scope", "scope: nothing listed as assumptions",
+                 "non-functional requirements: none recorded", "sign-off: no name for Business owner", "sign-off: no name for IT"):
+        assert "- " + said in log, said
+    assert "5 PART(S) MISSING" in log
+
+
+def test_nothing_is_listed_as_missing_when_the_spec_has_every_part(tmp_path):
+    spec = support.changed(support.load_spec(support.EXAMPLE), timeline=SHORT_TIMELINE,
+                           signoff=[{"name": "Aminah Yusof", "organisation": "Sample Client Sdn. Bhd.", "signing_for": "Business owner"}])
+    log = support.generate(support.make_project(tmp_path / "complete", spec=spec)).log
+    assert "MISSING" not in log and "WARNING" not in log
+
+
+# ====================================================================== captions of extra screenshots
+def test_extra_screenshots_of_a_screen_get_captions_that_tell_them_apart(tmp_path):
+    spec = support.load_spec(support.EXAMPLE)
+    spec["screenshots"] += [{"screen": "approvals", "role": "hr", "name": "approvals-hr"},
+                            {"screen": "application-details", "record": "LV-2026-013", "name": "details-approved"}]
+    result = support.generate(support.make_project(tmp_path / "extra-shots", spec=spec))
+    caps = support.captions(chapter(result.doc, TITLES["screens"]))
+    assert len(caps) == len({c.split(" · ", 1)[1] for c in caps}), caps
+    assert any(c.endswith(", as seen by HR Admin") for c in caps), caps
+    assert any(c.endswith(", showing record LV-2026-013") for c in caps), caps
+    assert "two figures have the caption" not in result.log
+
+
+def test_two_figures_with_the_same_caption_are_warned_about(tmp_path):
+    spec = support.load_spec(support.EXAMPLE)
+    spec["screenshots"] += [{"screen": "approvals", "name": "approvals-again"}]
+    log = support.generate(support.make_project(tmp_path / "same-caption", spec=spec)).log
+    assert "screen approvals: two figures have the caption 'Pending Approvals'" in log and "name approvals-again" in log
+
+
+# ====================================================================== plain messages
+def test_a_project_without_a_spec_gets_a_plain_sentence(tmp_path):
+    (tmp_path / "new-project" / "docs").mkdir(parents=True)
+    with pytest.raises(SystemExit) as stop:
+        generate_requirements.build(tmp_path / "new-project")
+    assert str(stop.value).startswith("No spec at ") and "Build a mock-up first" in str(stop.value)
+    with pytest.raises(SystemExit) as stop:
+        generate_requirements.build(tmp_path / "no-such-project")
+    assert str(stop.value).startswith("No project at ")
+
+
+def test_the_usage_prints_its_dash_on_an_old_windows_code_page():
+    """Run as a person runs it, on a console with an old code page: the "–" in the usage came out as "\\u2013"."""
+    r = subprocess.run([sys.executable, "-I", str(support.ROOT / "tools" / "generate_requirements.py")],
+                       capture_output=True, timeout=60)  # a pipe: cp1252 on Windows
+    assert r.returncode == 1
+    assert "<System> – <document title>" in r.stderr.decode("utf-8")
+
+
+# ====================================================================== what is signed
+def test_the_signoff_says_what_is_signed_and_what_is_not(example, wide):
+    """It read "v0.2 / Document, 2026-11-06" and "23 (section 7) / Open decisions excluded": a client could not
+    tell what was being signed and what was left out."""
+    cards = rows(tables(chapter(example.doc, TITLES["signoff"]))[0])[0]
+    assert cards == ["Version 0.1\nWhat you are signing \u00b7 6\u00a0November\u00a02026", "No open decisions\nNothing is left out of it",
+                     "By hand or digitally\nHow to sign (see below)"]
+    cards = rows(tables(chapter(wide.doc, TITLES["signoff"]))[0])[0]
+    decisions = next(h for h in support.headings(wide.doc, 1) if h.endswith(TITLES["decisions"])).split()[0]
+    assert cards[1] == f"2 decisions still open\nNot part of this sign-off: see section {decisions}"
+
+
+def test_dates_read_the_same_way_everywhere(example):
+    assert generate_requirements.readable_date("2026-11-06") == "6 November 2026"
+    assert generate_requirements.readable_date("November 2026") == "November 2026"
+    assert generate_requirements.readable_date(None) == ""
+    front = support.chapters(example.doc)[0][1]
+    assert ["Date", "6 November 2026"] in rows(tables(front)[1])

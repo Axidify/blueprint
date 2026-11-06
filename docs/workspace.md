@@ -65,14 +65,38 @@ working on which project, especially during a session.
 | Folder or file | What it holds | Managed by |
 |---|---|---|
 | `docs/` | Documents from the client and your team. New ones are named with the date and what they are, e.g. `2026-11-12 client comments on v1.3.docx` | `process-inbox`, `new-project`, `tools/project.py file` |
-| `reviews/<document and version>/` | One folder per reviewed document version: extraction and review report | `review-requirements` |
-| `spec/` | The project spec, client logo, process-flow image | `build-mockup`, `apply-feedback` |
+| `Project overview.html` | The project at a glance, for anyone browsing the folder: the next step, the open questions and fixes, and every document in the order of the process, each a link with a line saying what it is and who it is for (see below) | `tools/overview.py`, rebuilt by the tools |
+| `Open the mock-up.cmd`, `Open the mock-up.command` | Double-click to open the project's mock-up so comments typed in it are saved (`.cmd` on Windows, `.command` on a Mac). Only in a project with a mock-up | `tools/overview.py` |
+| `reviews/<document and version>/` | One folder per reviewed document version: extraction, the review report (`review.md`) and the same as a Word file for the BA (`<document> review.docx`, internal) | `review-requirements`, `tools/review_doc.py` |
+| `spec/` | The project spec, client logo, process-flow image, and the project's own mock-up code (`mockup.js`, `mockup.css`) | `build-mockup`, `apply-feedback` |
 | `mockup/` | The current mock-up and screenshots; `mockup/versions/v0.1/`, `v0.2/` … keep every version | `tools/mockup.py` |
 | `feedback/` | Comments from mock-up sessions | the mock-up's Feedback mode |
 | `output/` | Every generated requirements document (Word and PDF) and the spec that produced it; `issued.json` lists the versions sent to the client | `generate-requirements`, `tools/project.py issue` |
 | `estimates/` | Manday estimates, one dated Excel file (and its `.json` source) per estimate. Internal: never sent to the client | `estimate` |
 | `workshops/` | One dated agenda (`.json` source) per client session, and the two Word documents made from it: the agenda for the client and the facilitator notes, which are internal | `prep-workshop` |
 | `register.json`, `register.xlsx` | The project register | the skills |
+
+### The overview page and the mock-up shortcut
+
+A project folder holds a few hundred files once the mock-up has screenshots and versions. `Project
+overview.html` is the way in: double-click it, from the shared folder too, to see what is open, what to do
+next (in the words to say to Claude) and every document as a row that opens it. Each row says who the file
+is for: **From the client**, **For the client**, **Client sheet only** (the register: send only its "For
+client" sheet), **Show the client**, **Can be shared**, or **Internal** with a lock (estimates, facilitator
+notes, reviews and change notes: never send these). The page never shows mandays, rates or cost. Blueprint
+rebuilds it whenever one of its tools writes into the project; to rebuild it by hand,
+`python -I tools/overview.py build projects/<slug>` (or `build --all`).
+
+**Open the mock-up** starts the mock-up the way `present.cmd` does, so the comments people type in it are
+saved to the project (opening `mockup/index.html` directly only shows it). The shortcut is the same in
+every project and works on any machine with Blueprint set up, wherever the app folder is: `setup.cmd`
+(`setup.sh` on a Mac) records where the app is in `.blueprint/app-path` in the person's home folder, and
+the shortcut reads it. On a machine without Blueprint it says what to do. On a Mac, a `.command` file that
+came through a synced folder may need to be allowed once (right-click, Open); if it still does not start,
+ask Claude to "present the mock-up". On Linux, use `./present.sh <slug>`.
+
+Other files at the top of the project folder are Blueprint's working files (`spec/`, `feedback/`,
+`register.json`, the `.json` beside each document): leave them as they are.
 
 Versions sent to the client are **locked**: their files are read-only and the generator refuses to
 overwrite them, so every change after issuing becomes a new version. Delivered projects move to

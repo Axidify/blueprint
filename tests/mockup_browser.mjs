@@ -1,7 +1,12 @@
 // Drives a served mock-up in the installed Microsoft Edge and prints what it saw as one line of JSON.
-// Usage: node tests/mockup_browser.mjs <mock-up URL, e.g. http://127.0.0.1:8765/>
+// Usage: node tests/mockup_browser.mjs <mock-up URL, e.g. http://127.0.0.1:8765/> [record ids for the colour checks]
+// MOCKUP_RED_URL: the same mock-up built with a red brand colour and larger text, served so that it follows
+// its spec; MOCKUP_RED_SPEC: that spec, which this script changes to see the open page follow.
+// MOCKUP_FILE: the built index.html, opened without a server (the walk-through kept by the browser tab alone).
 // Called by tests/test_mockup.py, which makes the project, serves it and checks the result.
 // Exit code 77: Edge could not be started (the test is then skipped).
+import fs from "node:fs";
+import { pathToFileURL } from "node:url";
 import { chromium } from "playwright-core";
 
 const base = process.argv[2];
@@ -22,9 +27,15 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 const out = { errors: [] };
 page.on("pageerror", (e) => out.errors.push(String(e)));
 
+// Every check starts from the sample data: the walk-through the server keeps for the room is reset first.
 const open = async (hash) => {
+  await page.request.post(base + "api/state", { data: { reset: true } });
+  await keep(hash);
+};
+// A reload that keeps the walk-through, as a presenter's F5 or Update ready does.
+const keep = async (hash, url) => {
   await page.goto("about:blank");
-  await page.goto(base + hash);
+  await page.goto((url || base) + hash);
   await page.waitForSelector("#app > *");
 };
 const state = () => page.evaluate(() => ({
@@ -41,6 +52,17 @@ for (const id of process.argv.slice(3)) {
   out.chips[id] = await page.locator(".status-bar .chip").getAttribute("class");
 }
 
+// ---- the project's own code runs after every screen is drawn
+const own = () => page.evaluate(() => {
+  const marks = document.querySelectorAll("#own-code");
+  return { text: marks[0] ? marks[0].textContent : null, color: marks[0] ? getComputedStyle(marks[0]).color : null, count: marks.length };
+});
+await open("#/approvals?role=manager");
+out.ownCode = { first: await own(), api: await page.evaluate(() => Object.keys(window.Mockup).sort()) };
+await page.evaluate(() => { location.hash = "#/review-application?role=manager"; });
+await page.waitForSelector('[data-el="button:Approve"]');
+out.ownCode.next = await own();
+
 // ---- dialogs: what the confirm button does
 await open("#/review-application?role=manager");
 await page.click('[data-el="button:Approve"]');
@@ -55,6 +77,7 @@ await page.waitForTimeout(150);
 out.defaultOk = await state();
 
 await open("#/review-application?role=manager&dialog=reject-dialog");
+await page.fill('.modal [data-el="field:reason"] textarea', "Not this month");   // its required field
 await page.click('.modal [data-el="button:Confirm Reject"]');     // goes to another screen
 await page.waitForTimeout(150);
 out.confirmWithTarget = await state();
@@ -106,6 +129,310 @@ await page.click('[data-el="menu:New Application"]');
 await page.waitForSelector('[data-el="field:reason"] textarea');
 out.typedAfterLeaving = await page.inputValue('[data-el="field:reason"] textarea');
 
+// ---- dialogs: the cursor, Esc, a click outside, and the browser's Back button
+out.dialogs = {};
+await open("#/approvals?role=manager");
+await page.click('#content tbody tr[data-row] [data-el="action:Review"]');
+await page.waitForSelector('[data-el="button:Approve"]');
+await page.click('[data-el="button:Approve"]');
+await page.waitForSelector(".modal");
+out.dialogs.focus = await page.evaluate(() => `${document.activeElement.tagName} in ${document.activeElement.closest(".modal") ? "dialog" : "page"}`);
+out.dialogs.role = await page.getAttribute(".modal", "role");
+await page.keyboard.press("Escape");
+await page.waitForTimeout(150);
+out.dialogs.afterEscape = await state();
+await page.click('[data-el="button:Approve"]');
+await page.waitForSelector(".modal");
+await page.mouse.click(15, 400);                                  // on the dimmed page, outside the dialog
+await page.waitForTimeout(150);
+out.dialogs.afterClickOutside = await state();
+await page.click('[data-el="button:Approve"]');
+await page.waitForSelector(".modal");
+await page.click(".modal-foot [data-close]:not([data-el])");      // Cancel
+await page.waitForTimeout(150);
+await page.goBack();
+await page.waitForTimeout(200);
+out.dialogs.afterBack = await state();
+
+// ---- required fields: pointed out on the first press, and the second press goes on
+const required = () => page.evaluate(() => ({
+  screen: document.getElementById("app").dataset.screen,
+  dialog: !!document.querySelector(".modal"),
+  page: new URLSearchParams(location.hash.split("?")[1] || "").get("page"),
+  marked: [...document.querySelectorAll(".f-row.invalid")].map((row) => row.dataset.el),
+  notes: [...document.querySelectorAll(".f-error")].map((n) => n.textContent),
+  toastKinds: [...document.querySelectorAll(".toast")].map((t) => t.className),
+  toasts: [...document.querySelectorAll(".toast")].map((t) => t.textContent),
+  status: (document.querySelector(".status-bar .chip") || {}).textContent,
+}));
+out.required = {};
+await open("#/review-application?role=manager&dialog=reject-dialog");
+await page.click('.modal [data-el="button:Confirm Reject"]');     // the reason is required and empty
+await page.waitForTimeout(150);
+out.required.dialogFirst = await required();
+await page.fill('.modal [data-el="field:reason"] textarea', "x");
+out.required.dialogTyped = await required();                      // the mark goes as soon as it is filled
+await page.fill('.modal [data-el="field:reason"] textarea', "");
+await page.click('.modal [data-el="button:Confirm Reject"]');     // pressed again, still empty: goes on
+await page.waitForSelector('[data-el="title:Pending Approvals"]');
+out.required.dialogSecond = await required();
+
+await open("#/new-application?role=employee&page=2");             // the last step, with Submit, has no required field
+await page.click('[data-el="button:Submit"]');
+await page.waitForTimeout(200);
+out.required.formFirst = { ...(await required()), flagged: await page.evaluate(() => [...document.querySelectorAll(".tab.missing")].map((t) => t.textContent)) };
+await page.click('[data-el="tab:Step 1"]');                       // the step that has them shows which
+await page.waitForTimeout(150);
+out.required.formFirstStep1 = await required();
+await page.click('[data-el="tab:More"]');
+await page.waitForTimeout(150);
+await page.click('[data-el="button:Save as Draft"]');             // not the main button: no check
+await page.waitForSelector('[data-el="title:My Leave Applications"]');
+out.required.draft = await required();
+await open("#/new-application?role=employee&page=2");
+await page.click('[data-el="button:Submit"]');
+await page.click('[data-el="button:Submit"]');
+await page.waitForSelector('[data-el="title:My Leave Applications"]');
+out.required.formSecond = await required();
+
+// ---- a form in steps: Submit on the last step only, Next and Previous on the others
+const stepButtons = () => page.evaluate(() => [...document.querySelectorAll("#content .form-buttons .btn")].map((b) => b.textContent));
+out.steps = {};
+await open("#/new-application?role=employee");
+out.steps.first = await stepButtons();
+await page.fill('[data-el="field:reason"] textarea', "Kept across steps");
+await page.click('[data-el="button:Next"]');
+await page.waitForTimeout(150);
+out.steps.last = { buttons: await stepButtons(), page: await page.evaluate(() => new URLSearchParams(location.hash.split("?")[1]).get("page")),
+  toasts: (await state()).toasts };
+await page.click('[data-el="button:Previous"]');
+await page.waitForTimeout(150);
+out.steps.back = { buttons: await stepButtons(), reason: await page.inputValue('[data-el="field:reason"] textarea') };
+await open("#/review-application?role=manager&dialog=reject-dialog");   // a dialog opened from a screen still works
+out.steps.dialog = await page.evaluate(() => [...document.querySelectorAll(".modal-foot .btn")].map((b) => b.textContent));
+
+// ---- a drop-down filtered by options_from {list, field, where}: it follows the walk-through
+const carChoices = () => page.evaluate(() => [...document.querySelectorAll('[data-el="field:car"] option')].map((o) => o.textContent).slice(1));
+await open("#/new-application?role=employee");
+out.carChoices = { before: await carChoices() };
+
+// ---- a detail screen shows a related list: the records that name the one shown
+const related = () => page.evaluate(() => ({
+  heading: (document.querySelector(".related-list h3") || {}).textContent,
+  rows: [...document.querySelectorAll(".related-list tbody tr[data-row]")].map((tr) => tr.innerText.replace(/\s+/g, " ").trim()),
+  empty: (document.querySelector(".related-list td.empty") || {}).textContent,
+}));
+out.related = {};
+await open("#/car?role=manager&record=WXY%201234");
+out.related.named = await related();
+await open("#/car?role=manager&record=VBN%205678");
+out.related.none = await related();
+
+// ---- a step still to come with no word of its own reads Waiting
+await open("#/application-details?role=hr&record=LV-T-1");
+out.waitingWord = await page.evaluate(() => [...document.querySelectorAll('[data-el="section:Approval Progress"] tbody tr')].map((tr) => tr.lastElementChild.textContent));
+
+// ---- a file field and a signature field answer a click, and keep what they hold across a step change
+out.fakes = {};
+await open("#/new-application?role=employee");
+const fileText = () => page.evaluate(() => document.querySelector('[data-el="field:attachment"] .file-drop').innerText.replace(/\s+/g, " ").trim());
+out.fakes.fileBefore = await fileText();
+await page.click('[data-el="field:attachment"] .file-drop');
+out.fakes.fileAttached = await fileText();
+await page.click('[data-el="tab:More"]');
+await page.waitForSelector('[data-el="field:sign"] .signature');   // the step is drawn a moment after the click
+const signature = () => page.evaluate(() => document.querySelector('[data-el="field:sign"] .signature').innerText.trim());
+out.fakes.signBefore = await signature();
+await page.click('[data-el="field:sign"] .signature');
+out.fakes.signed = await signature();
+await page.click('[data-el="tab:Step 1"]');
+await page.waitForSelector('[data-el="field:attachment"] .file-drop');
+out.fakes.fileAfterStepChange = await fileText();
+await page.click('[data-el="field:attachment"] [data-fake-clear]');
+out.fakes.fileRemoved = await fileText();
+await page.click('[data-el="tab:More"]');
+await page.waitForSelector('[data-el="field:sign"] .signature');
+out.fakes.signAfterStepChange = await signature();
+await page.click('[data-el="field:sign"] .signature');
+out.fakes.signCleared = await signature();
+
+// ---- filters are still there after a visit to a record
+await open("#/my-applications?role=employee");
+await page.selectOption('[data-el="filter:Status"] select', "Approved");
+await page.click('[data-el="button:Search"]');
+const filteredRows = (await listState()).rows;
+await page.click('#content tbody tr[data-row]:not([hidden]) [data-el="action:View"]');
+await page.waitForSelector('[data-el="button:Back"]');
+await page.click('[data-el="button:Back"]');
+await page.waitForSelector('[data-el="title:My Leave Applications"]');
+out.filtersKept = { before: filteredRows, after: (await listState()).rows, value: await page.inputValue('[data-el="filter:Status"] select') };
+
+// ---- two messages at once sit above one another
+await open("#/leave-types?role=hr");
+await page.click('#content tbody tr[data-row] [data-el="action:Edit"]');
+await page.click('#content tbody tr[data-row] [data-el="action:Edit"]');
+await page.waitForTimeout(100);
+out.twoToasts = await page.evaluate(() => [...document.querySelectorAll(".toast")].map((t) => { const r = t.getBoundingClientRect(); return [Math.round(r.top), Math.round(r.bottom)]; }));
+
+// ---- the presenter's tools: together, apart from the system's own top bar, and clear of the page's buttons
+out.tools = {};
+await open("#/login");
+out.tools.onLogin = await page.evaluate(() => ({ badge: document.querySelector(".fb-bar .fb-badge").textContent, viewAsShown: !document.querySelector(".fb-viewas").hidden }));
+await open("#/application-details?role=employee");
+out.tools.onScreen = await page.evaluate(() => ({
+  viewAsShown: !document.querySelector(".fb-viewas").hidden, picked: document.querySelector(".fb-bar .role-switch").value,
+  inTopBar: document.querySelectorAll(".topbar .role-switch, .topbar select").length,
+}));
+await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+await page.waitForTimeout(100);
+out.tools.covered = await page.evaluate(() => {
+  const bar = document.querySelector(".fb-bar").getBoundingClientRect();
+  return [...document.querySelectorAll("#content .btn")].filter((b) => { const r = b.getBoundingClientRect(); return !(r.right < bar.left || r.left > bar.right || r.bottom < bar.top || r.top > bar.bottom); }).map((b) => b.textContent);
+});
+await page.selectOption(".fb-bar .role-switch", "manager");
+await page.waitForSelector('[data-el="title:Pending Approvals"]');
+out.tools.afterSwitch = await state();
+// View as a role that starts on the screen already shown: the address does not change, and the screen is drawn again all the same.
+await page.click('[data-el="menu:Pending Approvals"]');           // the address no longer names the role
+await page.waitForTimeout(150);
+await page.selectOption(".fb-bar .role-switch", "deputy");
+await page.waitForTimeout(200);
+out.tools.sameScreenSwitch = await page.evaluate(() => ({
+  user: document.querySelector(".topbar .user").textContent, hash: location.hash, picked: document.querySelector(".fb-bar .role-switch").value,
+}));
+await page.click("#fb-toggle");                                   // in feedback mode the tools themselves are not commented on
+await page.click(".fb-badge");
+out.tools.commentBoxOnTools = (await page.locator(".fb-dialog").count()) > 0;
+await page.click("#fb-toggle");
+
+// ---- the presenter's chrome: dark charcoal with the Cobalt accent, never orange; it folds away, and the open
+// Feedback panel makes room beside the page so the last column is not under it
+const colour = (selector) => page.evaluate((sel) => { const s = getComputedStyle(document.querySelector(sel)); return { bg: s.backgroundColor, color: s.color }; }, selector);
+out.chrome = {};
+await open("#/approvals?role=manager");
+out.chrome.bar = await colour(".fb-bar");
+out.chrome.toggle = await colour("#fb-toggle");
+out.chrome.css = await page.evaluate(() => [...document.styleSheets].flatMap((sh) => { try { return [...sh.cssRules].map((r) => r.cssText); } catch (e) { return []; } })
+  .filter((t) => /fb-|cw-tag/.test(t)).join("\n"));
+await page.click("#fb-toggle");
+await page.waitForTimeout(150);
+out.chrome.panel = await colour("#fb-panel");
+out.chrome.room = await page.evaluate(() => {
+  const panel = document.getElementById("fb-panel").getBoundingClientRect();
+  const cells = [...document.querySelectorAll("#content thead th, #content tbody tr[data-row] td")].map((c) => c.getBoundingClientRect().right);
+  return { panelLeft: Math.round(panel.left), lastColumnRight: Math.round(Math.max(...cells)), overflow: document.documentElement.scrollWidth > window.innerWidth + 1 };
+});
+await page.click("#fb-fold");                                     // folded away: the panel goes with it
+await page.waitForTimeout(100);
+const barState = () => page.evaluate(() => ({ width: Math.round(document.querySelector(".fb-bar").getBoundingClientRect().width), panel: !document.getElementById("fb-panel").hidden
+  && getComputedStyle(document.getElementById("fb-panel")).display !== "none", feedback: document.body.classList.contains("fb-active") }));
+out.chrome.folded = await barState();
+await keep("#/approvals?role=manager");                           // remembered
+out.chrome.foldedAfterReload = await barState();
+await page.click("#fb-fold");
+out.chrome.unfolded = await barState();
+
+// ---- a red brand colour: the danger button is an outline, so Reject cannot be taken for Approve
+const look = () => page.evaluate(() => ({
+  outline: document.documentElement.classList.contains("danger-outline"),
+  reject: getComputedStyle(document.querySelector('[data-el="button:Reject"]')).backgroundColor,
+  approve: getComputedStyle(document.querySelector('[data-el="button:Approve"]')).backgroundColor,
+}));
+await open("#/review-application?role=manager");
+out.danger = { blue: await look() };
+const sizes = () => page.evaluate(() => Object.fromEntries(Object.entries({ menu: ".menu-item", table: ".datalist td", title: ".page-head h2", tools: ".fb-bar" })
+  .map(([name, selector]) => [name, getComputedStyle(document.querySelector(selector)).fontSize])));
+await open("#/approvals?role=manager");
+out.textSize = { normal: await sizes() };
+if (process.env.MOCKUP_RED_URL) {
+  const red = process.env.MOCKUP_RED_URL;
+  await page.goto("about:blank");
+  await page.goto(red + "#/review-application?role=manager");
+  await page.waitForSelector("#app > *");
+  out.danger.red = await look();
+
+  // ---- larger text, and an open mock-up that follows its spec
+  await page.goto("about:blank");
+  await page.goto(red + "#/approvals?role=manager");
+  await page.waitForSelector('[data-el="title:Pending Approvals"]');
+  out.textSize.large = await sizes();
+  out.live = { before: await page.textContent(".page-head h2") };
+  await page.waitForTimeout(3000);                                // the page has asked once which build it shows
+  await page.click("#fb-toggle");                                 // the presenter is collecting comments
+  await page.fill('[data-el="search:Employee"] input', "half-typed");
+  const spec = fs.readFileSync(process.env.MOCKUP_RED_SPEC, "utf8");
+  const renamed = spec.split("Pending Approvals").join("Waiting For Me");
+  fs.writeFileSync(process.env.MOCKUP_RED_SPEC, renamed);
+  try { await page.waitForSelector("#fb-update:not([hidden])", { timeout: 20000 }); } catch (e) { /* reported below as no button */ }
+  await page.waitForTimeout(3000);                                // long enough for a reload, had there been one
+  out.live.offered = {
+    button: await page.isVisible("#fb-update"), title: await page.textContent(".page-head h2"),
+    typed: await page.inputValue('[data-el="search:Employee"] input'),
+  };
+  await page.click("#fb-update");
+  try {
+    await page.waitForSelector('[data-el="title:Waiting For Me"]', { timeout: 20000 });
+    await page.waitForSelector(".toast");
+  } catch (e) { /* reported below as the old title */ }
+  out.live.after = await page.textContent(".page-head h2");
+  out.live.hash = await page.evaluate(() => location.hash);
+  out.live.toasts = await page.evaluate(() => [...document.querySelectorAll(".toast")].map((t) => t.textContent));
+  out.live.feedbackOn = await page.evaluate(() => document.body.classList.contains("fb-active"));   // off after an update
+  // A change with a mistake in it: the last good mock-up stays, and the room is told nothing.
+  await page.waitForTimeout(3500);                                // the "updated" message has gone
+  fs.writeFileSync(process.env.MOCKUP_RED_SPEC, renamed.replace("to: review-application", "to: nowhere"));
+  await page.waitForTimeout(7000);                                // several times the page asks which build it shows
+  out.live.broken = { title: await page.textContent(".page-head h2"), messages: await page.locator(".toast").count(), button: await page.isVisible("#fb-update") };
+  fs.writeFileSync(process.env.MOCKUP_RED_SPEC, renamed);
+
+  // ---- a live session: the bar says Live while the assistant is listening, and a comment shows what became of it
+  const folder = process.env.MOCKUP_RED_FEEDBACK;
+  const seen = async () => page.evaluate(() => ({ live: !document.querySelector(".fb-live").hidden, states: [...document.querySelectorAll("#fb-panel .fb-st")].map((s) => s.textContent),
+    edits: document.querySelectorAll("#fb-panel [data-fb-edit]").length, locked: [...document.querySelectorAll("#fb-panel .fb-locked")].map((s) => s.textContent) }));
+  const setStatus = (status, extra) => {
+    const items = JSON.parse(fs.readFileSync(`${folder}/feedback.json`, "utf8"));
+    Object.assign(items[items.length - 1], status ? { status } : {}, extra || {});
+    fs.writeFileSync(`${folder}/feedback.json`, JSON.stringify(items));
+  };
+  const beat = () => fs.writeFileSync(`${folder}/live.json`, JSON.stringify({ started: "now", heartbeat: Date.now() / 1000, changes: [] }));
+  await page.goto("about:blank");
+  await page.goto(red + "#/leave-types?role=hr");
+  await page.waitForSelector("#app > *");
+  await page.click("#fb-toggle");
+  await page.click('#app [data-el^="column:"]');
+  await page.fill("#fb-text", "a comment in a live session");
+  await page.click("#fb-save");
+  await page.waitForTimeout(3200);
+  out.session = { before: await seen() };
+  beat();
+  await page.waitForTimeout(3200);
+  out.session.listening = await seen();
+  for (const [name, status, extra] of [["working", "working"], ["applied", "applied", { note: "renamed" }], ["scope", "scope", { note: "possible CR", register_id: "R-031" }]]) {
+    setStatus(status, extra);
+    beat();
+    await page.waitForTimeout(5600);                              // comments are asked for every five seconds
+    out.session[name] = await seen();
+  }
+  out.session.sent = await page.evaluate(() => fetch("api/feedback").then((r) => r.text()));
+}
+
+// ---- a list that shows each role its own rows, and a row action for some roles only
+out.rowsByRole = {};
+for (const role of ["manager", "hr"]) {
+  await open(`#/all-applications?role=${role}`);
+  out.rowsByRole[role] = await listState();
+}
+
+// ---- what is waiting for whoever is signed in, read from each record's progress
+out.waiting = {};
+for (const role of ["manager", "hr"]) {
+  await open(`#/my-tasks?role=${role}`);
+  out.waiting[role] = await page.evaluate(() => ({   // a list with no rows at all has only its "empty" line
+    rows: [...document.querySelectorAll("#content tbody tr[data-row]")].map((tr) => tr.innerText.replace(/\s+/g, " ").trim()),
+    empty: (document.querySelector("#content tbody tr:not([data-row]):not([hidden]) td.empty") || {}).textContent,
+  }));
+}
+
 // ---- status moves: a button with set_status moves the record, and everything drawn from it follows
 const detailState = () => page.evaluate(() => ({
   screen: document.getElementById("app").dataset.screen,
@@ -121,6 +448,8 @@ const visit = async (hash) => {  // moves within the page, without a reload
 };
 const ids = (state) => state.rows.map((row) => row.split(" ")[0]);
 
+await open("#/cars?role=manager");                                // the car Daniel Tan's application names
+out.linkedBefore = (await listState()).rows;
 await open("#/review-application?role=manager");                  // Daniel Tan's application, pending
 out.moveBefore = await detailState();
 await page.click('[data-el="button:Approve"]');
@@ -132,10 +461,20 @@ out.moveApproved = await detailState();
 await page.click('[data-el="menu:Pending Approvals"]');
 await page.waitForSelector('[data-el="title:Pending Approvals"]');
 out.moveApprovalsAfter = ids(await listState());
+await visit("#/cars?role=manager");                               // its car moved along (also_move)
+out.linkedAfter = (await listState()).rows;
+await visit("#/new-application?role=employee");                   // a car on loan leaves the filtered drop-down
+out.carChoices = { ...(out.carChoices || {}), afterLoan: await carChoices() };
 await visit("#/application-details?role=hr&record=LV-2026-011");  // another screen shows the same record
 out.moveSeenElsewhere = await detailState();
-await open("#/review-application?role=manager");                  // a reload puts the sample data back
-out.moveAfterReload = await detailState();
+await keep("#/review-application?role=manager");                  // a reload keeps the walk-through
+out.moveAfterReload = { ...(await detailState()), reset: await page.isVisible("#fb-reset") };
+await page.click("#fb-reset");                                    // Reset sample data asks first
+await page.waitForSelector(".fb-ask");
+out.resetAsk = await page.evaluate(() => ({ title: document.querySelector(".fb-ask .fb-title").textContent, action: document.querySelector('.fb-ask [data-ask="yes"]').textContent }));
+await page.click('.fb-ask [data-ask="yes"]');
+await page.waitForTimeout(200);
+out.moveAfterReset = { ...(await detailState()), reset: await page.isVisible("#fb-reset") };
 
 await open("#/review-application?role=manager&dialog=reject-dialog");
 await page.fill('.modal [data-el="field:reason"] textarea', "Year-end freeze");
@@ -162,6 +501,177 @@ await open("#/approvals?role=manager");                           // an action o
 await page.click('#content tbody tr[data-row] [data-el="action:Approve now"]');
 await page.waitForTimeout(150);
 out.moveRowAction = { ...(await listState()), toasts: (await state()).toasts };
+
+// A button that goes by the step the record is waiting at, and the task list that follows.
+await open("#/my-tasks?role=manager");
+await page.click('#content tbody tr[data-row] [data-el="action:View"]');
+await page.waitForSelector('[data-el="button:Sign off"]');
+await page.click('[data-el="button:Sign off"]');
+await page.waitForTimeout(150);
+out.waiting.signedOff = await detailState();
+await page.click('[data-el="menu:My Tasks"]');
+await page.waitForSelector('[data-el="title:My Tasks"]');
+out.waiting.afterSignOff = { rows: await page.evaluate(() => [...document.querySelectorAll("#content tbody tr[data-row]")].map((tr) => tr.innerText)) };
+
+// One button for several steps: where the record goes depends on the status it is in.
+out.moveByStatus = {};
+for (const [from, id] of [["On Hold", "LV-T-4"], ["Active Review", "LV-T-5"], ["Approved", "LV-2026-013"]]) {
+  await open(`#/application-details?role=hr&record=${id}`);
+  await page.click('[data-el="button:Resume"]');
+  await page.waitForTimeout(150);
+  out.moveByStatus[from] = await detailState();
+}
+
+// ---- a form on a record: the screen's own record, buttons that follow its status, a single tick box
+const formState = () => page.evaluate(() => ({
+  reason: (document.querySelector('[data-el="field:reason"] textarea') || {}).value,
+  buttons: [...document.querySelectorAll("#content .form-buttons .btn")].map((b) => b.textContent),
+  ticks: document.querySelectorAll('[data-el="field:urgent"] input[type=checkbox]').length,
+  toasts: [...document.querySelectorAll(".toast")].map((t) => t.textContent),
+}));
+out.formOnRecord = {};
+await open("#/edit-application?role=employee");
+out.formOnRecord.byDefault = await formState();
+await page.click('[data-el="field:urgent"] input[type=checkbox]');
+out.formOnRecord.ticked = await page.isChecked('[data-el="field:urgent"] input[type=checkbox]');
+await open("#/edit-application?role=employee&record=LV-2026-009");
+out.formOnRecord.rejected = await formState();
+await open("#/edit-application?role=employee");
+await page.click('[data-el="button:Withdraw"]');
+await page.waitForTimeout(150);
+out.formOnRecord.withdrawn = await formState();
+await visit("#/application-details?role=employee&record=LV-2026-014");
+out.formOnRecord.statusAfter = (await detailState()).status;
+
+// ---- a new form adds a record: it shows in the lists, counts and task lists it matches, and opens
+const rowIds = (p) => p.evaluate(() => [...document.querySelectorAll("#content tbody tr[data-row]")].filter((tr) => !tr.hidden).map((tr) => tr.innerText.trim().split(/\s+/)[0]));
+out.created = {};
+await open("#/my-applications?role=employee");
+out.created.figuresBefore = await figures();
+await visit("#/new-application?role=employee");
+await page.fill('[data-el="field:reason"] textarea', "Sister's wedding");
+await page.selectOption('[data-el="field:leave_type"] select', "Emergency Leave");
+await page.fill('[data-el="field:from"] input', "2026-12-01");
+await page.click('[data-el="button:Next"]');                      // Submit is on the last step
+await page.waitForSelector('[data-el="button:Submit"]');
+await page.click('[data-el="button:Submit"]');                    // To Date is empty: pointed out first
+await page.click('[data-el="button:Submit"]');                    // and the second press goes on
+await page.waitForSelector('[data-el="title:My Leave Applications"]');
+out.created.firstRow = (await listState()).rows[0];
+out.created.figuresAfter = await figures();
+out.created.toasts = (await state()).toasts;
+await visit("#/application-details?role=employee&record=LV-2026-015");
+out.created.detail = await detailState();
+out.created.fields = await page.evaluate(() => Object.fromEntries(["reason", "leave_type", "from", "to", "employee"].map((f) => [f, (document.querySelector(`[data-el="field:${f}"] .f-value`) || {}).textContent])));
+await visit("#/approvals?role=manager");
+out.created.approvals = await rowIds(page);
+await visit("#/my-tasks?role=manager");
+out.created.tasks = await rowIds(page);
+await keep("#/my-applications?role=employee");                    // kept through a reload
+out.created.afterReload = (await listState()).rows[0];
+
+// ---- the walk-through is shared: another browser sees the new record, acts on it, and both follow
+const otherContext = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+const other = await otherContext.newPage();
+other.on("pageerror", (e) => out.errors.push(String(e)));
+await other.goto(base + "#/approvals?role=manager");
+await other.waitForSelector('[data-el="title:Pending Approvals"]');
+out.shared = { otherSees: await rowIds(other) };
+await other.evaluate(() => { location.hash = "#/review-application?role=manager&record=LV-2026-015"; });
+await other.waitForSelector('[data-el="button:Approve"]');
+await other.click('[data-el="button:Approve"]');
+await other.click('.modal [data-el="button:Confirm Approve"]');
+await other.waitForTimeout(300);
+try {   // the first browser, still on the employee's list, follows without a reload
+  await page.waitForFunction(() => /LV-2026-015 .*Approved/.test(document.querySelector("#content tbody tr[data-row]").innerText.replace(/\s+/g, " ")), null, { timeout: 8000 });
+} catch (e) { /* reported below */ }
+out.shared.firstRowThere = (await listState()).rows[0];
+out.shared.rolesKept = { here: await page.inputValue(".fb-bar .role-switch"), there: await other.inputValue(".fb-bar .role-switch") };
+await other.click("#fb-reset");                                   // a reset is for everyone
+await other.click('.fb-ask [data-ask="yes"]');
+try {
+  await page.waitForFunction(() => !document.querySelector("#content tbody").innerText.includes("LV-2026-015"), null, { timeout: 8000 });
+} catch (e) { /* reported below */ }
+out.shared.afterReset = (await listState()).rows.map((row) => row.split(" ")[0]);
+await otherContext.close();
+
+// ---- without a server, the browser tab keeps the walk-through by itself
+if (process.env.MOCKUP_FILE) {
+  const file = pathToFileURL(process.env.MOCKUP_FILE).href;
+  await keep("#/new-application?role=employee&page=2", file);
+  await page.click('[data-el="button:Submit"]');
+  await page.click('[data-el="button:Submit"]');
+  await page.waitForSelector('[data-el="title:My Leave Applications"]');
+  out.fileOnly = { added: (await listState()).rows[0] };
+  await page.reload();
+  await page.waitForSelector('[data-el="title:My Leave Applications"]');
+  out.fileOnly.afterReload = (await listState()).rows[0];
+  await page.click("#fb-reset");
+  await page.click('.fb-ask [data-ask="yes"]');
+  await page.waitForTimeout(200);
+  out.fileOnly.afterReset = (await listState()).rows[0];
+}
+
+// ---- custom work: tagged while presenting, hidden by the switch (remembered), never in a screenshot
+const tags = () => page.evaluate(() => [...document.querySelectorAll(".cw-tag")].map((t) => ({ text: t.textContent, title: t.title })));
+out.custom = {};
+await open("#/my-applications?role=employee");
+out.custom.dashboard = await tags();
+out.custom.switchShown = await page.isVisible(".fb-custom");
+await visit("#/new-application?role=employee");
+out.custom.form = await tags();
+await page.click(".fb-custom");                                   // off
+out.custom.off = await tags();
+await keep("#/my-applications?role=employee");
+out.custom.offAfterReload = { tags: await tags(), checked: await page.isChecked("#fb-custom") };
+await page.click(".fb-custom");                                   // on again
+out.custom.onAgain = (await tags()).length;
+await keep("#/my-applications?role=employee&clean=1");
+out.custom.screenshot = (await tags()).length;
+
+// ---- feedback mode: what is under the pointer is marked inside its own box, named in plain words, and Esc backs out
+out.marking = {};
+await open("#/approvals?role=manager");
+await page.click("#fb-toggle");
+await page.hover('th[data-el="column:Employee"]');
+out.marking.hover = await page.evaluate(() => {
+  const s = getComputedStyle(document.querySelector('th[data-el="column:Employee"]'));
+  return { style: s.outlineStyle, offset: s.outlineOffset, others: document.querySelectorAll('#app [data-el]:hover:not(:has([data-el]:hover))').length };
+});
+await page.click('th[data-el="column:Employee"]');
+await page.waitForSelector(".fb-dialog");
+out.marking.box = await page.evaluate(() => ({
+  title: document.querySelector(".fb-title").textContent, focus: document.activeElement.id,
+  marked: [...document.querySelectorAll(".fb-target")].map((e) => e.dataset.el),
+}));
+await page.keyboard.press("Escape");
+out.marking.afterEscape = await page.evaluate(() => ({ box: document.querySelectorAll(".fb-dialog").length, marked: document.querySelectorAll(".fb-target").length, stillOn: document.body.classList.contains("fb-active") }));
+await page.click('[data-el="field:reason"], [data-el^="title:"]');
+await page.waitForSelector(".fb-dialog");
+out.marking.titleOfPage = await page.textContent(".fb-title");
+await page.click(".fb-dialog", { position: { x: 10, y: 10 } });   // outside the box
+out.marking.afterClickOutside = await page.locator(".fb-dialog").count();
+// Any part of the screen, not only named fields, columns and buttons.
+const titleOf = async (click) => {
+  await click();
+  await page.waitForSelector(".fb-dialog");
+  const title = await page.textContent(".fb-title");
+  await page.keyboard.press("Escape");
+  return title;
+};
+out.anywhere = {
+  sideMenu: await titleOf(() => page.click(".sidebar", { position: { x: 30, y: 500 } })),
+  header: await titleOf(() => page.click(".topbar", { position: { x: 640, y: 20 } })),
+  background: await titleOf(() => page.click("#content", { position: { x: 500, y: 600 } })),
+  cell: await titleOf(() => page.click("#content tbody tr[data-row] td:nth-child(2)")),
+};
+await page.hover(".sidebar", { position: { x: 30, y: 500 } });
+out.anywhere.hoverSideMenu = await page.evaluate(() => getComputedStyle(document.querySelector(".sidebar")).outlineStyle);
+await page.click("#fb-toggle");
+await open("#/my-applications?role=employee");
+await page.click("#fb-toggle");
+out.anywhere.figures = await titleOf(() => page.click('[data-el="stat:Pending"]'));
+await page.click("#fb-toggle");
 
 // ---- feedback: a comment the server does not take is kept, shown as not saved, and sent later
 const feedbackState = () => page.evaluate(() => ({
@@ -208,6 +718,55 @@ try {
 } catch (e) { /* reported below as no new pin */ }
 out.afterOthers = await feedbackState();
 out.numbersAfterOthers = await page.evaluate(() => [...document.querySelectorAll(".fb-pin")].map((p) => p.textContent));
+
+// ---- Ctrl + Enter saves a comment, and a pin opens the comment it stands for
+await page.click('#app [data-el^="column:"]');
+await page.fill("#fb-text", "saved with the keyboard");
+await page.keyboard.press("Control+Enter");
+await page.waitForTimeout(400);
+out.keyboardSave = { box: await page.locator(".fb-dialog").count(), panel: await page.evaluate(() => document.getElementById("fb-panel").innerText) };
+await page.click("#fb-toggle");                                   // feedback mode off: the pins stay
+await page.click(".fb-pin");
+await page.waitForTimeout(150);
+out.pinClick = await page.evaluate(() => ({ on: document.body.classList.contains("fb-active"), shown: document.querySelectorAll("#fb-panel .fb-item.flash").length }));
+out.pinPlaces = await page.evaluate(() => [...document.querySelectorAll(".fb-pin")].map((p) => Math.round(p.getBoundingClientRect().left)));
+
+// ---- a comment that waits can be edited and deleted from the Feedback panel
+out.commentEdits = {};
+await open("#/leave-types?role=hr");
+await comment("first thought");
+const mineInPanel = (text) => page.locator("#fb-panel .fb-item", { hasText: text });
+out.commentEdits.buttons = await mineInPanel("first thought").locator(".fb-act").allTextContents();
+await mineInPanel("first thought").locator("[data-fb-edit]").click();
+await page.waitForSelector(".fb-dialog");
+out.commentEdits.boxText = await page.inputValue("#fb-text");
+await page.fill("#fb-text", "second thought");
+await page.click("#fb-save");
+await page.waitForTimeout(400);
+out.commentEdits.edited = await mineInPanel("second thought").innerText();
+await mineInPanel("second thought").locator("[data-fb-remove]").click();
+await page.waitForSelector(".fb-ask");
+out.commentEdits.ask = await page.evaluate(() => ({ title: document.querySelector(".fb-ask .fb-title").textContent, action: document.querySelector('.fb-ask [data-ask="yes"]').textContent }));
+await page.click('.fb-ask [data-ask="yes"]');
+await page.waitForTimeout(400);
+out.commentEdits.after = { panel: await page.evaluate(() => document.getElementById("fb-panel").innerText), pins: await page.locator(".fb-pin").count(),
+  room: await page.evaluate(() => fetch("api/feedback").then((r) => r.json()).then((list) => list.map((c) => c.text))) };
+
+// ---- a new request left half empty is not the twin of the open one at the same stage
+out.fresh = {};
+await open("#/new-application?role=employee");
+// records an earlier check added with made-up statuses (copies of LV-2026-014) are not sample data: leave them out
+await page.evaluate(() => { const list = Mockup.data.applications; for (let i = list.length - 1; i >= 0; i--) if (/^LV-T-/.test(list[i].id)) list.splice(i, 1); });
+await page.fill('[data-el="field:from"] input', "2026-12-10");
+await page.click('[data-el="button:Next"]');
+await page.waitForSelector('[data-el="button:Submit"]');
+await page.click('[data-el="button:Submit"]');
+await page.click('[data-el="button:Submit"]');
+await page.waitForSelector('[data-el="title:My Leave Applications"]');
+out.fresh.id = (await listState()).rows[0].split(/\s+/)[0];
+await visit(`#/application-details?role=employee&record=${out.fresh.id}`);
+out.fresh.fields = await page.evaluate(() => Object.fromEntries(["reason", "leave_type", "from"].map((f) => [f, (document.querySelector(`[data-el="field:${f}"] .f-value`) || {}).textContent])));
+out.fresh.others = await page.evaluate(() => Mockup.data.applications.map((x) => ({ id: x.id, status: x.status, reason: x.reason })));
 
 await browser.close();
 console.log(JSON.stringify(out));

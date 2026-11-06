@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Double-click on a Mac to present a project's mock-up (runs present.sh in a Terminal window).
+# Double-click on a Mac to open the page that lists every mock-up (runs present.sh in a Terminal window).
 cd "$(dirname "$0")"
 ./present.sh
 echo

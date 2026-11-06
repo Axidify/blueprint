@@ -23,5 +23,9 @@ examples/*/feedback/
 examples/*/output/
 examples/*/estimates/*.xlsx
 
+# The tour's scratch copy of the sample project (tools/tour.py), removed when the tour ends
+/.tour/
+
+
 # Blueprint's own Python environment on macOS and Linux (made by setup.sh)
 .venv/

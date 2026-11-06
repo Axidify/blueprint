@@ -28,6 +28,7 @@ https://github.com/user-attachments/assets/94a044d1-73c5-4213-94d9-ca1990de57b6
 
 Type it in your own words, for example:
 
+- "Give me a tour" (a ten-minute first run on a made-up sample, before your first real document)
 - "Start a new project for the courier booking system"
 - "Review this requirements document" (drop the file in `inbox/` first, or attach it)
 - "Build a mock-up from the brief"
@@ -39,8 +40,9 @@ Type it in your own words, for example:
 
 To present a mock-up in a meeting, double-click **`present.cmd`** (on a Mac: **`present.command`**) and pick
 the project. Press **Feedback**
-in the bottom-right corner, click anything on the screen and type a comment. Comments are saved
-automatically.
+on the dark bar in the bottom-right corner, click anything on the screen and type a comment. Comments are saved
+automatically. Submitting a form or approving a request plays out on screen, and the walk-through is kept
+(and shared with everyone in the room) until you press **Reset sample data**.
 
 ## Where things are
 

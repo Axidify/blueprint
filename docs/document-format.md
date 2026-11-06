@@ -36,7 +36,7 @@ orange otherwise ("Draft for client review", "Not approved", "Awaiting final rev
 | 6 Project timeline | Summary figures, a week-by-week chart of stages, activities and milestones (client activities highlighted), the milestones with what the client must do, and the assumptions behind the plan. Left out when the spec has no timeline | Spec `timeline` |
 | 7 onwards | Extra sections: environments, infrastructure … | Spec `extra_sections` |
 | Decisions needed before sign-off | Every open client question with its impact, owner, due date and the requirements it affects; then "Decisions made": the questions already answered, with the answer and where it was agreed | Register |
-| Client acknowledgement and sign-off | Standard wording; what is being signed (version, open decisions excluded, how to sign); one form per signatory, client first: name, designation, signature and date rows and a company stamp box | Spec `signoff` |
+| Client acknowledgement and sign-off | Standard wording; what is being signed ("Version 0.2 · What you are signing · 6 November 2026"), the decisions still open that are not part of it, and how to sign; one form per signatory, client first: name, designation, signature and date rows and a company stamp box | Spec `signoff` |
 | Appendices | Appendix A, B … | Spec `extra_sections` with `appendix: true` |
 
 Every page except the cover has a header (system, version, status) and a footer (company, confidential,
@@ -86,7 +86,7 @@ titles:
 | `front` | Front matter in order: `cover`, `at_a_glance`, `about`, `contents` |
 | `chapters` | Chapters in order: `users_access`, `scope`, `by_role`, `requirements`, `screens`, `nfr`, `timeline`, `extras`, `decisions`, `signoff`. A company file that lists its own chapters must add `timeline` to get the timeline |
 | `titles.*` | Chapter and page titles |
-| `labels.*` | Words used in the document: impact levels, "Decision needed", "Decisions made", the default status, "Confidential" |
+| `labels.*` | Words used in the document: impact levels, "Decision needed", "Decisions made", the default status, "Confidential", and the sign-off cards: `signing` ("What you are signing", under the version and its date), `not_signed` ("Not part of this sign-off", under the decisions still open, with their section), `nothing_left_out` (when none are open) and `how_to_sign` |
 
 **Mistakes are reported, not guessed at.** Before a document is generated the format is checked: a setting
 that does not exist (`colours` for `colors`, with the likely one suggested), a colour that is not six hex
@@ -112,6 +112,8 @@ python -I tools/document_format.py learn "<an existing requirements document>.do
 
 Reports the fonts, sizes, table fills, colours, page set-up and chapter headings of a sample document, as
 a starting point for the overrides. The `document-format` skill does this for you and proposes the changes.
+It reads Word files only (`.docx`, `.dotx`): for a PDF or an old `.doc` it says so, and the Word version of
+the sample is needed (an old `.doc` can be saved as `.docx` from Word).
 
 ## Previewing
 

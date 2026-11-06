@@ -266,3 +266,84 @@ def test_check_skips_the_archive(projects, run):
     new_project(projects)
     run("archive", "leave-request")
     assert run("check").strip() == "No projects."
+
+
+def test_archive_never_moves_a_project_into_an_archived_one_of_the_same_name(projects, run):
+    """It used to move the project inside projects/_archive/<slug>/ when that folder existed."""
+    new_project(projects)
+    run("archive", "leave-request")
+    p = new_project(projects)
+    with pytest.raises(SystemExit, match="An archived project called 'leave-request' already exists"):
+        run("archive", "leave-request")
+    assert (p / "spec" / "app.yaml").exists(), "nothing was moved"
+    assert not (projects / "_archive" / "leave-request" / "leave-request").exists()
+
+
+# ====================================================================== earlier work on the same system
+@pytest.mark.parametrize("a, b, how", [
+    ("Leave Request System", "leave request", "same"),
+    ("Leave Request System", "Leave Request System Phase 2", "same"),
+    ("Equipment Booking", "Equipment Booking and Return System", "similar"),
+    ("Leave Requests", "Leave Request", "similar"),
+    ("Leave Request System", "Courier Booking System", None),
+    ("System", "Leave Request System", None),
+])
+def test_system_names_are_compared_without_filler_words(a, b, how):
+    assert project_tool.likeness(a, b) == how
+
+
+def earlier_work(temp_workspace, projects):
+    new_project(projects, slug="leave-request")
+    new_project(projects, slug="leave-old")
+    project_tool.cmd_archive(type("A", (), {"slug": "leave-old"}))
+    knowledge = temp_workspace / "knowledge"
+    (knowledge / "actuals").mkdir(parents=True)
+    (knowledge / "actuals" / "leave-old.md").write_text("# Leave Request System – actuals\n", encoding="utf-8")
+    (knowledge / "projects-log.md").write_text(
+        "| Project | Platform | Phase |\n|---|---|---|\n| Leave Request System | Joget DX | 1 |\n| Courier Booking | Joget DX | 1 |\n",
+        encoding="utf-8")
+
+
+def test_find_lists_active_archived_and_delivered_work_on_the_same_system(temp_workspace, projects, run):
+    earlier_work(temp_workspace, projects)
+    out = run("find", "Leave request")
+    assert "active project Leave Request System (projects/leave-request, same name)" in out
+    assert "archived project Leave Request System (projects/_archive/leave-old, same name): bring it back with python -I tools/project.py restore leave-old" in out
+    assert "delivered before: Leave Request System (knowledge/actuals/leave-old.md, same name)" in out
+    assert "change requests" in out
+    assert "projects log row: Leave Request System | Joget DX | 1" in out and "Courier" not in out
+    assert "No earlier project" in run("find", "Asset Tracking")
+
+
+@pytest.fixture
+def new_project_tool(monkeypatch, capsys):
+    import new_project as tool
+
+    def call(*args):
+        monkeypatch.setattr(sys, "argv", ["new_project.py", *args])
+        tool.main()
+        return capsys.readouterr().out
+    return call
+
+
+def test_new_project_prints_a_short_path_and_the_next_step(projects, new_project_tool):
+    out = new_project_tool("courier-booking", "Courier Booking System", "Sample Client")
+    assert out.startswith("Created projects/courier-booking\n")
+    assert str(projects) not in out and "Warning" not in out
+    assert "Next: " in out and "'process my inbox'" in out
+    assert json.loads((projects / "courier-booking" / "register.json").read_text(encoding="utf-8"))["project"] == "Courier Booking System"
+
+
+def test_new_project_refuses_the_name_of_an_archived_project(temp_workspace, projects, new_project_tool):
+    earlier_work(temp_workspace, projects)
+    with pytest.raises(SystemExit, match=r"python -I tools/project.py restore leave-old"):
+        new_project_tool("leave-old", "Leave Request System", "Sample Client")
+    assert not (projects / "leave-old").exists()
+
+
+def test_new_project_warns_about_earlier_work_on_the_same_system(temp_workspace, projects, new_project_tool):
+    earlier_work(temp_workspace, projects)
+    out = new_project_tool("leave-request-phase-2", "Leave Request System", "Sample Client")
+    assert "Warning: earlier work on a system like 'Leave Request System':" in out
+    assert "projects/_archive/leave-old" in out and "knowledge/actuals/leave-old.md" in out
+    assert (projects / "leave-request-phase-2" / "register.json").exists(), "a warning, not a refusal"

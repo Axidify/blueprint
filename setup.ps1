@@ -126,6 +126,11 @@ foreach ($name in @("projects", "knowledge", "inbox")) {
     cmd /c mklink /J "$link" "$target" | Out-Null
 }
 Write-Host "Workspace: $ws"
+# Where Blueprint is on this machine, for the "Open the mock-up" shortcut in each project folder: the workspace
+# is shared, and the app can be in a different place on each person's machine.
+$pointer = Join-Path $env:USERPROFILE ".blueprint"
+New-Item -ItemType Directory -Force -Path $pointer | Out-Null
+[System.IO.File]::WriteAllText((Join-Path $pointer "app-path"), $PSScriptRoot, (New-Object System.Text.UTF8Encoding $false))
 
 # 4. Check everything
 Write-Host ""

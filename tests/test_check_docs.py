@@ -30,13 +30,16 @@ CHANGELOG = """# Changelog
 """
 
 
+SKILL = "---\nname: demo\n---\n\n# Demo\n\n## 1. Do it\n\nThe work.\n\n## Hand over\n\nWhat was made, where, for whom, the next step.\n"
+
+
 @pytest.fixture
 def repo(tmp_path):
     """A tiny repository that passes the documentation check."""
     root = tmp_path / "repo"
     files = {
         "tools/check_docs.py": (support.ROOT / "tools" / "check_docs.py").read_text(encoding="utf-8"),
-        ".claude/skills/demo/SKILL.md": "---\nname: demo\n---\n",
+        ".claude/skills/demo/SKILL.md": SKILL,
         "docs/skills.md": "# Skills\n\n### demo\nA demo skill.\n",
         "docs/tools.md": "# Tools\n\n### check_docs.py\nThe documentation check.\n",
         "CLAUDE.md": "Skills: `demo`.\n",
@@ -196,3 +199,33 @@ def test_workspace_names_must_not_appear_in_app_files(repo):
     result = check(repo)
     assert result.returncode == 1
     assert "docs/tools.md: contains 'Borrowed Name Ltd' from your workspace" in result.stderr
+
+
+# ====================================================================== the hand-over every skill ends with
+def write_skill(repo, name, text):
+    (repo / ".claude" / "skills" / name).mkdir(parents=True, exist_ok=True)
+    (repo / ".claude" / "skills" / name / "SKILL.md").write_text(text, encoding="utf-8")
+
+
+def test_a_skill_without_a_hand_over_fails(repo):
+    write_skill(repo, "demo", "---\nname: demo\n---\n\n## 1. Do it\n\n## 6. Report\nTell them.\n")
+    result = check(repo)
+    assert result.returncode == 1
+    assert ".claude/skills/demo/SKILL.md: no '## Hand over' section" in result.stderr
+
+
+def test_the_hand_over_must_be_the_last_section(repo):
+    write_skill(repo, "demo", SKILL + "\n## Rules\n\n- Something.\n")
+    assert "'## Hand over' must be the last section, but '## Rules' comes after it" in check(repo).stderr
+
+
+def test_a_hand_over_inside_a_code_block_does_not_count(repo):
+    write_skill(repo, "demo", "---\nname: demo\n---\n\n## 1. Do it\n\n```\n## Hand over\n```\n")
+    assert "no '## Hand over' section" in check(repo).stderr
+
+
+def test_the_release_skill_for_maintainers_needs_no_hand_over(repo):
+    write_skill(repo, "release", "---\nname: release\n---\n\n## 5. Publish (ask first)\n")
+    (repo / "docs" / "skills.md").write_text("# Skills\n\n### demo\n\n### release\n", encoding="utf-8")
+    (repo / "CLAUDE.md").write_text("Skills: `demo`, `release`.\n", encoding="utf-8")
+    assert check(repo).returncode == 0

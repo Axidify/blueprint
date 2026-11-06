@@ -1,5 +1,6 @@
-"""tools/register.py: validating a register and rendering the Excel file for the BA."""
+"""tools/register.py: adding, finding and updating items, validating a register and rendering the Excel file."""
 import copy
+import io
 import json
 import sys
 
@@ -152,8 +153,8 @@ def test_internal_items_never_reach_the_client_sheet(workbook):
 
 def test_client_sheet_is_what_the_ba_sends(workbook):
     client = sheet_rows(workbook["For client"])
-    assert client[0] == ["ID", "Severity", "Reference", "Observation", "Question for client", "Our recommendation",
-                         "Client response", "Status", "Raised"]
+    assert client[0] == ["ID", "Severity", "Document", "Where", "Observation", "Question for client",
+                         "Our recommendation", "Client response", "Status", "Raised"]
     first = dict(zip(client[0], client[1]))
     assert first["Severity"] == "High"
     assert first["Question for client"] == "May two people book the same equipment for overlapping dates?"
@@ -306,6 +307,74 @@ def test_a_file_from_an_older_blueprint_still_gives_up_its_answers(rendered, mon
     assert item(rendered, "R-004")["status"] == "open", "a status alone is not taken from a file without the note"
 
 
+def sent_to_client(project, tmp_path):
+    """The register.xlsx the BA sent to the client: a copy, kept apart from the project's own file."""
+    copy_path = tmp_path / "returned" / "Register with our answers.xlsx"
+    copy_path.parent.mkdir(exist_ok=True)
+    copy_path.write_bytes((project / "register.xlsx").read_bytes())
+    return copy_path
+
+
+def type_into_copy(path, sheet, item_id, column, value):
+    folder = path.parent
+    (folder / "register.xlsx").unlink(missing_ok=True)
+    path.rename(folder / "register.xlsx")
+    type_into(folder, sheet, item_id, column, value)
+    (folder / "register.xlsx").rename(path)
+
+
+def render_from(monkeypatch, project, returned, *flags):
+    monkeypatch.setattr(sys, "argv", ["register.py", "render", str(project), "--from", str(returned), *flags])
+    register.main()
+
+
+def test_a_register_returned_by_the_client_gives_up_its_answers(rendered, tmp_path, monkeypatch, capsys):
+    """The client answers in the copy they were sent. --from takes those answers in, reads the copy only,
+    and writes the project's own register.xlsx with them."""
+    returned = sent_to_client(rendered, tmp_path)
+    type_into_copy(returned, "For client", OPEN_CLIENT, "Client response", "Only HR may cancel.")
+    before = returned.read_bytes()
+    render_from(monkeypatch, rendered, returned)
+    out = capsys.readouterr().out
+    assert f"Taken from {returned.name} into register.json:" in out and f"{OPEN_CLIENT} answer: Only HR may cancel." in out
+    assert (item(rendered, OPEN_CLIENT)["answer"], item(rendered, OPEN_CLIENT)["status"]) == ("Only HR may cancel.", "answered")
+    assert cell(rendered, "For client", OPEN_CLIENT, "Client response") == "Only HR may cancel."
+    assert returned.read_bytes() == before, "the returned file is only read"
+    render_from(monkeypatch, rendered, returned)
+    assert "Nothing new in" in capsys.readouterr().out, "taking the same copy twice changes nothing"
+
+
+def test_the_bas_own_typing_is_taken_before_the_returned_copy(rendered, tmp_path, monkeypatch, capsys):
+    returned = sent_to_client(rendered, tmp_path)
+    type_into(rendered, "Internal fixes", "R-004", "Status", "resolved")
+    type_into_copy(returned, "For client", OPEN_CLIENT, "Client response", "Yes, both.")
+    render_from(monkeypatch, rendered, returned)
+    assert item(rendered, "R-004")["status"] == "resolved" and item(rendered, OPEN_CLIENT)["answer"] == "Yes, both."
+
+
+def test_a_returned_answer_to_an_item_changed_here_since_stops(rendered, tmp_path, monkeypatch, capsys):
+    returned = sent_to_client(rendered, tmp_path)
+    type_into_copy(returned, "For client", OPEN_CLIENT, "Client response", "The client says A.")
+    monkeypatch.setattr(sys, "argv", ["register.py", "update", str(rendered), OPEN_CLIENT, "--set", "answer=Decided B in the call."])
+    register.main()
+    run(monkeypatch, "render", rendered)
+    capsys.readouterr()
+    with pytest.raises(SystemExit) as stop:
+        render_from(monkeypatch, rendered, returned)
+    out = capsys.readouterr().out
+    assert stop.value.code == 1 and "register.xlsx was not written" in out
+    assert f"{OPEN_CLIENT} answer: the returned file has 'The client says A.', register.json has 'Decided B in the call.'" in out
+    assert item(rendered, OPEN_CLIENT)["answer"] == "Decided B in the call."
+
+
+@pytest.mark.parametrize("name, message", [("missing.xlsx", "No file at"), ("not-excel.xlsx", "Cannot read")])
+def test_a_returned_file_that_cannot_be_read_is_refused(rendered, tmp_path, monkeypatch, name, message):
+    (tmp_path / "not-excel.xlsx").write_text("plain text", encoding="utf-8")
+    with pytest.raises(SystemExit) as stop:
+        render_from(monkeypatch, rendered, tmp_path / name)
+    assert message in str(stop.value) and "Nothing was written" in str(stop.value)
+
+
 def test_an_excel_file_that_is_open_gives_a_plain_message(rendered, monkeypatch, capsys):
     from openpyxl import Workbook
 
@@ -325,3 +394,210 @@ def test_an_unknown_option_shows_the_usage(tmp_path, monkeypatch):
         register.main()
     assert "--overwrite" in str(stop.value)
 
+
+# ====================================================================== add, similar and update
+NEW = {"type": "gap", "audience": "client", "severity": "medium", "category": "GP-05", "stage": "workshop-2",
+       "source": "v1.1 screen booking-list", "finding": "The booking list has no filter by department.",
+       "question": "Should managers filter the booking list by department?"}
+INTERNAL = {"type": "fix", "audience": "internal", "severity": "low", "category": "hygiene", "stage": "requirements-draft",
+            "source": "v1.1 cover page", "finding": "The cover page still names a café from another template."}
+
+
+def run_args(monkeypatch, *args, stdin=None):
+    monkeypatch.setattr(sys, "argv", ["register.py", *map(str, args)])
+    if stdin is not None:
+        monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(stdin.encode("utf-8")), encoding="utf-8"))
+    register.main()
+
+
+def items_file(tmp_path, data, name="items.json"):
+    path = tmp_path / name
+    path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    return path
+
+
+@pytest.fixture
+def project(tmp_path):
+    return write_register(tmp_path / "add", GOOD)
+
+
+def saved(project):
+    return json.loads((project / "register.json").read_text(encoding="utf-8"))
+
+
+def test_add_gives_the_next_ids_and_fills_the_defaults(project, tmp_path, monkeypatch, capsys):
+    run_args(monkeypatch, "add", project, "--file", items_file(tmp_path, [NEW, INTERNAL]))
+    out = capsys.readouterr().out
+    assert "Added 2 items to register.json: R-005 to R-006" in out and "Next: python -I tools/register.py render" in out
+    reg = saved(project)
+    assert [it["id"] for it in reg["items"]] == ["R-001", "R-002", "R-003", "R-004", "R-005", "R-006"]
+    added = reg["items"][4]
+    assert added["status"] == "open" and added["raised"] == register.date.today().isoformat()
+    assert list(added) == [f for f in register.FIELDS if f in added], "fields are written in the documented order"
+    assert reg["items"][5]["finding"] == INTERNAL["finding"]
+    assert register.validate(reg) == []
+    raw = (project / "register.json").read_text(encoding="utf-8")
+    assert raw == json.dumps(reg, indent=2, ensure_ascii=False) + "\n" and "café" in raw, "same formatting, text kept as written"
+    assert not list(project.glob(".register-*")), "no temporary file is left behind"
+
+
+def test_add_ignores_an_id_it_was_given_and_keeps_raised_and_status(project, tmp_path, monkeypatch, capsys):
+    item = dict(NEW, id="R-001", status="asked", raised="2026-10-30")
+    run_args(monkeypatch, "add", project, "--file", items_file(tmp_path, item))
+    assert "the id R-001 it carried is not used; it is R-005" in capsys.readouterr().out
+    added = saved(project)["items"][-1]
+    assert (added["id"], added["status"], added["raised"]) == ("R-005", "asked", "2026-10-30")
+    assert [it["id"] for it in saved(project)["items"]].count("R-001") == 1
+
+
+def test_add_after_a_gap_never_reuses_an_id(tmp_path, monkeypatch, capsys):
+    reg = copy.deepcopy(GOOD)
+    reg["items"] = [it for it in reg["items"] if it["id"] != "R-002"]
+    folder = write_register(tmp_path / "gap", reg)
+    run_args(monkeypatch, "add", folder, "--file", items_file(tmp_path, NEW))
+    assert saved(folder)["items"][-1]["id"] == "R-005"
+
+
+def test_one_bad_item_refuses_the_whole_batch_and_writes_nothing(project, tmp_path, monkeypatch, capsys):
+    before = (project / "register.json").read_bytes()
+    no_question = {k: v for k, v in NEW.items() if k != "question"}
+    bad = [NEW, dict(INTERNAL, severity="critical"), no_question, dict(NEW, colour="red", effort_impact="huge")]
+    with pytest.raises(SystemExit) as stop:
+        run_args(monkeypatch, "add", project, "--file", items_file(tmp_path, bad))
+    out = capsys.readouterr().out
+    assert stop.value.code == 1 and "Nothing was added" in out
+    assert "item 2 (R-006): severity 'critical' not in ['high', 'low', 'medium']" in out, "the same rule and message as validate"
+    assert "item 3 (R-007): client items need a question" in out
+    assert "item 4 (R-008): unknown field 'colour'" in out and "item 4 (R-008): effort_impact 'huge' not in" in out
+    assert (project / "register.json").read_bytes() == before
+
+
+@pytest.mark.parametrize("content, message", [("", "is empty"), ("{not json", "is not valid JSON"), ("[]", "Give one item"),
+                                              ('["text"]', "item 1: not an item")])
+def test_add_refuses_input_that_is_not_items(project, tmp_path, monkeypatch, capsys, content, message):
+    path = tmp_path / "items.json"
+    path.write_text(content, encoding="utf-8")
+    with pytest.raises(SystemExit) as stop:
+        run_args(monkeypatch, "add", project, "--file", path)
+    assert message in str(stop.value.code) + capsys.readouterr().out
+    assert saved(project) == GOOD
+
+
+def test_add_reads_standard_input_and_a_file_with_a_bom(project, tmp_path, monkeypatch, capsys):
+    run_args(monkeypatch, "add", project, stdin=json.dumps({"items": [NEW]}))
+    assert "Added 1 item to register.json: R-005" in capsys.readouterr().out
+    bom = tmp_path / "bom.json"
+    bom.write_text(json.dumps(INTERNAL, ensure_ascii=False), encoding="utf-8-sig")  # as Windows PowerShell saves it
+    run_args(monkeypatch, "add", project, "--file", bom)
+    assert saved(project)["items"][-1]["finding"] == INTERNAL["finding"]
+    run_args(monkeypatch, "add", project, "--file", "-", stdin=json.dumps(NEW))
+    assert [it["id"] for it in saved(project)["items"][-3:]] == ["R-005", "R-006", "R-007"]
+
+
+def test_add_names_likely_duplicates_and_still_writes(project, tmp_path, monkeypatch, capsys):
+    again = dict(NEW, finding="Two bookings of the same equipment may overlap; the brief is silent.",
+                 question="Can two people book the same equipment for overlapping dates?")
+    run_args(monkeypatch, "add", project, "--file", items_file(tmp_path, [again, NEW, NEW]))
+    out = capsys.readouterr().out
+    assert "R-005 may be a duplicate of R-001 (similarity" in out
+    assert "R-007 may be a duplicate of R-006 (similarity 1.00" in out, "items of the same batch are compared too"
+    assert "R-006 may be a duplicate" not in out, "a new subject is not flagged"
+    assert len(saved(project)["items"]) == 7
+
+
+def test_add_check_writes_nothing(project, tmp_path, monkeypatch, capsys):
+    before = (project / "register.json").read_bytes()
+    same = dict(NEW, question="May two people book the same equipment for overlapping dates?")
+    run_args(monkeypatch, "add", project, "--file", items_file(tmp_path, same), "--check")
+    out = capsys.readouterr().out
+    assert "Checked, nothing written: 1 item would be added as R-005." in out and "may be a duplicate of R-001" in out
+    assert (project / "register.json").read_bytes() == before
+
+
+def test_similarity_reads_past_wording():
+    assert register.similarity({"question": "Should the Storekeeper receive an email when bookings are approved?"},
+                               GOOD["items"][1]) >= register.DUPLICATE
+    assert register.similarity({"question": "Which currencies does the invoice support?"}, GOOD["items"][1]) < 0.2
+    assert register.words("The e-mails were approved") == {"email", "approv"}
+
+
+def test_similar_lists_the_closest_items(project, monkeypatch, capsys):
+    run_args(monkeypatch, "similar", project, "Does the storekeeper get an e-mail when a booking is approved?")
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[1].split()[0] == "R-002" and "asked" in lines[1]
+    run_args(monkeypatch, "similar", project, "currency", "of", "invoices")
+    assert "No existing item reads like it" in capsys.readouterr().out
+
+
+def test_update_answers_and_resolves(project, monkeypatch, capsys):
+    run_args(monkeypatch, "update", project, "R-001", "--set", "status=resolved", "--set", "answer=No, never.",
+             "--set", "resolved_in=Workshop 2", "--set", "owner=")
+    out = capsys.readouterr().out
+    assert "R-001 status: open -> resolved" in out and "R-001 owner: Operations -> (removed)" in out
+    it = saved(project)["items"][0]
+    assert (it["status"], it["answer"], it["resolved_in"]) == ("resolved", "No, never.", "Workshop 2") and "owner" not in it
+    assert list(it) == [f for f in register.FIELDS if f in it], "new fields go in their documented place"
+
+
+def test_update_an_answer_alone_moves_the_item_to_answered(project, monkeypatch, capsys):
+    run_args(monkeypatch, "update", project, "R-001", "R-002", "--set", "answer=Yes.")
+    assert [it["status"] for it in saved(project)["items"][:2]] == ["answered", "answered"]
+
+
+@pytest.mark.parametrize("sets, message", [
+    (["colour=red"], "unknown field 'colour'"), (["id=R-009"], "id cannot be changed"),
+    (["status=done"], "R-001: status 'done' not in"), (["finding="], "R-001: missing finding"),
+    (["effort_impact=huge"], "effort_impact 'huge' not in"), (["due=soon"], "due 'soon' is not a date"),
+    (["status"], "write it as field=value")])
+def test_update_refuses_and_writes_nothing(project, monkeypatch, capsys, sets, message):
+    before = (project / "register.json").read_bytes()
+    with pytest.raises(SystemExit) as stop:
+        run_args(monkeypatch, "update", project, "R-001", *[a for s in sets for a in ("--set", s)])
+    out = capsys.readouterr().out
+    assert stop.value.code == 1 and "Nothing was changed" in out and message in out
+    assert (project / "register.json").read_bytes() == before
+
+
+def test_update_an_unknown_item_is_refused(project, monkeypatch, capsys):
+    with pytest.raises(SystemExit):
+        run_args(monkeypatch, "update", project, "R-001", "R-099", "--set", "status=asked")
+    assert "R-099: no such item in the register" in capsys.readouterr().out
+    assert saved(project)["items"][0]["status"] == "open", "nothing changed, not even the item that exists"
+
+
+@pytest.mark.parametrize("args", [["update", "R-001"], ["similar"], ["add", "--file"], ["add", "--set", "x=y"]])
+def test_new_commands_show_the_usage_when_misused(project, monkeypatch, args):
+    monkeypatch.setattr(sys, "argv", ["register.py", args[0], str(project), *args[1:]])
+    with pytest.raises(SystemExit) as stop:
+        register.main()
+    assert "register.py add" in str(stop.value)
+
+
+# ---------------------------------------------------------------- readable references
+@pytest.mark.parametrize("source, document, where", [
+    ("SRS v1.0 Appendix A item 4 (p82); Figure 5 (p30); Figure 8 T&Cs (p36)",
+     "SRS v1.0", "Appendix A item 4 · page 82\nFigure 5 · page 30\nFigure 8 T&Cs · page 36"),
+    ("SRS v1.0 §2.1/§2.2 Loan Request Form; FR-LR-001",
+     "SRS v1.0", "Section 2.1, Section 2.2 Loan Request Form\nFR-LR-001"),
+    ("SRS v1.0 §1.5.1 row 2 (p9-10); 4.3.1 (p31)",
+     "SRS v1.0", "Section 1.5.1 row 2 · pages 9–10\nSection 4.3.1 · page 31"),
+    ("SRS v1.0 Figure 8 (4.6 T&Cs, p36)", "SRS v1.0", "Figure 8 (4.6 T&Cs) · page 36"),
+    ("URS draft v0.3 section 4 (pp. 12-14)", "URS draft v0.3", "Section 4 · pages 12–14"),
+    ("Mock-up v0.1 FB-001, New Loan Request, Estimated Repair Days",
+     "Mock-up v0.1", "comment FB-001, New Loan Request, Estimated Repair Days"),
+    ("v1.0 §3.2 FR-REQ-003.1", "v1.0", "Section 3.2 FR-REQ-003.1"),
+    ("Figure 2", "", "Figure 2"),
+    ("Word draft, heading 'Approvals'", "", "Word draft, heading 'Approvals'"),
+])
+def test_a_reference_reads_as_the_document_and_each_place_on_its_own_line(source, document, where):
+    """The Excel file shows where an item was found as the document, said once, and each place on a line of
+    its own in plain words; a note in a style the rules do not know is shown as it is."""
+    assert register.readable_reference(source) == (document, where)
+
+
+def test_a_long_quote_in_a_reference_is_shortened_and_the_columns_replace_the_old_one(workbook):
+    _, where = register.readable_reference("SRS v1.0 §2.1 'Customer Information to be retrieved from 3 In 1'; Figure 5 (p30)")
+    assert where.split("\n")[0] == "Section 2.1 'Customer Information to be ret…'"
+    for name in ("For client", "Internal fixes", "All items"):
+        header = sheet_rows(workbook[name])[0]
+        assert "Reference" not in header and header.index("Where") == header.index("Document") + 1

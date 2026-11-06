@@ -1,0 +1,226 @@
+/* Desk: a calm, ordered design language (in the manner of Apple's own apps) for the client's own screens. True greys,
+   white cards on a soft grey ground, hairlines that start where the text starts, and one colour: the
+   project's primary_color in the accent's place (Cobalt when the spec sets none). Colour is spent only on
+   actions, selection and status; a status is a dot and a word. Three button tiers: primary (solid, the
+   screen's one main action), secondary (accent tint) and quiet (outline). Reject is a normal choice, so it
+   is quiet; a destructive button is red words in a quiet button, solid red only inside its confirmation
+   dialog. The engine marks which is which (tier-secondary, normal-choice) for this theme.
+   Sizes: 28 page title, 17 section, 15 body, 13 details, 12 column headers, all times --ts. Corners grow
+   with the thing: 6 tags, 9 buttons and fields, 12 inner panels, 16 cards, 20 dialogs. */
+:root {
+  --font: "Geist", "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --mono: "Geist Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --text: #1D1D1F; --muted: #6E6E73; --label: #1D1D1F;
+  --bg: #F5F5F7; --card: #FFFFFF; --border: #E5E5EA; --stripe: #FFFFFF;
+  --line: #D2D2D7; --field: #E9E9EE; --track: #EDEDF0; --hover-row: #FAFAFC;
+  --topbar-bg: rgba(250, 250, 252, .75); --topbar-text: #1D1D1F;
+  --sidebar-bg: rgba(250, 250, 252, .75); --sidebar-text: #1D1D1F; --sidebar-hover: rgba(0, 0, 0, .04);
+  --sidebar-active: var(--tint); --sidebar-active-text: var(--tint-text);
+  --th-bg: #FFFFFF; --th-text: #6E6E73;
+  --input-border: #D2D2D7; --btn-bg: transparent; --btn-border: #D2D2D7;
+  --radius: 16px; --radius-sm: 9px; --label-width: 150px;
+  /* The accent and the shades calculated from it, never picked by hand. */
+  --tint: color-mix(in srgb, var(--primary) 8%, #fff);
+  --tint-hover: color-mix(in srgb, var(--primary) 14%, #fff);
+  --tint-ring: color-mix(in srgb, var(--primary) 22%, #fff);
+  --tint-text: color-mix(in srgb, var(--primary) 85%, #000);
+  --accent-hover: color-mix(in srgb, var(--primary) 88%, #000);
+  --accent-press: color-mix(in srgb, var(--primary) 76%, #000);
+  --halo: color-mix(in srgb, var(--primary) 25%, transparent);
+  /* Status: a dot and a word. */
+  --done: #34C759; --done-text: #248A3D; --late: #FF9500; --late-text: #C93400;
+  --blocked: #FF3B30; --blocked-text: #D70015; --neutral: #8E8E93; --red: #D70015;
+  /* Depth: ground, card, raised, dialog. */
+  --ring: 0 0 0 1px rgba(0, 0, 0, .05), 0 1px 3px rgba(0, 0, 0, .04);
+  --raised: 0 0 0 1px rgba(0, 0, 0, .05), 0 8px 24px rgba(0, 0, 0, .12);
+  --dialog: 0 0 0 1px rgba(0, 0, 0, .05), 0 24px 64px rgba(0, 0, 0, .2);
+  --frost: blur(20px) saturate(180%);
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --login-bg: #F5F5F7;
+}
+body { font-size: calc(15px * var(--ts)); line-height: 1.45; -webkit-font-smoothing: antialiased; }
+a { color: var(--primary); }
+h2 { font-size: calc(28px * var(--ts)); font-weight: 600; letter-spacing: -.02em; line-height: 1.2; }
+h3 { font-size: calc(17px * var(--ts)); font-weight: 600; letter-spacing: -.01em; margin: 0 0 16px; }
+
+/* Top bar and side menu: frosted, because they stay above what scrolls. Solid for people who ask for less transparency. */
+.topbar { height: 56px; padding: 0 24px; border-bottom: 1px solid var(--border); -webkit-backdrop-filter: var(--frost); backdrop-filter: var(--frost); }
+.brand { gap: 12px; font-size: calc(15px * var(--ts)); font-weight: 600; letter-spacing: -.01em; }
+.brand-mark { min-width: 28px; height: 28px; padding: 0 6px; border-radius: 7px; font-size: calc(11px * var(--ts)); font-weight: 600; letter-spacing: .02em; }
+.brand-mark.big { min-width: 44px; height: 44px; border-radius: 12px; font-size: calc(15px * var(--ts)); }
+.topbar-right { gap: 20px; font-size: calc(13px * var(--ts)); color: var(--muted); }
+.topbar-right .user { color: var(--muted); }
+.topbar-right .logout { color: var(--text); opacity: 1; font-weight: 500; }
+.layout { min-height: calc(100vh - 56px); }
+.sidebar { width: 232px; padding: 16px 8px; border-right: 1px solid var(--border); position: sticky; top: 56px; align-self: flex-start;
+  height: calc(100vh - 56px); overflow-y: auto; -webkit-backdrop-filter: var(--frost); backdrop-filter: var(--frost); }
+.menu-item { display: flex; align-items: center; min-height: 34px; padding: 6px 12px; margin-bottom: 2px; border-left: 0; border-radius: 7px; font-size: calc(14px * var(--ts)); }
+.menu-item.active { font-weight: 500; }
+/* At the 1000px of the screenshots the menu and the margins give the page the room its lists need. */
+@media (max-width: 1100px) { .sidebar { width: 200px; } .content { padding: 32px 32px 48px; } }
+@media (prefers-reduced-transparency: reduce) { .topbar, .sidebar { background: #FAFAFC; -webkit-backdrop-filter: none; backdrop-filter: none; } }
+
+/* The page */
+.content { padding: 32px 40px 48px; }
+.page-head { margin-bottom: 24px; }
+.page-head p { margin-top: 4px; font-size: calc(15px * var(--ts)); }
+
+/* Figures: equal tiles, one number each. */
+.stats { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.stat { border: 0; border-radius: var(--radius); box-shadow: var(--ring); padding: 20px 24px; }
+.stat-value { font-size: calc(28px * var(--ts)); font-weight: 600; letter-spacing: -.02em; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.stat-label { font-size: calc(13px * var(--ts)); margin-top: 4px; }
+
+/* A list is one card: its toolbar row, the rows, and the count at its foot. */
+.list-block { background: var(--card); border-radius: var(--radius); box-shadow: var(--ring); margin-bottom: 24px; }
+.list-tools { padding: 16px 20px; margin: 0; border-bottom: 1px solid var(--border); align-items: flex-end; }
+.filters { gap: 12px; }
+.filter label { font-size: calc(12px * var(--ts)); font-weight: 500; color: var(--muted); margin-bottom: 4px; }
+.filter .f-input { min-width: 150px; height: 34px; }
+.filter[data-el^="search:"] .f-input { background: var(--field); border-color: var(--field); }
+.toolbar { gap: 8px; margin-left: auto; }
+.table-wrap { background: transparent; border: 0; border-radius: 0; }
+table.datalist { font-size: calc(14px * var(--ts)); }
+.datalist th { padding: 10px 12px; background: transparent; color: var(--th-text); font-size: calc(12px * var(--ts)); font-weight: 500; border-bottom: 1px solid var(--border); }
+/* Rows at least 48px, with separators that start where the text starts. */
+#app .datalist td { padding: 13px 12px; border-bottom: 0; vertical-align: middle;
+  --sep: linear-gradient(var(--border), var(--border)) 0 0 / 100% 1px no-repeat; background: var(--sep), var(--row-bg, transparent); }
+#app .datalist { --inset: 20px; }
+#app .form-section .datalist { --inset: 0px; }  /* inside a card of its own the rows start where its heading starts */
+#app .datalist th:first-child, #app .datalist td:first-child { padding-left: var(--inset); }
+#app .datalist th:last-child, #app .datalist td:last-child { padding-right: var(--inset); }
+#app .datalist td:first-child { --sep: linear-gradient(var(--border), var(--border)) var(--inset) 0 / calc(100% - var(--inset)) 1px no-repeat; }
+/* A short value without spaces (a reference, a date) is not broken at its hyphens. */
+#app .datalist td.nb { white-space: nowrap; }
+#app .datalist tbody tr:first-child td { --sep: linear-gradient(transparent, transparent); }
+#app .datalist tbody tr[data-row]:hover td { --row-bg: var(--hover-row); }
+.datalist td.actions .link { margin-right: 16px; font-weight: 500; }
+.datalist td.actions .link:last-child { margin-right: 0; }
+.datalist .empty { padding: 32px 16px; font-size: calc(14px * var(--ts)); }
+.datalist.compact td, .datalist.compact th { padding: 10px 12px; }
+#app .datalist.dense td, #app .datalist.dense th { padding: 10px 8px; }
+.pager { margin: 0; padding: 12px 20px; border-top: 1px solid var(--border); font-size: calc(13px * var(--ts)); }
+
+/* Status: a dot and a word. The spec's colours: green done, amber needs attention, red refused or failed,
+   grey neutral; a status without a colour whose words say it waits or is in progress takes the accent. */
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 0; border-radius: 0; background: none; font-size: calc(14px * var(--ts)); font-weight: 400; white-space: nowrap; }
+.chip::before { content: ""; flex: 0 0 8px; height: 8px; border-radius: 50%; background: var(--neutral); }
+.chip.ok { background: none; color: var(--done-text); } .chip.ok::before { background: var(--done); }
+.chip.warn { background: none; color: var(--late-text); } .chip.warn::before { background: var(--late); }
+.chip.bad { background: none; color: var(--blocked-text); } .chip.bad::before { background: var(--blocked); }
+.chip.neutral { background: none; color: var(--muted); }
+.chip.prog { background: none; color: var(--tint-text); } .chip.prog::before { background: var(--primary); }
+.status-bar { display: flex; align-items: center; gap: 12px; margin: -12px 0 24px; color: var(--muted); font-size: calc(13px * var(--ts)); }
+.status-bar .chip { font-size: calc(15px * var(--ts)); }
+
+/* Tabs: words only; the chosen one semibold with a 2px accent underline. */
+.tabs { gap: 24px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+.tab { padding: 10px 0 8px; margin-bottom: -1px; border-bottom: 2px solid transparent; color: var(--muted); font-weight: 500; }
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--text); border-bottom-color: var(--primary); font-weight: 600; }
+.tab.missing::after { content: ""; display: inline-block; width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: var(--blocked); vertical-align: 2px; }
+
+/* Cards of fields, labels above them. */
+.form-section { border: 0; border-radius: var(--radius); box-shadow: var(--ring); padding: 24px; margin-bottom: 24px; }
+.form-section .note { color: var(--muted); margin: -8px 0 16px; font-size: calc(13px * var(--ts)); }
+.f-grid { gap: 20px 24px; }
+.f-row { grid-template-columns: 1fr; gap: 6px; align-content: start; }
+.f-label { padding-top: 0; font-size: calc(13px * var(--ts)); font-weight: 500; color: var(--label); }
+.req { color: var(--muted); margin-left: 2px; }
+.f-input { min-height: 36px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 9px; background: #fff; color: var(--text); font-size: calc(15px * var(--ts));
+  transition: border-color .12s var(--ease), box-shadow .12s var(--ease); }
+select.f-input { padding-right: 32px; -webkit-appearance: none; appearance: none; cursor: pointer;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236E6E73' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") right 10px center / 16px no-repeat; }
+.filter[data-el^="search:"] .f-input:focus, #app .f-input:focus { outline: 0; border-color: var(--primary); box-shadow: 0 0 0 3px var(--halo); }
+textarea.f-input { padding: 8px 12px; line-height: 1.45; resize: vertical; }
+.f-value { padding: 0; min-height: 0; font-size: calc(15px * var(--ts)); }
+.f-row:has(> .f-control > .f-value) .f-label { color: var(--muted); font-weight: 400; }
+.f-help { font-size: calc(12.5px * var(--ts)); margin-top: 6px; }
+.f-error { font-size: calc(13px * var(--ts)); color: var(--blocked-text); margin-top: 6px; }
+.f-row.invalid .f-input, .f-row.invalid .file-drop, .f-row.invalid .signature { border-color: var(--blocked-text); }
+.choices { gap: 8px 20px; padding-top: 6px; }
+.choices input { accent-color: var(--primary); width: 16px; height: 16px; vertical-align: -3px; margin: 0 6px 0 0; }
+.file-drop { border: 1px dashed var(--line); border-radius: 12px; padding: 16px; background: #FAFAFC; color: var(--muted); font-size: calc(14px * var(--ts)); }
+.file-drop .link { font-weight: 500; }
+.file-name { font-weight: 500; }
+.signature { height: 96px; border: 1px dashed var(--line); border-radius: 12px; background: #FAFAFC; color: var(--muted); font-size: calc(14px * var(--ts)); }
+.sig-ink { color: var(--text); }
+
+/* Buttons: primary, secondary, quiet. Hover and pressed go one and two shades darker. */
+.form-buttons { gap: 8px; margin-top: 24px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 16px; border-radius: 9px; border: 1px solid var(--line);
+  background: transparent; color: var(--text); font-size: calc(14px * var(--ts)); font-weight: 500; white-space: nowrap; }
+.btn:hover { filter: none; background: rgba(0, 0, 0, .04); }
+.btn:active { background: rgba(0, 0, 0, .08); }
+.form-buttons .btn { height: 40px; padding: 0 20px; }
+.btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn.primary:active { background: var(--accent-press); border-color: var(--accent-press); }
+/* One primary per screen: the engine marks the others, which take the secondary tier. */
+.btn.primary.tier-secondary, .btn.secondary { background: var(--tint); border-color: var(--tint); color: var(--tint-text); }
+.btn.primary.tier-secondary:hover, .btn.secondary:hover { background: var(--tint-hover); border-color: var(--tint-hover); }
+/* No red Reject: a destructive button is red words in a quiet button, a refusal a plain quiet one. */
+#app .btn.danger, #app .btn.danger:hover { background: transparent; border-color: var(--line); color: var(--red); box-shadow: none; filter: none; }
+#app .btn.danger:hover { background: rgba(215, 0, 21, .05); }
+#app .btn.danger.normal-choice { color: var(--text); }
+#app .btn.danger.normal-choice:hover { background: rgba(0, 0, 0, .04); }
+/* Inside its confirmation dialog the destructive action is solid red; a refusal is the dialog's main action. */
+#app .modal-foot .btn.danger { background: var(--red); border-color: var(--red); color: #fff; }
+#app .modal-foot .btn.danger:hover { background: #B80012; border-color: #B80012; }
+#app .modal-foot .btn.danger.normal-choice { background: var(--primary); border-color: var(--primary); color: #fff; }
+#app .modal-foot .btn.danger.normal-choice:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn.small { height: 34px; padding: 0 12px; font-size: calc(13px * var(--ts)); }
+.btn.block { width: 100%; height: 44px; margin-top: 24px; font-size: calc(15px * var(--ts)); }
+.filters .btn.small[data-apply-filters] { background: var(--tint); border-color: var(--tint); color: var(--tint-text); }
+.filters .btn.small[data-clear-filters] { border-color: transparent; color: var(--primary); padding: 0 8px; }
+.filters .btn.small[data-clear-filters]:hover { background: transparent; text-decoration: underline; }
+.link { font-weight: 500; }
+:where(#app) :where(a, button, input, select, textarea):focus-visible { outline: 0; box-shadow: 0 0 0 3px var(--halo); }
+
+/* A detail screen: the record's status under its title, the progress as a card of rows, a related list. */
+.related-list { margin-top: 8px; }
+.related-list > h3 { margin: 0 0 12px; }
+.notice { position: relative; background: var(--card); border: 0; border-radius: 12px; box-shadow: var(--ring); color: var(--text);
+  padding: 14px 16px 14px 36px; margin-bottom: 24px; font-size: calc(14px * var(--ts)); }
+.notice::before { content: ""; position: absolute; left: 16px; top: calc(14px + .45em); width: 8px; height: 8px; border-radius: 50%; background: var(--blocked); }
+
+/* Sign-in: one card on the grey ground. */
+.login-wrap { background: var(--login-bg); padding: 40px 16px; }
+.login-card { width: 400px; max-width: 100%; border-radius: var(--radius); padding: 32px; box-shadow: var(--raised); }
+.login-brand { margin-bottom: 8px; }
+.login-brand h1 { font-size: calc(22px * var(--ts)); font-weight: 600; letter-spacing: -.015em; margin: 16px 0 2px; }
+.login-brand p { font-size: calc(14px * var(--ts)); }
+.login-card .f-label { margin-top: 16px; padding: 0 0 6px; }
+.login-card .f-input { min-height: 40px; }
+.demo-roles { margin-top: 24px; padding-top: 16px; gap: 8px; font-size: calc(13px * var(--ts)); }
+.denied { padding: 48px; font-size: calc(15px * var(--ts)); }
+
+/* The client's dialogs: 20px corners over a dimmed page; the title says the consequence, then Cancel and the action. */
+.modal-back { background: rgba(0, 0, 0, .32); }
+.modal { width: 520px; border-radius: 20px; box-shadow: var(--dialog); }
+.modal-head { padding: 24px 24px 8px; border-bottom: 0; font-size: calc(17px * var(--ts)); font-weight: 600; letter-spacing: -.01em; align-items: center; }
+.modal-x { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 7px; font-size: calc(20px * var(--ts)); }
+.modal-x:hover { background: rgba(0, 0, 0, .05); }
+.modal-body { padding: 8px 24px 16px; }
+.modal-body > p { margin: 0 0 16px; color: var(--muted); }
+.modal-body .f-row { gap: 6px; margin-bottom: 16px; }
+.modal-body .f-row:last-child { margin-bottom: 4px; }
+.modal-body .list-block { box-shadow: 0 0 0 1px var(--border); }
+.modal-foot { padding: 8px 24px 24px; border-top: 0; }
+.modal-foot .btn { height: 40px; padding: 0 20px; }
+
+/* Process flow (#/__flow) */
+.flow { padding: 32px 40px; background: var(--bg); }
+.flow h2 { margin-bottom: 24px; }
+.flow-row { gap: 8px; }
+.flow-step { border: 0; border-radius: var(--radius); background: var(--card); box-shadow: var(--ring); padding: 16px 12px; }
+.flow-step.optional { background: var(--card); box-shadow: inset 0 0 0 1px var(--line); border: 0; outline: 1px dashed var(--line); outline-offset: -1px; }
+.flow-num { width: 26px; height: 26px; line-height: 26px; margin-bottom: 8px; background: var(--tint); color: var(--tint-text); font-weight: 600; }
+.flow-name { font-weight: 600; font-size: calc(14px * var(--ts)); }
+.flow-role { font-size: calc(12.5px * var(--ts)); }
+.flow-status { margin-top: 10px; }
+.flow-status .chip { font-size: calc(13px * var(--ts)); }
+.flow-arrow { color: var(--line); }
+.flow-reject { color: var(--blocked-text); font-weight: 500; font-size: calc(14px * var(--ts)); }
+.flow-reject-line { border-top-color: var(--blocked); }
+.flow-notes { color: var(--muted); font-size: calc(13px * var(--ts)); }

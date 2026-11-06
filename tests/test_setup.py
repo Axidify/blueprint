@@ -116,8 +116,34 @@ def test_present_names_the_projects_and_refuses_an_unknown_one(tmp_path):
     (app / "projects" / "leave-request" / "spec").mkdir(parents=True)
     (app / "projects" / "leave-request" / "spec" / "app.yaml").write_text("project: {}\n", encoding="utf-8")
     shutil.copy(support.ROOT / "present.sh", app / "present.sh")
-    listed = subprocess.run(["bash", "present.sh"], cwd=app, input="nowhere\n", capture_output=True, text=True, timeout=30)
-    assert "  leave-request" in listed.stdout and 'No mock-up spec found for "nowhere".' in listed.stdout and listed.returncode == 1
+    listed = subprocess.run(["bash", "present.sh", "nowhere"], cwd=app, capture_output=True, text=True, timeout=30)
+    assert 'No mock-up spec found for "nowhere".' in listed.stdout and "  leave-request" in listed.stdout and listed.returncode == 1
+
+
+@pytest.mark.skipif(sys.platform == "win32" or not shutil.which("bash"), reason="bash scripts: checked on macOS and Linux")
+@pytest.mark.parametrize("arguments, started", [
+    ([], "-I tools/mockup.py serve"),                                       # nothing named: the page that lists every mock-up
+    (["--port", "9001"], "-I tools/mockup.py serve --port 9001"),           # only options: the same page
+    (["leave-request", "--lan"], "-I tools/mockup.py serve projects/leave-request --lan"),
+])
+def test_present_opens_the_list_of_mockups_unless_a_project_is_named(tmp_path, arguments, started):
+    """A stand-in for Python shows what the script starts. It used to ask for a project name to be typed."""
+    app = tmp_path / "app"
+    (app / "projects" / "leave-request" / "spec").mkdir(parents=True)
+    (app / "projects" / "leave-request" / "spec" / "app.yaml").write_text("project: {}\n", encoding="utf-8")
+    (app / ".venv" / "bin").mkdir(parents=True)
+    stand_in = app / ".venv" / "bin" / "python"
+    stand_in.write_text('#!/usr/bin/env bash\necho "started: $*"\n', encoding="utf-8", newline="\n")
+    stand_in.chmod(0o755)
+    shutil.copy(support.ROOT / "present.sh", app / "present.sh")
+    run = subprocess.run(["bash", "present.sh", *arguments], cwd=app, capture_output=True, text=True, timeout=30)
+    assert f"started: {started}" in run.stdout, run.stdout + run.stderr
+
+
+def test_present_cmd_opens_the_list_of_mockups_when_no_project_is_named():
+    """On Windows the same: no name typed into a console window."""
+    script = (support.ROOT / "present.cmd").read_text(encoding="utf-8")
+    assert "python -I tools\\mockup.py serve\n" in script.replace("\r\n", "\n") and "set /p" not in script
 
 
 def test_the_no_word_message_on_a_mac_says_what_to_do_by_hand(tmp_path, monkeypatch):

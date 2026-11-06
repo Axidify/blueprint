@@ -11,7 +11,9 @@ Uses   the company profile and branding from the workspace (see tools/workspace.
 Writes <project_dir>/output/<System> – <document title> v<version>.docx, a PDF when
        Microsoft Word is installed, and a snapshot of the spec used. A PDF from an earlier run is removed
        first, so the Word file and the PDF in output/ are always the same version of the content.
-Warns  when the screenshots were taken before the spec's screens last changed, or one is missing.
+Warns  when the screenshots were taken before the spec's screens last changed, or one is missing, and about
+       team-only text in what the client reads (the mock-up, "proposed", FB-/R- ids, requirement ids of
+       another document); lists the parts still missing before issuing (NFRs, timeline, scope, signatories).
 
 Everything (access matrix, roles, statuses, screens, field tables) comes from the same spec as the
 mock-up, so the document cannot contradict the screens. Format reference: docs/document-format.md.
@@ -43,11 +45,38 @@ TYPE_MAP = {
 }
 REF = re.compile(r"\{ref:([a-z]+):([^}]+)\}")
 LITERAL_REF = re.compile(r"\b(?:[Ss]ections? \d+(?:\.\d+)+|Appendix [A-Z]\b|Figure \d+)")
+# Team-only words that must not reach the document the client signs (see team_notes).
+MOCKUP_WORD = re.compile(r"\bmock-?ups?\b", re.I)
+PROPOSED_WORD = re.compile(r"\bproposed\b(?!\s+(?:new\s+)?(?:system|solution|application|platform|portal|module)s?\b)", re.I)
+FEEDBACK_ID = re.compile(r"\bFB-\d+\b")
+REGISTER_ID = re.compile(r"\bR-\d{3,}\b")
+REQUIREMENT_ID = re.compile(r"\b(?:N?FR|BR|UR|SR|REQ)(?:-[A-Z][A-Z0-9]*)*-\d+(?:\.\d+)*\b")
+SIGNATORY_PLACEHOLDER = re.compile(r"^\s*(?:|[\[<(].*|tbc|tbd|tba|to be (?:named|confirmed|advised)|name|n/?a|x+|-+|–+|\?+)\s*$", re.I)
+PROJECT_TEXT = ("timeline", "project history", "resolved_in")  # texts about the project, not the system (see team_notes)
 SKIP_ACTIONS = {"Back", "Cancel", "View"}
 
 
 def pretty(field):
     return str(field).replace("_", " ").capitalize()
+
+
+def options_from_words(source):
+    """Where a drop-down's choices come from, for the field table: "From Cars" or "From Cars where Status is Available"."""
+    if isinstance(source, dict):
+        where = source.get("where") if isinstance(source.get("where"), dict) else {}
+        rule = " and ".join(f"{pretty(k)} is {' or '.join(map(str, v)) if isinstance(v, list) else v}" for k, v in where.items())
+        return f"From {pretty(source.get('list', ''))}" + (f" where {rule}" if rule else "")
+    return f"From {pretty(str(source).split('.')[0])}"
+
+
+def related_list_words(spec, screen, lst):
+    """The sentence above a detail screen's related list: which records it shows."""
+    link = lst.get("where_record") if isinstance(lst.get("where_record"), dict) else {}
+    shown = pretty(screen.get("data") or "record").rstrip("s").lower()
+    if not link:
+        return f"The {pretty(lst.get('data', '')).lower()} shown with this {shown}."
+    parts = " and ".join(f"{pretty(mine).lower()} is this {shown}'s {pretty(theirs).lower()}" for mine, theirs in link.items())
+    return f"The {pretty(lst.get('data', '')).lower()} whose {parts}."
 
 
 def deep_merge(base, over):
@@ -1018,10 +1047,102 @@ def as_word(value):
     return value
 
 
+MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
+          "November", "December")
+
+
+def readable_date(value):
+    """A date from the spec as the document prints it: 2026-11-06 becomes 6 November 2026, the same on every
+    page whatever the machine's language. Anything else (a month, "TBC") is printed as typed."""
+    text = str(value or "").strip()
+    m = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", text)
+    if m and 1 <= int(m.group(2)) <= 12 and 1 <= int(m.group(3)) <= 31:
+        return f"{int(m.group(3))} {MONTHS[int(m.group(2)) - 1]} {m.group(1)}"
+    return text
+
+
+def requirement_ids(spec):
+    """Every requirement id this spec prints: each group's id and each numbered item under it."""
+    ids = set()
+    for g in spec.get("requirements") or []:
+        if isinstance(g, dict) and g.get("id"):
+            ids.add(str(g["id"]))
+            ids.update(f"{g['id']}.{i}" for i in range(1, len(g.get("items") or []) + 1))
+    return ids
+
+
+def missing_parts(spec, fmt):
+    """The parts the requirements standard asks for that the spec does not have yet, as sentences: the
+    document is still generated (a draft may lack them), but a version for sign-off should not."""
+    import workshop  # its spec_gaps says the same of the scope and the non-functional requirements
+
+    chapters = fmt.get("chapters") or []
+    topics = {"Scope": "scope", "Non-functional requirements": "nfr"}
+    found = [f"{topic.lower()}: {what}" for topic, what, _ in workshop.spec_gaps(spec)
+             if topic in topics and topics[topic] in chapters]
+    if "timeline" in chapters and not ((spec.get("timeline") or {}).get("stages") if isinstance(spec.get("timeline"), dict) else None):
+        found.append("timeline: none in the spec, so the document has no timeline chapter (add `timeline`, "
+                     "see docs/spec-format.md)")
+    if "signoff" in chapters:
+        signoff = [s for s in spec.get("signoff") or [] if isinstance(s, dict)]
+        if not signoff:
+            found.append("sign-off: nobody is named, so the forms are blank (list the signatories under `signoff`)")
+        for s in signoff:
+            if SIGNATORY_PLACEHOLDER.match(str(s.get("name") or "")):
+                who = s.get("signing_for") or s.get("organisation") or "a signatory"
+                found.append(f"sign-off: no name for {who} (set `name` under `signoff`)")
+    return found
+
+
+def team_notes(text, known_requirements, register=None, listed=(), system=True):
+    """What in a client-visible text belongs to the team, not to the client, as short sentences: the mock-up,
+    "proposed", a mock-up comment id (FB-…), a register id (R-…) the document does not list among its
+    decisions needed, a requirement id that is not in this spec (often one of the client's original document).
+    `register` maps register ids to items; `listed` are the ids printed under Decisions needed. `system` is
+    false for texts about the project rather than the system (the timeline, the version history, where a
+    decision was agreed), which may well speak of the mock-up or of a proposed date."""
+    text = REF.sub("", str(text or ""))  # a {ref:...} is resolved, so it is never a stale id
+    found = []
+
+    def around(m):
+        a, b = max(0, m.start() - 25), min(len(text), m.end() + 25)
+        return ("..." if a else "") + text[a:b].strip() + ("..." if b < len(text) else "")
+
+    m = MOCKUP_WORD.search(text) if system else None
+    if m:
+        found.append(f"mentions the mock-up ('{around(m)}'); the document should describe the real system")
+    m = PROPOSED_WORD.search(text) if system else None
+    if m:
+        found.append(f"says 'proposed' ('{around(m)}'); write what was agreed, and keep what is still open in the register")
+    for x in dict.fromkeys(FEEDBACK_ID.findall(text)):
+        found.append(f"names the mock-up comment {x}, which the client cannot look up; say in words what was agreed")
+    for x in dict.fromkeys(REGISTER_ID.findall(text)):
+        if x in listed:
+            continue
+        it = (register or {}).get(x)
+        if it and it.get("audience") == "internal":
+            found.append(f"names {x}, an internal register item the client never sees")
+        elif it and it.get("status") in ("resolved", "wont-fix"):
+            found.append(f"names {x}, which is closed in the register; write the decision into the text")
+        else:
+            found.append(f"names {x}, which is not among the decisions needed in this document")
+    for x in dict.fromkeys(REQUIREMENT_ID.findall(text)):
+        if x not in known_requirements:
+            found.append(f"names {x}, which is not a requirement in this spec (an id from another document?); "
+                         "use {ref:req:...} or an id from this spec")
+    return found
+
+
 # ====================================================================== main
 def build(project):
     project = Path(project)
-    spec = json.loads(json.dumps(yaml.safe_load((project / "spec" / "app.yaml").read_text(encoding="utf-8")), default=str))
+    spec_file = project / "spec" / "app.yaml"
+    if not project.is_dir():
+        sys.exit(f"No project at {project}. Give the project's folder, for example projects/<slug>.")
+    if not spec_file.exists():
+        sys.exit(f"No spec at {spec_file}: this project has no spec yet. Build a mock-up first (it writes the spec), "
+                 "then take its screenshots and generate the document.")
+    spec = json.loads(json.dumps(yaml.safe_load(spec_file.read_text(encoding="utf-8")), default=str))
     import mockup  # the spec check, and whether the screenshots still show the spec
     import project as project_tool  # issued versions are locked
 
@@ -1068,6 +1189,15 @@ def build(project):
     status_color = "ok" if status_is_settled(status_text) else "warning"
     version = P.get("version", "draft")
     num = {key: number for key, number, _ in chapters if number}
+    known_reqs = requirement_ids(spec)
+    register = {it.get("id"): it for it in items}
+    listed = {it["id"] for it in open_items} if "decisions" in num else set()
+
+    def team_check(text, where):
+        """Warn about team-only words in a text the client will read, saying where it is in the spec."""
+        if isinstance(text, str) and text.strip():
+            system = not (where.startswith(PROJECT_TEXT) or where.endswith(PROJECT_TEXT))
+            warnings.extend(f"{where}: {x}" for x in team_notes(text, known_reqs, register, listed, system))
 
     def fill(text, where=""):
         text = str(text)
@@ -1084,7 +1214,62 @@ def build(project):
         out = REF.sub(sub, text)
         if where and LITERAL_REF.search(REF.sub("", text)):
             warnings.append(f"{where}: literal cross-reference '{LITERAL_REF.search(text).group(0)}' (use {{ref:...}})")
+        if where:
+            team_check(text, where)
         return out
+
+    # The short texts the document prints as they are (names, titles, labels, captions), checked the same way
+    # as the longer ones that go through fill().
+    team_check(P.get("name"), "project")
+    team_check(P.get("status"), "project status")
+    for r in roles:
+        team_check(r.get("name"), f"role {r['id']}")
+    for s in spec.get("statuses") or []:
+        team_check(s.get("name"), f"status {s.get('name')}")
+    for s in screens:
+        where = f"screen {s['id']}"
+        for text in (s.get("title"), s.get("caption")):
+            team_check(text, where)
+        for sec in s.get("sections") or []:
+            team_check(sec.get("title"), where)
+            for f in sec.get("fields") or []:
+                team_check(f.get("label"), f"field {f['id']}")
+        lst = s.get("list") or {}
+        for c in lst.get("columns") or []:
+            team_check(c.get("label"), where)
+        for b in (lst.get("toolbar") or []) + (lst.get("actions") or []) + (s.get("buttons") or []):
+            if not b.get("example"):
+                team_check(b.get("label"), where)
+        for stat in s.get("stats") or []:
+            team_check(stat.get("label"), where)
+    for d in spec.get("dialogs") or []:
+        team_check(d.get("title"), f"dialog {d['id']}")
+        for f in d.get("fields") or []:
+            team_check(f.get("label"), f"dialog {d['id']}, field {f['id']}")
+    for shot in shots:
+        team_check(shot.get("caption"), f"screenshots, {shot['name']}")
+    for x in spec.get("glossary") or []:
+        team_check(x.get("term"), f"glossary {x.get('term')}")
+    for x in spec.get("nfr") or []:
+        team_check(x.get("area"), f"non-functional requirement {x.get('area')}")
+    for x in spec.get("integrations") or []:
+        team_check(x.get("system"), f"integration {x.get('system')}")
+        team_check(x.get("direction"), f"integration {x.get('system')}")
+    for e in spec.get("extra_sections") or []:
+        team_check(e.get("title"), f"section '{e.get('title')}'")
+        for block in e.get("content") or []:
+            team_check(block.get("heading"), f"section '{e.get('title')}'")
+            team_check(block.get("caption"), f"section '{e.get('title')}'")
+    for st in (spec.get("timeline") or {}).get("stages") or []:
+        team_check(st.get("name"), "timeline")
+        for it in st.get("items") or []:
+            team_check(it.get("name"), "timeline")
+    # What the register puts in the document: its questions and answers, and where each was agreed.
+    for it in open_items + made_items:
+        for key in ("question", "answer", "resolved_in") + (("finding",) if not it.get("question") else ()):
+            if it in open_items and key in ("answer", "resolved_in"):
+                continue
+            team_check(str(it.get(key) or ""), f"register {it['id']}, {key}")
 
     doc = Document(str(workspace.asset("document-template.docx")))
     w = Writer(doc, fmt)
@@ -1116,6 +1301,27 @@ def build(project):
         if loose:
             notes.append(f"no requirement refers to {'this screen' if len(loose) == 1 else 'these screens'}: {', '.join(loose)}. "
                          "Link each with `screens` on a requirement, or check whether a requirement is missing")
+    # Where in this document each decision needed applies: the requirements that carry it as `tbc`, otherwise
+    # the requirement ids its register `source` names, if this spec has them. A source says where the item was
+    # found, often in the client's original document, whose ids are not this document's: printed as they are,
+    # they pointed the client at the wrong requirement or at none.
+    where_asked, elsewhere = {}, []
+    for g in groups:
+        for i, item in enumerate(g["items"], 1):
+            for x in REGISTER_ID.findall(str(item.get("tbc") or "") if isinstance(item, dict) else ""):
+                where_asked.setdefault(x, []).append(f"{g['id']}.{i}")
+    for it in open_items:
+        if it["id"] in where_asked:
+            continue
+        named = list(dict.fromkeys(REQUIREMENT_ID.findall(str(it.get("source") or ""))))
+        if [x for x in named if x in known_reqs]:
+            where_asked[it["id"]] = [x for x in named if x in known_reqs]
+        if [x for x in named if x not in known_reqs]:
+            elsewhere.append(f"{it['id']} ({', '.join(x for x in named if x not in known_reqs)})")
+    if elsewhere and "decisions" in num:
+        notes.append(f"the register's source for {', '.join(elsewhere)} names requirement ids that are not in this spec "
+                     "(probably those of the document the question was found in), so Decisions needed does not show them. "
+                     "Put `tbc: R-xxx` on the requirement each question is about, and the document points at it")
     # A figure on a dashboard needs its meaning written down (GP-03). Strict once the spec gives any formula.
     formulas_in_use = any("formula" in stat for s in spec["screens"] for stat in s.get("stats") or [])
     figures_open = []
@@ -1155,7 +1361,7 @@ def build(project):
             title.paragraph_format.keep_with_next = True
             w.para([(f"Prepared for {names['client']}", "sec")], size=w.s["body"] + 1, after=8)
             w.para([(status_color, "dot"), (status_text, "")], after=60)
-            pairs = [("Version", [(version, "mono")]), ("Date", P.get("date", "")), ("Prepared by", P.get("prepared_by", "")),
+            pairs = [("Version", [(version, "mono")]), ("Date", readable_date(P.get("date"))), ("Prepared by", P.get("prepared_by", "")),
                      ("Reviewed by", P.get("reviewed_by", ""))]
             if P.get("approved_by"):
                 pairs.append(("Approved by", P["approved_by"]))
@@ -1188,7 +1394,7 @@ def build(project):
             if P.get("history"):
                 w.para([("Version history", "medium")], size=w.s["h3"], before=8, after=3)
                 w.table(["Version", "Date", "Author", "Changes"],
-                        [[[(str(h.get("version")), "mono")], h.get("date"), h.get("author"), fill(h.get("changes", ""))] for h in P["history"]],
+                        [[[(str(h.get("version")), "mono")], readable_date(h.get("date")), h.get("author"), fill(h.get("changes", ""), f"project history v{h.get('version')}")] for h in P["history"]],
                         [1.8, 2.6, 3.4, w.text_width - 7.8])
         elif part == "about":
             w.page_break()
@@ -1220,7 +1426,7 @@ def build(project):
                     t += f", {f['length']}"
                 if f.get("readonly") and f.get("type") not in ("file",):
                     t = "Calculated" if "alculat" in str(f.get("source", "")) else t + " (read-only)"
-                src = f.get("source") or (f"From {pretty(f['options_from'].split('.')[0])}" if f.get("options_from")
+                src = f.get("source") or (options_from_words(f["options_from"]) if f.get("options_from")
                                           else ("Options: " + ", ".join(map(str, f["options"])) if f.get("options") else ""))
                 val = f.get("validation") if f.get("validation") not in (None, "N/A") else ""
                 rule = ". ".join(x for x in (src, val) if x) or "–"
@@ -1249,6 +1455,7 @@ def build(project):
                 else:
                     warnings.append(f"{where}: image {block['image']} not found")
 
+    captions = set()  # of the screens' figures: two alike and the reader cannot tell the pictures apart
     by_screen = {}
     for s in shots:
         by_screen.setdefault(s["screen"], []).append(s)
@@ -1328,16 +1535,18 @@ def build(project):
                             return "Nobody"
                         return "All roles" if set(ids) >= set(role_ids) else ", ".join(r["name"] for r in roles if r["id"] in ids)
 
-                    def moves_to(value):
+                    def moves_to(value, auto=()):
+                        """The statuses it moves to; those the system moves it to on its own (`auto`) say so."""
                         if value is None:
                             return undecided
-                        return ", ".join(status_name[x] for x in value) or "None: a final status"
+                        return ", ".join(status_name[x] + (" (automatic)" if x in auto else "") for x in value) or "None: a final status"
 
                     w.para([("Status rules", "medium")], size=w.s["h3"], before=8, after=3, keep=True)
                     w.lead("Who may change a record while it is in each status, and which statuses it can move to.")
                     rule_w = (tw - 3.0) / 4
                     w.table(["Status"] + [label_ for _, label_ in STATUS_RULES] + ["Moves to"],
-                            [[[(s["name"], "medium")]] + [who(s.get(k)) for k, _ in STATUS_RULES] + [moves_to(s.get("next"))] for s in spec["statuses"]],
+                            [[[(s["name"], "medium")]] + [who(s.get(k)) for k, _ in STATUS_RULES]
+                             + [moves_to(s.get("next"), s.get("auto") or ())] for s in spec["statuses"]],
                             [3.0] + [rule_w] * 4)
                     open_rules = [s["name"] for s in spec["statuses"] if any(s.get(k) is None for k in rule_keys)]
                     if open_rules:
@@ -1440,9 +1649,7 @@ def build(project):
                 rows = []
                 for i, item in enumerate(g["items"], 1):
                     d = item if isinstance(item, dict) else {"text": item}
-                    text = fill(d["text"], f"{g['id']}.{i}")
-                    if re.search(r"mock-?up", text, re.I):
-                        warnings.append(f"{g['id']}.{i}: mentions the mock-up; requirements should describe the real system")
+                    text = fill(d["text"], f"{g['id']}.{i}")  # also warns when it mentions the mock-up
                     cell = [(text, "")]
                     if d.get("tbc"):
                         cell += [("\n", ""), ("warning", "dot"), (labels["decision_needed"] + " ", "sec"), (d["tbc"], "mono")]
@@ -1473,6 +1680,7 @@ def build(project):
                            size=w.s["caption"], after=8, keep=True)
                 sshots = by_screen.get(s["id"], [])
                 paged = [x for x in sshots if x.get("page") and not x.get("dialog") and not x.get("record")]
+                main_role = sshots[0].get("role") if sshots else None
                 for shot in sshots:
                     img = shot_dir / f"{shot['name']}.png"
                     if not img.exists():
@@ -1486,6 +1694,15 @@ def build(project):
                         cap = f"{s['title']}, step {paged.index(shot) + 1} of {len(paged)}"
                     else:
                         cap = s.get("caption") or s["title"]
+                        if "dialog" in shot:  # an extra screenshot from the spec's `screenshots`: say how it differs
+                            seen_by = next((r["name"] for r in roles if r["id"] == shot.get("role")), None)
+                            parts = ([f"as seen by {seen_by}"] if seen_by and shot.get("role") != main_role else []) + \
+                                    ([f"showing record {shot['record']}"] if shot.get("record") else [])
+                            cap += (", " + " and ".join(parts)) if parts else ""
+                    if cap in captions:
+                        warnings.append(f"screen {s['id']}: two figures have the caption '{cap}' (give the extra one a "
+                                        f"`caption` in `screenshots`, name {shot['name']})")
+                    captions.add(cap)
                     w.figure(img, cap)
                 if s.get("stats"):
                     column_label = {c["field"]: c["label"] for c in (s.get("list") or {}).get("columns") or []}
@@ -1512,8 +1729,11 @@ def build(project):
                 if s.get("sections"):
                     rows, group = field_rows(s["sections"])
                     w.table(field_header, rows, field_widths, group_rows=group)
-                elif s.get("list"):
+                if s.get("list") and (s.get("type") == "detail" or not s.get("sections")):
                     lst = s["list"]
+                    if s.get("type") == "detail":
+                        w.para([(lst.get("title") or "Related records", "medium")], before=6, after=2, keep=True)
+                        w.lead(related_list_words(spec, s, lst))
                     marks = {f: "Search" for f in lst.get("search") or []}
                     for f in lst.get("filters") or []:
                         marks[f] = (marks.get(f, "") + " Filter").strip()
@@ -1552,7 +1772,7 @@ def build(project):
             tl = spec["timeline"]
             w.heading(f"{number} {title}", 1)
             w.lead(fill(tl.get("intro") or "The high-level plan for the project. Week 1 is the week of the kick-off meeting; "
-                                              "calendar dates are set once the kick-off date is confirmed."))
+                                              "calendar dates are set once the kick-off date is confirmed.", "timeline"))
             if tl.get("summary"):
                 w.cards([(x["value"], x["label"], x.get("color")) for x in tl["summary"]], value_size=14)
             stages = tl.get("stages") or []
@@ -1571,12 +1791,12 @@ def build(project):
             if ms:
                 w.para([("Milestones", "medium")], size=w.s["h3"], before=6, after=3, keep=True)
                 w.table(["ID", "Milestone", tl.get("unit", "Week"), "Client action"],
-                        [[[(str(m["milestone"]), "mono")], fill(m.get("title") or m.get("name", "")),
-                          str(m.get("week", m.get("start", ""))), fill(m.get("client_action") or "\u2013")] for m in ms],
+                        [[[(str(m["milestone"]), "mono")], fill(m.get("title") or m.get("name", ""), "timeline"),
+                          str(m.get("week", m.get("start", ""))), fill(m.get("client_action") or "\u2013", "timeline")] for m in ms],
                         [1.4, 6.0, 1.6, tw - 9.0])
             if tl.get("assumptions"):
                 w.para([("Assumptions", "medium")], size=w.s["h3"], before=6, after=3, keep=True)
-                w.bullets([fill(a) for a in tl["assumptions"]])
+                w.bullets([fill(a, "timeline, assumptions") for a in tl["assumptions"]])
 
         # ---------------------------------------------------------------- extra sections
         elif key == "extra":
@@ -1593,10 +1813,7 @@ def build(project):
                 rows = []
                 for it in open_items:
                     color, word = impact.get(it["severity"], ("line", it["severity"]))
-                    # Point only at requirement IDs that exist in this version; free-text locations in the
-                    # register may refer to an older document.
-                    ids = [x for x in dict.fromkeys(re.findall(r"FR-[A-Z]+-\d{3}(?:\.\d+)?", it.get("source", "")))
-                           if x.split(".")[0] in {g["id"] for g in groups}]
+                    ids = where_asked.get(it["id"], [])
                     rows.append([[(it["id"], "mono")], [(it["question"], "")] + ([("  " + ", ".join(ids), "ref")] if ids else []),
                                  [(color, "dot"), (word, "")], it.get("owner") or names["client_short"], it.get("due") or "–"])
                 # The three narrow columns are sized to what they hold, so an impact stays on one line and an
@@ -1627,10 +1844,16 @@ def build(project):
             w.heading(title, 1)
             for line in bp["signoff"]:
                 w.para(fill(line))
-            excluded = (f"{len(open_items)} (section {num['decisions']})" if open_items and "decisions" in num
-                        else ("None" if not open_items else str(len(open_items))))
-            w.cards([(f"v{version}", f"Document, {P.get('date', '')}", None), (excluded, "Open decisions excluded", None),
-                     ("By hand or in the PDF", "How to sign", None)], value_size=11)
+            # What is signed and what is not, in words a client reads without help: the version and its date,
+            # the decisions still open (left out of this approval), and how to sign.
+            dated = readable_date(P.get("date")).replace(" ", " ")  # the date stays on one line in the card
+            n_open = len(open_items)
+            still_open = (f"{n_open} decision{'s' if n_open != 1 else ''} still open" if n_open else "No open decisions")
+            left_out = (labels["not_signed"] + (f": see section {num['decisions']}" if "decisions" in num else "")
+                        if n_open else labels["nothing_left_out"])
+            w.cards([(f"Version {version}", labels["signing"] + (f" · {dated}" if dated else ""), None),
+                     (still_open, left_out, None),
+                     ("By hand or digitally", labels["how_to_sign"], None)], value_size=11)
             w.para([("Sign by hand: print this section, sign, stamp and scan it. Sign digitally: open the PDF in Adobe "
                      "Acrobat Reader and click a signature box to sign with your digital ID. Each box can be signed "
                      "separately, in any order.", "sec")], size=w.s["caption"], after=10)
@@ -1672,13 +1895,20 @@ def build(project):
         print(f"  {len(warnings)} WARNING(S) - fix these before issuing:")
         for x in warnings:
             print("   - " + x)
+    missing = missing_parts(spec, fmt)
+    if missing:
+        print(f"  {len(missing)} PART(S) MISSING - add these to the spec before issuing:")
+        for x in missing:
+            print("   - " + x)
     done, why = finish_in_word(out)
     if done:
-        sharp = sharpen_pdf_pictures(pdf, w.pictures)
+        sharp, unsharp = sharpen_pdf_pictures(pdf, w.pictures)
         placed = add_signature_fields(pdf, signers)
         print(f"  Table of contents updated, fonts embedded; PDF written to {pdf.name}"
               f" with {placed} of {len(signers)} signing fields"
               + (f" and {sharp} of {len(w.pictures)} pictures at full size" if w.pictures else ""))
+        if unsharp:
+            print(f"  Pictures: {unsharp}.")
         return out
     try:
         strip_markers(out)
@@ -1724,39 +1954,80 @@ def sharpen_pdf_pictures(pdf_path, pictures):
 
     Word's PDF export brings every picture down to about 200 dots per inch, whatever the document holds, so
     the small text of a screenshot went soft when zoomed. The figures are the wide pictures of the PDF, in
-    reading order; each is replaced by the file it was made from. Returns how many were replaced. When the
-    PDF's pictures cannot be matched one for one with the figures, nothing is changed."""
+    reading order; each is replaced by the file it was made from. Word keeps two identical pictures once, so
+    one picture of the PDF may stand for several figures: it is replaced once, when their files are the same.
+
+    Returns (how many figures now have their full-size picture, why the others do not: "" when all do).
+    When the PDF's pictures cannot be matched one for one with the figures, nothing is changed."""
+    import hashlib
+
     import pymupdf
 
     doc = pymupdf.open(str(pdf_path))
     wide = []  # (page, picture reference, width in pixels, shape) of each figure: logos and icons are narrower
+    is_wide = lambda rect: rect.width > 8 / 2.54 * 72
     for page in doc:
-        on_page = []
+        # The places of a picture are found by its content, so pictures with the same content (one stored
+        # twice, or once and used twice) all report every place: each place is taken once, by one of them.
+        alike = {}  # places -> the pictures that report them
         for image in page.get_images(full=True):
-            rects = page.get_image_rects(image[0])
-            if rects and rects[0].width > 8 / 2.54 * 72:
-                on_page.append((rects[0].y0, rects[0].x0, page.number, image[0], image[2], rects[0].width / rects[0].height))
+            rects = sorted((r for r in page.get_image_rects(image[0]) if is_wide(r)), key=lambda r: (r.y0, r.x0))
+            if rects:
+                alike.setdefault(tuple((round(r.y0, 1), round(r.x0, 1)) for r in rects), (rects, []))[1].append(image)
+        on_page = []
+        for rects, images in alike.values():
+            for i, rect in enumerate(rects):
+                image = images[i % len(images)]
+                on_page.append((rect.y0, rect.x0, page.number, image[0], image[2], rect.width / rect.height))
         wide += sorted(on_page)
-    replaced = 0
-    if len(wide) == len(pictures) and len({w[3] for w in wide}) == len(wide):
-        for (_, _, page_no, xref, pixels, shape), picture in zip(wide, pictures):
-            try:
-                original = pymupdf.Pixmap(str(picture))
-            except Exception:
-                continue
-            same_shape = abs(original.width / original.height - shape) < 0.03 * shape  # a wrong match would distort
-            if same_shape and original.width > pixels:
-                if original.alpha:  # a screenshot has nothing see-through: without it the PDF is smaller
-                    original = pymupdf.Pixmap(original, 0)
-                page = doc[page_no]
-                names_before = {image[7] for image in page.get_images(full=True)}
-                page.replace_image(xref, pixmap=original)
-                # The library adds the new picture to the page under a name of its own and copies it over the
-                # old one, leaving that extra entry behind: every picture would be in the file twice.
-                for image in page.get_images(full=True):
-                    if image[7] not in names_before:
-                        drop_picture_entry(doc, page, image[7])
-                replaced += 1
+    unmatched = "the pictures could not be matched to the figures, so the PDF keeps Word's reduced pictures"
+    if len(wide) != len(pictures):
+        doc.close()
+        return 0, f"the PDF has {len(wide)} wide pictures for {len(pictures)} figures: {unmatched}"
+    uses = {}  # picture reference -> [(page, width in pixels, shape, figure file)], in reading order
+    for (_, _, page_no, xref, pixels, shape), picture in zip(wide, pictures):
+        uses.setdefault(xref, []).append((page_no, pixels, shape, Path(picture)))
+
+    def content(path):
+        try:
+            return hashlib.sha256(path.read_bytes()).hexdigest()
+        except OSError:
+            return str(path)
+
+    if any(len({content(p) for *_, p in used}) > 1 for used in uses.values()):
+        doc.close()  # one picture in the PDF for figures that differ: the order is not the figures' order
+        return 0, unmatched
+    replaced, other_shape, not_larger, unreadable = 0, 0, 0, 0
+    for xref, used in uses.items():
+        page_no, pixels, shape, picture = used[0]
+        try:
+            original = pymupdf.Pixmap(str(picture))
+        except Exception:
+            unreadable += len(used)
+            continue
+        if abs(original.width / original.height - shape) >= 0.03 * shape:  # a wrong match would distort
+            other_shape += len(used)
+            continue
+        if original.width <= pixels:
+            not_larger += len(used)
+            continue
+        if original.alpha:  # a screenshot has nothing see-through: without it the PDF is smaller
+            original = pymupdf.Pixmap(original, 0)
+        page = doc[page_no]
+        names_before = {image[7] for image in page.get_images(full=True)}
+        page.replace_image(xref, pixmap=original)  # every place that shows this picture gets the new one
+        # The library adds the new picture to the page under a name of its own and copies it over the
+        # old one, leaving that extra entry behind: every picture would be in the file twice.
+        for image in page.get_images(full=True):
+            if image[7] not in names_before:
+                drop_picture_entry(doc, page, image[7])
+        replaced += len(used)
+    pictures_ = lambda n: f"{n} picture{'s' if n != 1 else ''}"
+    why = "; ".join(x for x in (
+        f"{pictures_(other_shape)} did not match the shape of {'its' if other_shape == 1 else 'their'} figure, "
+        "so the PDF keeps Word's reduced version" if other_shape else "",
+        f"{pictures_(not_larger)} {'was' if not_larger == 1 else 'were'} already as sharp as the original" if not_larger else "",
+        f"{pictures_(unreadable)} could not be read from the screenshots folder" if unreadable else "") if x)
     if replaced:
         tmp = pdf_path.with_suffix(".sharp.pdf")
         doc.save(str(tmp), garbage=3, deflate=True)
@@ -1764,7 +2035,7 @@ def sharpen_pdf_pictures(pdf_path, pictures):
         tmp.replace(pdf_path)
     else:
         doc.close()
-    return replaced
+    return replaced, why
 
 
 def add_signature_fields(pdf_path, signers):
@@ -1880,8 +2151,23 @@ def finish_in_word(docx_path):
     return False, reason[:400] or f"PowerShell ended with code {r.returncode}"
 
 
+def utf8_console():
+    """Print "●", "–" and every other character as they are: a Windows console or pipe may otherwise use an
+    old code page, where they stop the run or come out as "?" or "�". Messages to stderr (sys.exit) as well."""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
 if __name__ == "__main__":
+    utf8_console()
+    if len(sys.argv) == 2 and sys.argv[1] in ("-h", "--help"):
+        print(__doc__)
+        sys.exit(0)
     if len(sys.argv) != 2:
         sys.exit(__doc__)
-    sys.stdout.reconfigure(encoding="utf-8")
     build(sys.argv[1])
+    try:  # the project's overview page follows what was just written; it never stops this command
+        import overview; overview.refresh(sys.argv[1])
+    except Exception:
+        pass

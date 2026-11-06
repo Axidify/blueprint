@@ -37,6 +37,36 @@ def check_skills(errors):
         errors.append(f"docs/skills.md: documents '{s}', but there is no .claude/skills/{s}/SKILL.md")
 
 
+HAND_OVER = "## Hand over"
+MAINTAINER_SKILLS = {"release"}  # for the people who maintain the app itself: nothing to hand to a BA
+
+
+def headings(text):
+    """The '## ' headings of a Markdown text, outside code blocks."""
+    found, fenced = [], False
+    for line in text.splitlines():
+        if line.startswith("```"):
+            fenced = not fenced
+        elif not fenced and line.startswith("## "):
+            found.append(line.rstrip())
+    return found
+
+
+def check_hand_over(errors):
+    """Every skill people use ends with the shared hand-over: what was made, where, for whom, the next step."""
+    for path in sorted((ROOT / ".claude" / "skills").glob("*/SKILL.md")):
+        name = path.parent.name
+        if name in MAINTAINER_SKILLS:
+            continue
+        found = headings(path.read_text(encoding="utf-8"))
+        rel = f".claude/skills/{name}/SKILL.md"
+        if HAND_OVER not in found:
+            errors.append(f"{rel}: no '{HAND_OVER}' section; every skill ends by telling the person what was made, "
+                          "where it is, who it is for and the next step (see 'Writing a skill' in docs/maintaining.md)")
+        elif found[-1] != HAND_OVER:
+            errors.append(f"{rel}: '{HAND_OVER}' must be the last section, but '{found[-1]}' comes after it")
+
+
 def check_tools(errors):
     tools = sorted(p.name for p in (ROOT / "tools").iterdir() if p.suffix in (".py", ".mjs"))
     tools_doc = (ROOT / "docs" / "tools.md").read_text(encoding="utf-8")
@@ -163,6 +193,7 @@ def main():
     pre_commit = "--pre-commit" in sys.argv or "--hook" in sys.argv
     errors = []
     check_skills(errors)
+    check_hand_over(errors)
     check_tools(errors)
     check_changelog(errors)
     check_links(errors)
