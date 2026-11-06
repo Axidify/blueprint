@@ -11,6 +11,8 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-07
+
 ### Added
 - **Comment with a box.** In feedback mode, drag a box instead of clicking: around several things, it is one
   comment about all of them ("make these one date range"); where there is nothing yet, it marks where
@@ -807,7 +809,8 @@ First release.
 - One-step setup (`setup.cmd`) with a machine check, `present.cmd` for sessions, shared Claude Code
   permissions and a start-up status greeting.
 
-[Unreleased]: https://github.com/Axidify/blueprint/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/Axidify/blueprint/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/Axidify/blueprint/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/Axidify/blueprint/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/Axidify/blueprint/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/Axidify/blueprint/compare/v1.0.0...v1.1.0
