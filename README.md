@@ -48,7 +48,8 @@ To present a mock-up in a meeting, double-click **`present.cmd`** (on a Mac: **`
 the project. Press **Feedback**
 on the dark bar in the bottom-right corner, click anything on the screen and type a comment, or drag a box:
 around several things for one comment about all of them, or where there is nothing yet for something new
-("an Export button here"). Comments are saved automatically, and every comment with what became of it is
+("an Export button here"); the box stays beside what it was drawn next to, whatever the width of the
+window. Comments are saved automatically, and every comment with what became of it is
 listed in the project's `2 Reviews/Mock-up comments.xlsx`. When the mock-up is changed, **Update ready**
 appears; press it and **What changed** lists each change, so you can go through them with the room. Submitting a form or approving a request plays out on screen, and the walk-through is kept
 (and shared with everyone in the room) until you press **Reset sample data**.

@@ -11,6 +11,8 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+## [1.3.3] - 2026-11-07
+
 ### Fixed
 - **A box drawn for something new stays beside what it was drawn next to.** A box drawn just left of a
   button stays just left of that button when the Feedback or What changed panel opens or closes, or the
@@ -862,7 +864,8 @@ First release.
 - One-step setup (`setup.cmd`) with a machine check, `present.cmd` for sessions, shared Claude Code
   permissions and a start-up status greeting.
 
-[Unreleased]: https://github.com/Axidify/blueprint/compare/v1.3.2...HEAD
+[Unreleased]: https://github.com/Axidify/blueprint/compare/v1.3.3...HEAD
+[1.3.3]: https://github.com/Axidify/blueprint/compare/v1.3.2...v1.3.3
 [1.3.2]: https://github.com/Axidify/blueprint/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/Axidify/blueprint/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/Axidify/blueprint/compare/v1.2.1...v1.3.0
