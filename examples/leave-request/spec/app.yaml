@@ -17,10 +17,12 @@ project:
 roles:
   - id: employee
     name: Employee
+    user: Nur Aisyah          # the sample person signed in as this role: shown in the header and as "handled by"
     description: Applies for leave, tracks the status of their applications and cancels them when plans change.
     scope: Own applications only
   - id: manager
     name: Line Manager
+    user: Ahmad Faiz
     description: Approves or rejects leave applications from their direct reports.
     scope: Applications from their direct reports
   - id: hr
@@ -164,7 +166,7 @@ screens:
       - {step: Line Manager Approval, by: "Ahmad Faiz", at: "", status: Pending}
     buttons:
       - {label: Back, to: my-applications}
-      - {label: Cancel Application, style: danger, roles: [employee], dialog: cancel-dialog}
+      - {label: Cancel Application, style: danger, roles: [employee], dialog: cancel-dialog, when: {status: [Pending Approval, Approved]}}
 
   - id: approvals
     type: list
@@ -196,8 +198,8 @@ screens:
     fields_from: new-application
     buttons:
       - {label: Back, to: approvals}
-      - {label: Reject, style: danger, dialog: reject-dialog}
-      - {label: Approve, style: primary, dialog: approve-dialog}
+      - {label: Reject, style: danger, dialog: reject-dialog, when: {status: Pending Approval}}
+      - {label: Approve, style: primary, dialog: approve-dialog, when: {status: Pending Approval}}
 
   - id: leave-types
     type: list
@@ -221,16 +223,16 @@ dialogs:
     title: Approve Application
     fields:
       - {id: comment, label: Comment, type: textarea, length: 500}
-    confirm: {label: Confirm Approve, style: primary, toast: "Application approved", to: approvals}
+    confirm: {label: Confirm Approve, style: primary, toast: "Application approved", to: approvals, set_status: approved}
   - id: reject-dialog
     title: Reject Application
     fields:
       - {id: reason, label: Reason for rejection, type: textarea, length: 500, required: true, validation: "Please provide a reason for rejection"}
-    confirm: {label: Confirm Reject, style: danger, toast: "Application rejected", to: approvals}
+    confirm: {label: Confirm Reject, style: danger, toast: "Application rejected", to: approvals, set_status: rejected}
   - id: cancel-dialog
     title: Cancel Application
     message: Are you sure you want to cancel this application? Your line manager will be informed.
-    confirm: {label: Yes, cancel it, style: danger, toast: "Application cancelled", to: my-applications}
+    confirm: {label: "Yes, cancel it", style: danger, toast: "Application cancelled", to: my-applications, set_status: cancelled}
 
 # Extra screenshots beyond one per screen: dialogs, other roles or records.
 screenshots:

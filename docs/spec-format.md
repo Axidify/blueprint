@@ -32,7 +32,8 @@ Optional files next to `app.yaml`: `client-logo.png` (document cover) and `proce
 ## Status rules
 
 Who may change a record while it is in a status, and where it can go next. They are printed as a table
-under the statuses in the document; the mock-up does not use them.
+under the statuses in the document. The mock-up does not enforce them, but a button that moves a record
+(see [Status moves](#status-moves)) must agree with `next`.
 
 ```yaml
 statuses:
@@ -104,8 +105,9 @@ screenshot) and `caption`.
 **`list`:** `data` (a key of `data`), `where` (filter, e.g. `{status: "Pending Approval"}` or a list of
 allowed values `{status: [Submitted, Approved]}`), `columns: [{field, label, chip}]` (`chip: true` shows
 the value as a coloured status), `filters: [field, ...]`,
-`actions: [{label, to | toast, when}]` (per row; `to` opens a screen with that row's record; `when:
-{status: Draft}` shows the action only on matching rows),
+`actions: [{label, to | toast, when, set_status}]` (per row; `to` opens a screen with that row's record; `when:
+{status: Draft}` shows the action only on matching rows; `set_status` moves that row's record, see
+[Status moves](#status-moves)),
 `toolbar: [{label, to | toast, style}]`, `search: [field]` (text search boxes, partial match). In the
 mock-up both work on the sample rows: **Search** applies them and **Clear Filters** resets them. `sort` (text for the requirements document), `empty` (empty-state text). Actions and toolbar buttons appear in the requirements document access matrix unless `access: false`.
 
@@ -117,20 +119,61 @@ form into steps (tabs); each page gets its own screenshot.
 `options` or `options_from: list.field`, `placeholder`, `help`, `source` and `validation` (both go into
 the requirements document data requirement table).
 
-**Buttons:** `{label, style (primary | danger), to, toast, dialog, roles, when, example}`. `toast` shows a
+**Buttons:** `{label, style (primary | danger), to, toast, dialog, roles, when, example, set_status}`. `toast` shows a
 message (e.g. "Draft saved"); `roles` limits who sees the button; `when` shows it only for matching
-records on detail screens. Primary, danger and dialog buttons appear as actions in the requirements document access matrix,
+records on detail screens; `set_status` moves the record to another status (see
+[Status moves](#status-moves)). Put a label that starts with Yes, No, On or Off in quotes (`label: "Yes,
+cancel it"`): YAML otherwise reads it as true or false, and the build stops. Primary, danger and dialog buttons appear as actions in the requirements document access matrix,
 except `example: true` buttons (demo-only buttons that open a dialog for screenshots).
 
 ## Dialogs
 
-`{id, title, message, fields, list, doc_table, confirm: {label, style, toast, to}}`. `doc_table: false` (formerly `srs_table`) leaves its field table out of the requirements document. A button opens it with
+`{id, title, message, fields, list, doc_table, confirm: {label, style, toast, to, set_status}}`. `doc_table: false` (formerly `srs_table`) leaves its field table out of the requirements document. A button opens it with
 `dialog: <id>`. `list` shows a table inside the dialog (same format as a screen list). Dialog fields
 appear in the requirements document under the screen that opens it.
 
 The confirm button always closes the dialog: it then opens its `to` screen, or stays on the current
 screen when it has none (with its `toast`, if any). A dialog without `confirm` gets an OK button that
 closes it.
+
+## Status moves
+
+Give a button `set_status: <status id or name>` and clicking it in the mock-up moves the record to that
+status, so the client can watch the process play out instead of being told about it:
+
+```yaml
+screens:
+  - id: review-application
+    type: detail
+    data: applications
+    buttons:
+      - {label: Approve, style: primary, dialog: approve-dialog, when: {status: Pending Approval}}
+dialogs:
+  - id: approve-dialog
+    title: Approve Application
+    confirm: {label: Confirm Approve, toast: "Application approved", to: approvals, set_status: approved}
+```
+
+Everything drawn from the record follows: its status on every screen, the lists it belongs to (`where`),
+the counts on dashboards (`count`), and the buttons and row actions that depend on its status (`when`).
+Give those buttons a `when`, or Approve stays on an application that is already approved.
+
+- **Which record.** On a detail screen, or a form opened on a record, it is that record, also from a dialog
+  opened there. On a row action of a list it is that row. When the button opens a dialog, put `set_status`
+  on the dialog's `confirm`: the record moves when the dialog is confirmed, not when it opens.
+- **Progress.** When the record (or the detail screen that shows it) has a `timeline`, the first step still
+  waiting (no `at`) is filled in with the new status, the signed-in role's `user` (or its name), the time,
+  and what was typed into the dialog as the comment. With no step waiting, a line is added. After a final
+  status (`next: []`) the steps still waiting are dropped.
+- **Only in the browser, only until a reload.** Nothing is saved and nobody else in the room sees it.
+  Reloading the page (F5) puts the sample data back, which is how to start a walk-through again.
+  Screenshots are not affected, and adding `set_status` does not make them out of date.
+- **Checked against the status rules.** The build stops when `set_status` names no status, when the button
+  has no record to move (a toolbar or dashboard button), or when the move contradicts `next`: where the
+  record is comes from the button's `when: {status: ...}`, or the `where` of its list. The build also lists
+  the moves the rules allow that no button makes, so you can see what the walk-through cannot show.
+
+A new record is not created: **Submit** on an empty form still only shows its message.
 
 ## Status colours
 
@@ -179,7 +222,9 @@ the timeline and extra sections, including the cells of their tables.
 when the spec points at something that does not exist: a screen, dialog, role or data list; a list column,
 filter, search field or `where` / `when` / `count` condition naming a field the sample data does not have;
 an `options_from` that is not `<data list>.<field>`; a field type that is not one of the list above; a
-`record` that is not in the data; a role or dialog id used twice. It also reports a setting that nearly
+`record` that is not in the data; a role or dialog id used twice; a button label that YAML read as true
+or false; a `set_status` that cannot work or contradicts the status rules (see
+[Status moves](#status-moves)). It also reports a setting that nearly
 spells a real one, such as `colums` or `tittle`, with the name it expects. Settings the format does not know
 at all are left alone, so you can keep notes of your own in the spec.
 

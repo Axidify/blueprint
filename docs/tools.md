@@ -79,6 +79,9 @@ Builds the mock-up from the spec (self-contained: `mockup/index.html` opens with
 with feedback capture, captures screenshots with Edge, or lists saved feedback by screen.
 `present.cmd` runs `serve` (`present.sh` on macOS and Linux). See [Spec format](spec-format.md).
 
+When buttons in the spec move a record to another status (`set_status`), `build` says how many, and lists
+the moves the status rules allow that no button makes.
+
 Every build keeps a copy of the mock-up in `mockup/versions/v<version>/`. The copy of a version that
 was issued to the client is never replaced: bump `project.version` to keep a new one.
 

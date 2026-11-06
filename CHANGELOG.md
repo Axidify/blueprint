@@ -11,6 +11,25 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+### Added
+- **The mock-up can act the process out.** Give a button `set_status` in the spec and clicking it moves the
+  record to that status: approve an application as the manager and it shows as Approved on every screen,
+  leaves the list of pending approvals, changes the counts on the dashboards, loses its Approve and Reject
+  buttons, and its approval progress records who handled it, when, and the comment typed into the dialog.
+  Until now the button showed a message and the record stayed as it was. Nothing is saved: reload the page
+  (F5) to put the sample data back and run the walk-through again. Screenshots are not affected. The
+  made-up sample project does it for Approve, Reject and Cancel; say "make the buttons move the record"
+  to have it added to a project of your own. See [Spec format](docs/spec-format.md#status-moves).
+- **The mock-up and the status rules can no longer disagree.** The build stops when a button moves a
+  record somewhere the status rules do not allow (for example out of a final status), and it lists the
+  moves the rules allow that no button makes, so you know what the walk-through cannot show.
+
+### Fixed
+- **A button label starting with Yes, No, On or Off is no longer shown as "true" or "false".** Written
+  without quotes, YAML reads such a label as true or false, and the mock-up showed that word on the
+  button; the sample project's "Yes, cancel it" button did. The build now stops and says to put the label
+  in quotes.
+
 ## [0.9.0] - 2026-11-06
 
 ### Added

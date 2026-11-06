@@ -28,7 +28,13 @@ so every decision put into the spec shows up in both. Format: `docs/spec-format.
    rules where they are known: `edit`, `cancel`, `delete` (role ids, `all` or `none`) and `next` (the
    statuses it can move to). Leave a rule out when it is not decided and add a register question for it:
    never guess who may cancel or delete (GP-02).
-3. Screens: one per menu item, plus detail, review and dialog screens for each workflow step. Every list
+3. Screens: one per menu item, plus detail, review and dialog screens for each workflow step. Give every
+   button that moves an existing record on (approve, reject, cancel, return, resubmit, complete)
+   `set_status` and a `when` for the statuses it shows in, so the client can act the process out in the
+   session: approve as one role, switch role, see what the next person sees. On a button that opens a
+   dialog, `set_status` goes on the dialog's `confirm`. Submit on a new, empty form has no record to move
+   and keeps its message. The build refuses a move the status rules do not allow, and lists the
+   allowed moves no button makes: decide for each whether the client should be able to see it. Every list
    gets explicit columns and filters (GP-05). Every figure on a dashboard says what it counts
    (GP-03): use `count` where it can be counted from the screen's list (the document then describes it),
    and give a typed-in `value` a `formula` in words. Leave the formula out when the client has not defined
@@ -54,6 +60,8 @@ Tell the user:
 - How to present it: `python -I tools/mockup.py serve projects/<slug>` opens it at http://localhost:8765.
   Add `--lan` so people in the room can comment from their own laptops. It also opens straight from
   `projects/<slug>/mockup/index.html` without the server (comments are then exported with a button).
+- How to act the process out: the action buttons move the sample record to its next status, and lists,
+  counts and buttons follow. Reloading the page (F5) puts the sample data back for the next run.
 - How feedback works: press **Feedback** (or F2), click any element, type a comment. Comments are saved
   to `projects/<slug>/feedback/feedback.json`. The window that started the mock-up must stay open: if it
   is closed, the mock-up says in red that a comment was not saved and keeps it in the browser until the

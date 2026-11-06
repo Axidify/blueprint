@@ -1,5 +1,6 @@
-"""The mock-up tool: the build, the spec check for status colours, the server that saves comments, and
-(where Node and Microsoft Edge are installed) the mock-up itself, clicked through in the browser."""
+"""The mock-up tool: the build, the spec checks (status colours, typos, buttons that move a record to another
+status), the server that saves comments, and (where Node and Microsoft Edge are installed) the mock-up
+itself, clicked through in the browser."""
 import io
 import json
 import shutil
@@ -39,6 +40,10 @@ def mockup_spec():
     new_application = next(s for s in spec["screens"] if s["id"] == "new-application")
     new_application["sections"].append({"title": "More", "page": 2, "page_title": "More", "fields": [{"id": "note", "label": "Note", "type": "text"}]})
     next(s for s in spec["screens"] if s["id"] == "approvals")["list"]["search"] = ["employee"]
+    # For the tests of status moves: an employee role without a named person, and an action that moves its row.
+    del next(r for r in spec["roles"] if r["id"] == "employee")["user"]
+    next(s for s in spec["screens"] if s["id"] == "approvals")["list"]["actions"].append(
+        {"label": "Approve now", "set_status": "approved", "toast": "Application approved"})
     return spec
 
 
@@ -212,8 +217,9 @@ def test_what_the_mockup_draws_changes_the_fingerprint(change):
     lambda s: next(x for x in s["screens"] if x.get("stats"))["stats"][-1].update(formula="Reworded: what it counts."),
     lambda s: s["statuses"][0].update(edit="all", cancel="none", next=[]),
     lambda s: s["integrations"][0].update(trigger="Reworded.", on_failure="Reworded."),
+    lambda s: s["dialogs"][0]["confirm"].pop("set_status"),
 ], ids=["requirement", "version-and-cover", "screen-description", "field-rule", "role-text", "status-meaning", "document-chapters",
-        "figure-formula", "status-rules", "integration-details"])
+        "figure-formula", "status-rules", "integration-details", "status-move"])
 def test_what_only_the_document_prints_leaves_the_fingerprint(change):
     spec = mockup_spec()
     before = mockup.fingerprint(spec)
@@ -327,6 +333,86 @@ def test_a_column_called_no_is_not_mistaken_for_a_typo():
     spec["data"]["leave_types"] = [{False: 1, "name": "Annual Leave"}, {False: 2, "name": "Medical Leave"}]
     listing(spec, "leave-types")["columns"] = [{"field": False, "label": "No"}, {"field": "name", "label": "Leave Type"}]
     assert mockup.validate(json.loads(json.dumps(spec, default=str))) == []
+
+
+# ---------------------------------------------------------------------- buttons that move a record to another status
+def sample():
+    return json.loads(json.dumps(support.load_spec(support.EXAMPLE), default=str))
+
+
+def screen(spec, screen_id):
+    return next(s for s in spec["screens"] if s["id"] == screen_id)
+
+
+def confirm(spec, dialog_id):
+    return next(d for d in spec["dialogs"] if d["id"] == dialog_id)["confirm"]
+
+
+@pytest.mark.parametrize("change, said", [
+    (lambda s: confirm(s, "approve-dialog").update(set_status="aproved"),
+     "dialog approve-dialog, button Confirm Approve: set_status 'aproved' is not a status (did you mean 'approved'?)"),
+    (lambda s: confirm(s, "approve-dialog").update(set_status="draft"),
+     "dialog approve-dialog, button Confirm Approve: moves a record from Pending Approval to Draft, but in the status rules "
+     "Pending Approval may only move to Approved, Rejected, Cancelled. Change the button, or the status's 'next'"),
+    (lambda s: listing(s, "my-applications")["actions"].append({"label": "Reopen", "set_status": "Pending Approval", "when": {"status": "Cancelled"}}),
+     "screen my-applications, button Reopen: moves a record from Cancelled to Pending Approval, but in the status rules "
+     "Cancelled is a final status (next: [])"),
+    (lambda s: listing(s)["actions"].append({"label": "Send back", "set_status": "draft"}),
+     "screen approvals, button Send back: moves a record from Pending Approval to Draft"),  # the list's `where` says where it is
+    (lambda s: screen(s, "my-applications").update(buttons=[{"label": "Approve all", "set_status": "approved"}]),
+     "screen my-applications, button Approve all: set_status has no record to move here"),
+    (lambda s: listing(s).update(toolbar=[{"label": "Approve all", "set_status": "approved"}]),
+     "screen approvals, button Approve all: set_status has no record to move here"),
+    (lambda s: listing(s, "leave-types")["actions"].append({"label": "Retire", "set_status": "cancelled"}),
+     "screen leave-types, button Retire: set_status changes a record's 'status' field, and the 'leave_types' data has none"),
+    (lambda s: screen(s, "review-application")["buttons"][1].update(set_statuss="rejected"),
+     "'set_statuss' is not a button setting (did you mean 'set_status'?)"),
+    (lambda s: confirm(s, "cancel-dialog").update(label=True),
+     "dialog cancel-dialog: a button's label reads as true, not as text. YAML takes an unquoted Yes, No, On or Off for true or false"),
+], ids=["unknown-status", "against-the-rules", "from-a-final-status", "source-from-the-list", "no-record-on-a-dashboard", "no-record-on-a-toolbar",
+        "data-without-status", "misspelt", "label-read-as-true"])
+def test_a_status_move_that_cannot_work_or_breaks_the_status_rules_is_refused(change, said):
+    spec = sample()
+    assert mockup.validate(spec) == []
+    change(spec)
+    errors = mockup.validate(spec)
+    assert any(said in e for e in errors), errors
+
+
+def test_a_status_without_rules_lets_a_button_move_it_anywhere():
+    """The rules are optional: a status that has none set is not checked."""
+    spec = sample()
+    for status in spec["statuses"]:
+        status.pop("next")
+    confirm(spec, "approve-dialog")["set_status"] = "Draft"   # by name, in any letter case, works as the id does
+    assert mockup.validate(spec) == []
+
+
+def test_the_moves_of_the_sample_are_made_by_its_three_dialogs():
+    spec = sample()
+    moves = {(m["where"], m["label"]): m for m in mockup.status_moves(spec)}
+    assert set(moves) == {("dialog approve-dialog", "Confirm Approve"), ("dialog reject-dialog", "Confirm Reject"),
+                          ("dialog cancel-dialog", "Yes, cancel it")}
+    cancel = moves[("dialog cancel-dialog", "Yes, cancel it")]
+    assert [s["id"] for s in cancel["sources"]] == ["pending", "approved"], "where the button that opens the dialog shows"
+    assert cancel["record"] and cancel["data"] == "applications"
+
+
+def test_the_moves_the_rules_allow_but_no_button_makes_are_listed():
+    spec = sample()
+    assert mockup.moves_not_shown(spec) == ["Draft to Pending Approval", "Rejected to Pending Approval"]
+    for dialog in spec["dialogs"]:
+        dialog["confirm"].pop("set_status", None)
+    assert mockup.moves_not_shown(spec) == [], "a mock-up that moves nothing is not told what it leaves out"
+
+
+def test_build_says_how_many_buttons_move_a_record_and_what_is_left_out(tmp_path, capsys):
+    project = tmp_path / "leave-request"
+    support.write_spec(project, sample())
+    mockup.build(project)
+    out = capsys.readouterr().out
+    assert "3 buttons move a record to another status when clicked (until the page is reloaded)." in out
+    assert "which no button of the mock-up makes: Draft to Pending Approval; Rejected to Pending Approval." in out
 
 
 # ---------------------------------------------------------------------- the fingerprint does not move with an update
@@ -490,6 +576,67 @@ def test_a_confirm_button_still_goes_to_its_screen(browser):
 def test_cancel_closes_a_dialog_and_stays_on_the_screen(browser):
     after = browser["cancel"]
     assert not after["dialog"] and after["screen"] == "review-application" and after["toasts"] == []
+
+
+# Status moves. The record is Daniel Tan's pending application, LV-2026-011; the manager is Ahmad Faiz.
+def test_a_dialog_only_moves_the_record_when_it_is_confirmed(browser):
+    before, opened = browser["moveBefore"], browser["moveDialogOpen"]
+    assert before["status"] == opened["status"] == "Pending Approval"
+    assert before["buttons"] == ["Back", "Reject", "Approve"]
+
+
+def test_approving_moves_the_record_and_the_screen_follows(browser):
+    """It used to show a message and leave the record as it was."""
+    after = browser["moveApproved"]
+    assert after["screen"] == "review-application" and after["toasts"] == ["Application approved"]
+    assert after["status"] == "Approved" and after["chip"] == "chip ok"
+    assert after["buttons"] == ["Back"], "Approve and Reject are for a pending application only"
+
+
+def test_the_step_that_was_waiting_is_recorded_with_who_when_and_the_comment(browser):
+    done, handled = browser["moveApproved"]["timeline"]
+    assert done == ["Submitted", "Nur Aisyah", "2026-11-05 09:12", "Done", "-"]
+    assert handled[:2] == ["Line Manager Approval", "Ahmad Faiz"] and handled[3:] == ["Approved", "Enjoy the break"]
+    assert len(handled[2]) == 16 and handled[2][:2] == "20", "the time it was clicked, written like the sample data"
+
+
+def test_a_moved_record_leaves_the_list_it_no_longer_belongs_to(browser):
+    assert browser["moveApprovalsAfter"] == ["LV-2026-014"]
+    assert browser["moveRejectedList"] == ["LV-2026-014"]
+
+
+def test_every_screen_shows_the_moved_record_the_same_way(browser):
+    elsewhere = browser["moveSeenElsewhere"]
+    assert elsewhere["screen"] == "application-details" and elsewhere["status"] == "Approved"
+    assert elsewhere["timeline"][1][3:] == ["Approved", "Enjoy the break"]
+    rejected = browser["moveRejected"]
+    assert rejected["status"] == "Rejected" and rejected["chip"] == "chip bad"
+    assert rejected["timeline"][1][3:] == ["Rejected", "Year-end freeze"]
+
+
+def test_a_reload_puts_the_sample_data_back(browser):
+    again = browser["moveAfterReload"]
+    assert again["status"] == "Pending Approval" and again["buttons"] == ["Back", "Reject", "Approve"]
+
+
+def test_counts_follow_a_moved_record(browser):
+    before, after = browser["moveFiguresBefore"], browser["moveFiguresAfter"]
+    assert int(after["Pending"]) == int(before["Pending"]) - 1
+    assert after["Approved"] == before["Approved"] and after["Rejected"] == before["Rejected"]
+    assert browser["moveCancelledRow"].startswith("LV-2026-014 ") and " Cancelled " in browser["moveCancelledRow"]
+
+
+def test_after_a_final_status_nothing_is_left_waiting(browser):
+    cancelled = browser["moveCancelled"]
+    assert cancelled["status"] == "Cancelled" and cancelled["buttons"] == ["Back"]
+    assert [row[3] for row in cancelled["timeline"]] == ["Done", "Cancelled"]
+    assert cancelled["timeline"][1][1] == "Employee", "handled by whoever is signed in: a role without a name shows its own"
+
+
+def test_an_action_on_a_row_moves_that_row_and_stays_on_the_page(browser):
+    after = browser["moveRowAction"]
+    assert len(after["rows"]) == 1 and after["rows"][0].startswith("LV-2026-011 "), "the first row was approved and left the list"
+    assert after["pager"] == "Showing 1 of 1 records" and after["toasts"] == ["Application approved"]
 
 
 def test_a_filter_is_applied_by_search_and_removed_by_clear_filters(browser):

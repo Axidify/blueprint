@@ -73,6 +73,10 @@ session, press **Feedback** in the bottom-right corner (or F2), click anything o
 client's comment. Comments are saved to the project automatically. Afterwards, say
 **"apply the feedback"**.
 
+Buttons such as Approve or Reject move the sample record to its next status when the mock-up was built
+that way, so you can act the process out: approve as the manager, switch role, and see it approved. To
+start the walk-through again, reload the page (F5): the sample data goes back to how it was.
+
 Keep the window that `present.cmd` opened until the session is over: it is what saves the comments. If it
 is closed, the mock-up says in red that a comment was not saved and keeps it in the browser; start
 `present.cmd` again and press **Feedback** → **Try again**.

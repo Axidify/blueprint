@@ -52,9 +52,87 @@ KNOWN_KEYS = {
     "section": {"title", "page", "page_title", "note", "fields"},
     "field": {"id", "label", "type", "required", "readonly", "default", "length", "options", "options_from", "placeholder", "help",
               "source", "validation"},
-    "button": {"label", "style", "to", "toast", "dialog", "roles", "when", "example", "access"},
+    "button": {"label", "style", "to", "toast", "dialog", "roles", "when", "example", "access", "set_status"},
     "dialog": {"id", "title", "message", "fields", "list", "doc_table", "srs_table", "confirm"},
 }
+
+
+# ------------------------------------------------------------------ status moves
+def find_status(spec, value):
+    """The status with that id or name, as the mock-up finds it (any letter case), or None."""
+    want = str(value).strip().lower()
+    for st in spec.get("statuses") or []:
+        if isinstance(st, dict) and any(k is not None and str(k).strip().lower() == want for k in (st.get("id"), st.get("name"))):
+            return st
+    return None
+
+
+def status_moves(spec):
+    """Every button with `set_status`, which moves a record to another status in the mock-up:
+    [{where, label, to, sources, record}]. `sources` are the statuses the record can be in when the button
+    shows (from its `when`, or the `where` of its list), or None when nothing says; `record` is False when
+    the button has no record to move."""
+    data = spec.get("data") or {}
+
+    def sources(*conditions):
+        for cond in conditions:
+            value = cond.get("status") if isinstance(cond, dict) else None
+            if value is not None:
+                return [st for st in (find_status(spec, v) for v in (value if isinstance(value, list) else [value])) if st]
+        return None
+
+    def holds_record(screen):
+        return screen.get("data") in data and screen.get("type") in ("detail", "form")
+
+    moves, openers = [], {}
+    for s in spec.get("screens") or []:
+        where = f"screen {s.get('id')}"
+        for b in s.get("buttons") or []:
+            if b.get("dialog"):
+                openers.setdefault(b["dialog"], []).append((s, b))
+            if b.get("set_status") is not None and not b.get("dialog"):
+                moves.append({"where": where, "label": b.get("label"), "to": b["set_status"], "sources": sources(b.get("when")),
+                              "record": holds_record(s), "data": s.get("data")})
+        lst = s.get("list") or {}
+        for a in lst.get("actions") or []:
+            if a.get("set_status") is not None:
+                moves.append({"where": where, "label": a.get("label"), "to": a["set_status"],
+                              "sources": sources(a.get("when"), lst.get("where")), "record": True, "data": lst.get("data")})
+        for b in lst.get("toolbar") or []:
+            if b.get("set_status") is not None:
+                moves.append({"where": where, "label": b.get("label"), "to": b["set_status"], "sources": None, "record": False, "data": None})
+    for d in spec.get("dialogs") or []:
+        confirm = d.get("confirm") or {}
+        if confirm.get("set_status") is None:
+            continue
+        opened = [(s, b) for s, b in openers.get(d.get("id"), []) if holds_record(s)]
+        known = [sources(b.get("when")) for _, b in opened]
+        moves.append({"where": f"dialog {d.get('id')}", "label": confirm.get("label"), "to": confirm["set_status"],
+                      "sources": None if not known or any(k is None for k in known) else [st for k in known for st in k],
+                      "record": bool(opened), "data": opened[0][0].get("data") if opened else None})
+    return moves
+
+
+def moves_not_shown(spec):
+    """The moves the status rules allow (`next`) that no button of the mock-up makes, as "From to To". Empty
+    when the mock-up moves no record at all: the rules are then for the document only."""
+    moves = status_moves(spec)
+    if not moves:
+        return []
+    made = set()
+    for move in moves:
+        to = find_status(spec, move["to"])
+        if to is None:
+            continue
+        for st in move["sources"] if move["sources"] is not None else [s for s in spec.get("statuses") or [] if isinstance(s, dict)]:
+            made.add((st.get("id"), to.get("id")))
+    missing = []
+    for st in spec.get("statuses") or []:
+        for other in st.get("next") or [] if isinstance(st, dict) and isinstance(st.get("next"), list) else []:
+            to = find_status(spec, other)
+            if to is not None and (st.get("id"), to.get("id")) not in made:
+                missing.append(f"{st.get('name', st.get('id'))} to {to.get('name', to.get('id'))}")
+    return missing
 
 
 # ------------------------------------------------------------------ spec
@@ -157,6 +235,9 @@ def validate(spec):
             errors.append(f"{kind} id '{dup}' is used more than once")
 
     def check_target(where, item):
+        if isinstance(item.get("label"), bool):
+            errors.append(f"{where}: a button's label reads as {str(item['label']).lower()}, not as text. YAML takes an unquoted Yes, No, "
+                          "On or Off for true or false: put the label in quotes")
         if item.get("to") and item["to"] not in screens:
             errors.append(f"{where}: unknown screen '{item['to']}'")
         if item.get("dialog") and item["dialog"] not in dialogs:
@@ -212,6 +293,35 @@ def validate(spec):
             check_list(f"dialog {d['id']}", d["list"])
         if d.get("confirm"):
             check_target(f"dialog {d['id']}", d["confirm"])
+    # A button that moves a record to another status must agree with the status rules the document prints.
+    def named(st):
+        return st.get("name", st.get("id"))
+
+    for move in status_moves(spec):
+        w = f"{move['where']}, button {move['label']}"
+        to = find_status(spec, move["to"])
+        if to is None:
+            known = [str(st.get("id") or st.get("name")) for st in spec.get("statuses") or [] if isinstance(st, dict)]
+            close = difflib.get_close_matches(str(move["to"]), known, 1, 0.6)
+            errors.append(f"{w}: set_status '{move['to']}' is not a status"
+                          + (f" (did you mean '{close[0]}'?)" if close else f" (the statuses are {', '.join(known)})" if known else " (the spec has no statuses)"))
+            continue
+        if not move["record"]:
+            errors.append(f"{w}: set_status has no record to move here. It works on a detail screen, on a form with data, "
+                          "on a row action of a list, and in a dialog opened from a detail screen or such a form")
+            continue
+        known = fields_of(move["data"])
+        if known is not None and "status" not in known:
+            errors.append(f"{w}: set_status changes a record's 'status' field, and the '{move['data']}' data has none")
+        for source in move["sources"] or []:
+            allowed = source.get("next")
+            if source is to or not isinstance(allowed, list):
+                continue  # no rule set for that status: nothing to disagree with
+            if to not in [find_status(spec, x) for x in allowed]:
+                rule = (f"may only move to {', '.join(named(find_status(spec, x) or {'name': x}) for x in allowed)}" if allowed
+                        else "is a final status (next: [])")
+                errors.append(f"{w}: moves a record from {named(source)} to {named(to)}, but in the status rules {named(source)} {rule}. "
+                              "Change the button, or the status's 'next'")
     for shot in spec.get("screenshots", []) or []:
         where = f"screenshot {shot.get('name') or shot.get('screen')}"
         if shot.get("screen") not in screens:
@@ -266,6 +376,14 @@ def build(project):
     (out / "index.html").write_text(INDEX.format(title=f"{p['name']} – Mock-up v{p.get('version', '')}"), encoding="utf-8")
     snapshot(project, spec)
     print(f"Built {out / 'index.html'} ({len(spec['screens'])} screens, theme {theme})")
+    moves = status_moves(spec)
+    if moves:
+        print(f"{len(moves)} button{'s' if len(moves) != 1 else ''} move{'' if len(moves) != 1 else 's'} a record to another status when clicked "
+              "(until the page is reloaded).")
+        missing = moves_not_shown(spec)
+        if missing:
+            print("The status rules also allow these moves, which no button of the mock-up makes: " + "; ".join(missing)
+                  + ". Add set_status to the button that does it, if the client should see it.")
     return spec
 
 
@@ -452,6 +570,8 @@ DRAWN_PROJECT = ("name", "short_name", "client", "theme", "primary_color")
 DOCUMENT_ONLY = {"description", "caption", "meaning", "scope", "source", "validation", "length", "sort", "access",
                  "doc_table", "srs_table", "formula"}
 CONDITIONS = {"where", "when", "count"}  # their keys are data field names, never spec keys: kept whole
+# What a click does, not what a screen looks like: setting it leaves every picture as it was.
+BEHAVIOUR = {"set_status"}
 
 
 def drawn(spec):
@@ -460,7 +580,7 @@ def drawn(spec):
     make the screenshots look out of date."""
     def strip(node):
         if isinstance(node, dict):
-            return {k: (v if k in CONDITIONS else strip(v)) for k, v in node.items() if k not in DOCUMENT_ONLY}
+            return {k: (v if k in CONDITIONS else strip(v)) for k, v in node.items() if k not in DOCUMENT_ONLY and k not in BEHAVIOUR}
         if isinstance(node, list):
             return [strip(x) for x in node]
         return node
@@ -559,6 +679,8 @@ def show_feedback(project):
 
 
 def main():
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="replace")  # a status or project name the console cannot show must not stop a build
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", choices=["build", "serve", "screenshots", "feedback"])
     ap.add_argument("project")

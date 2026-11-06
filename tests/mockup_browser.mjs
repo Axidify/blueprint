@@ -106,6 +106,63 @@ await page.click('[data-el="menu:New Application"]');
 await page.waitForSelector('[data-el="field:reason"] textarea');
 out.typedAfterLeaving = await page.inputValue('[data-el="field:reason"] textarea');
 
+// ---- status moves: a button with set_status moves the record, and everything drawn from it follows
+const detailState = () => page.evaluate(() => ({
+  screen: document.getElementById("app").dataset.screen,
+  status: (document.querySelector(".status-bar .chip") || {}).textContent,
+  chip: (document.querySelector(".status-bar .chip") || {}).className,
+  buttons: [...document.querySelectorAll("#content .form-buttons .btn")].map((b) => b.textContent),
+  timeline: [...document.querySelectorAll('[data-el="section:Approval Progress"] tbody tr')].map((tr) => [...tr.children].map((td) => td.textContent)),
+  toasts: [...document.querySelectorAll(".toast")].map((t) => t.textContent),
+}));
+const visit = async (hash) => {  // moves within the page, without a reload
+  await page.evaluate((h) => { location.hash = h; }, hash);
+  await page.waitForTimeout(150);
+};
+const ids = (state) => state.rows.map((row) => row.split(" ")[0]);
+
+await open("#/review-application?role=manager");                  // Daniel Tan's application, pending
+out.moveBefore = await detailState();
+await page.click('[data-el="button:Approve"]');
+out.moveDialogOpen = await detailState();                         // opening the dialog moves nothing yet
+await page.fill('.modal [data-el="field:comment"] textarea', "Enjoy the break");
+await page.click('.modal [data-el="button:Confirm Approve"]');    // stays on the screen: it has nowhere to go
+await page.waitForTimeout(150);
+out.moveApproved = await detailState();
+await page.click('[data-el="menu:Pending Approvals"]');
+await page.waitForSelector('[data-el="title:Pending Approvals"]');
+out.moveApprovalsAfter = ids(await listState());
+await visit("#/application-details?role=hr&record=LV-2026-011");  // another screen shows the same record
+out.moveSeenElsewhere = await detailState();
+await open("#/review-application?role=manager");                  // a reload puts the sample data back
+out.moveAfterReload = await detailState();
+
+await open("#/review-application?role=manager&dialog=reject-dialog");
+await page.fill('.modal [data-el="field:reason"] textarea', "Year-end freeze");
+await page.click('.modal [data-el="button:Confirm Reject"]');     // goes to the approvals list
+await page.waitForSelector('[data-el="title:Pending Approvals"]');
+out.moveRejectedList = ids(await listState());
+await visit("#/application-details?role=hr&record=LV-2026-011");
+out.moveRejected = await detailState();
+
+const figures = () => page.evaluate(() => Object.fromEntries([...document.querySelectorAll(".stat")].map((s) => [s.querySelector(".stat-label").textContent, s.querySelector(".stat-value").textContent])));
+await open("#/my-applications?role=employee");
+out.moveFiguresBefore = await figures();
+await page.click('#content tbody tr[data-row] [data-el="action:View"]');   // the first row: pending
+await page.waitForSelector('[data-el="button:Cancel Application"]');
+await page.click('[data-el="button:Cancel Application"]');
+await page.click('.modal [data-el="button:Yes, cancel it"]');     // a final status
+await page.waitForSelector('[data-el="title:My Leave Applications"]');
+out.moveFiguresAfter = await figures();
+out.moveCancelledRow = (await listState()).rows[0];
+await visit("#/application-details?role=employee&record=LV-2026-014");
+out.moveCancelled = await detailState();
+
+await open("#/approvals?role=manager");                           // an action on a row, which stays on the page
+await page.click('#content tbody tr[data-row] [data-el="action:Approve now"]');
+await page.waitForTimeout(150);
+out.moveRowAction = { ...(await listState()), toasts: (await state()).toasts };
+
 // ---- feedback: a comment the server does not take is kept, shown as not saved, and sent later
 const feedbackState = () => page.evaluate(() => ({
   toggle: document.getElementById("fb-toggle").textContent,

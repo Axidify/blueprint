@@ -7,6 +7,10 @@
  * Filters and search boxes on lists work on the sample rows (Search applies, Clear Filters resets), and what
  * is typed into a form is kept while moving between its steps or opening a dialog.
  *
+ * A button with `set_status` moves the record it acts on to that status, so a process can be acted out:
+ * approve a request and it leaves the approver's list, shows its new status and loses its Approve button.
+ * The change lasts until the page is reloaded, which puts the sample data back.
+ *
  * Feedback mode: press "Feedback" (or F2), click any element, type a comment. Comments saved by other
  * people in the room appear within a few seconds, and each shows the number it was saved under.
  *
@@ -86,6 +90,55 @@
     return "neutral";
   }
 
+  // ------------------------------------------------------------------ status moves
+  // A button with `set_status` moves the record it acts on to that status: the record of the detail screen
+  // (or of a form opened on a record), also from a dialog opened there, or the row of a list action. Lists,
+  // counts, the status shown and the buttons that depend on the status follow, because all are drawn from
+  // that record. Nothing is saved: reloading the page puts the sample data back.
+  const same = (a, b) => a != null && b != null && String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+  const findStatus = (v) => (S.statuses || []).find((st) => same(st.id, v) || same(st.name, v));
+  const two = (n) => String(n).padStart(2, "0");
+  function now() {
+    const d = new Date();
+    return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())} ${two(d.getHours())}:${two(d.getMinutes())}`;
+  }
+  function recordToMove(el, r) {
+    if (el.dataset.list) {  // an action on a row: that row's record
+      const data = (S.data || {})[el.dataset.list] || [];
+      const key = Object.keys(data[0] || {})[0];
+      return { name: el.dataset.list, rec: data.find((x) => String(x[key]) === el.dataset.record) };
+    }
+    const screen = byId(S.screens, r.screen);
+    if (!screen || !screen.data || !(screen.type === "detail" || (screen.type === "form" && r.q.record))) return {};
+    const rec = record(screen, r.q);
+    return { name: screen.data, rec: Object.keys(rec).length ? rec : null, timeline: screen.timeline };
+  }
+  function moveStatus(el, r) {
+    const to = findStatus(el.dataset.status);
+    const { name, rec, timeline } = recordToMove(el, r);
+    if (!to || !rec) return false;
+    // The sample data names a status by its name or by its id: keep whichever this record uses.
+    const was = findStatus(rec.status);
+    rec.status = was && same(was.id, rec.status) && !same(was.name, rec.status) ? to.id : to.name;
+    // Its progress: the step that was waiting is now handled, by whoever is signed in. A record without
+    // progress of its own takes that of the detail screen that shows it.
+    const shown = rec.timeline || timeline || (S.screens.find((s) => s.type === "detail" && s.data === name && s.timeline) || {}).timeline;
+    if (shown) {
+      const role = byId(S.roles, r.role) || {};
+      const modal = el.closest(".modal");
+      const typedIn = modal ? [...modal.querySelectorAll(".modal-body textarea, .modal-body input.f-input")].map((c) => c.value.trim()).find(Boolean) : "";
+      const opener = modal && ((byId(S.screens, r.screen) || {}).buttons || []).find((b) => b.dialog === r.q.dialog);
+      const lines = shown.map((s) => ({ ...s }));
+      const waiting = lines.findIndex((s) => !s.at);
+      const entry = { by: role.user || role.name || "", at: now(), status: to.name, ...(typedIn ? { comment: typedIn } : {}) };
+      if (waiting >= 0) Object.assign(lines[waiting], entry);
+      else lines.push({ step: (opener || {}).label || el.textContent.trim(), ...entry });
+      // After a final status nothing is waiting any more.
+      rec.timeline = Array.isArray(to.next) && !to.next.length ? lines.filter((s) => s.at) : lines;
+    }
+    return true;
+  }
+
   // ------------------------------------------------------------------ renderers
   function shell(r, body) {
     const role = byId(S.roles, r.role) || { name: r.role };
@@ -148,7 +201,7 @@
     // Each row carries the values its filters and search boxes look at (also fields that are not columns).
     const watched = [...(list.filters || []), ...(list.search || [])];
     const watchedValues = (row) => esc(JSON.stringify(Object.fromEntries(watched.map((f) => [f, row[f] == null ? "" : String(row[f])]))));
-    const body = data.length ? data.map((row) => `<tr data-row="${watchedValues(row)}">${cols.map((c) => `<td>${c.chip ? `<span class="chip ${statusClass(row[c.field])}">${esc(row[c.field])}</span>` : esc(row[c.field])}</td>`).join("")}${(list.actions || []).length ? `<td class="actions">${list.actions.filter((a) => matches(a.when, row)).map((a) => `<a href="#" class="link" data-el="action:${esc(a.label)}" ${a.to ? `data-go="${a.to}" data-record="${esc(row[key])}"` : ""} ${a.toast ? `data-toast="${esc(a.toast)}"` : ""}>${esc(a.label)}</a>`).join(" ")}</td>` : ""}</tr>`).join("")
+    const body = data.length ? data.map((row) => `<tr data-row="${watchedValues(row)}">${cols.map((c) => `<td>${c.chip ? `<span class="chip ${statusClass(row[c.field])}">${esc(row[c.field])}</span>` : esc(row[c.field])}</td>`).join("")}${(list.actions || []).length ? `<td class="actions">${list.actions.filter((a) => matches(a.when, row)).map((a) => `<a href="#" class="link" data-el="action:${esc(a.label)}" ${a.to ? `data-go="${a.to}"` : ""} ${a.to || a.set_status != null ? `data-record="${esc(row[key])}"` : ""} ${a.set_status != null ? `data-status="${esc(a.set_status)}" data-list="${esc(list.data)}"` : ""} ${a.toast ? `data-toast="${esc(a.toast)}"` : ""}>${esc(a.label)}</a>`).join(" ")}</td>` : ""}</tr>`).join("")
       : `<tr><td colspan="${cols.length + 1}" class="empty">${esc(list.empty || "No records found")}</td></tr>`;
     return `
       ${search || filters || toolbar ? `<div class="list-tools">${search || filters ? `<div class="filters">${search}${filters}<button class="btn small" data-el="button:Search" data-apply-filters>Search</button><button class="btn small" data-el="button:Clear Filters" data-clear-filters>Clear Filters</button></div>` : "<div></div>"}<div class="toolbar">${toolbar}</div></div>` : ""}
@@ -203,7 +256,7 @@
   function button(b, r, rec, attrs) {
     if (b.roles && !b.roles.includes(r.role)) return "";
     if (b.when && !matches(b.when, rec || {})) return "";
-    return `<button class="btn ${b.style || ""} ${b.example ? "fb-hide" : ""}" data-el="button:${esc(b.label)}" ${b.to ? `data-go="${b.to}"` : ""} ${b.toast ? `data-toast="${esc(b.toast)}"` : ""} ${b.dialog ? `data-dialog="${b.dialog}"` : ""} ${attrs || ""}>${esc(b.label)}</button>`;
+    return `<button class="btn ${b.style || ""} ${b.example ? "fb-hide" : ""}" data-el="button:${esc(b.label)}" ${b.to ? `data-go="${b.to}"` : ""} ${b.toast ? `data-toast="${esc(b.toast)}"` : ""} ${b.dialog ? `data-dialog="${b.dialog}"` : ""} ${b.set_status != null ? `data-status="${esc(b.set_status)}"` : ""} ${attrs || ""}>${esc(b.label)}</button>`;
   }
   const buttons = (list, r, rec) => (list && list.length ? `<div class="form-buttons">${list.map((b) => button(b, r, rec)).join("")}</div>` : "");
 
@@ -354,7 +407,7 @@
 
   document.addEventListener("click", (e) => {
     if (feedback.active) return; // feedback mode handles clicks itself
-    const el = e.target.closest("[data-go],[data-toast],[data-dialog],[data-close],[data-page],[data-role-login],[data-apply-filters],[data-clear-filters]");
+    const el = e.target.closest("[data-go],[data-toast],[data-dialog],[data-close],[data-page],[data-role-login],[data-apply-filters],[data-clear-filters],[data-status]");
     if (!el) return;
     e.preventDefault();
     if (el.dataset.applyFilters !== undefined || el.dataset.clearFilters !== undefined) {
@@ -368,12 +421,16 @@
     const r = route();
     if (el.dataset.roleLogin) { sessionStorage.setItem("mock-role", el.dataset.roleLogin); return go(firstScreen(el.dataset.roleLogin)); }
     if (el.dataset.role && el.dataset.go) sessionStorage.setItem("mock-role", el.dataset.role);
+    // A button that opens a dialog moves nothing itself: the dialog's confirm button does.
+    const moved = el.dataset.status !== undefined && !el.dataset.dialog && moveStatus(el, r);
     if (el.dataset.toast) toast(el.dataset.toast);
-    if (el.dataset.page) return go(r.screen, { page: el.dataset.page, ...(r.q.record ? { record: r.q.record } : {}) });
-    if (el.dataset.dialog) return go(r.screen, { dialog: el.dataset.dialog, ...(r.q.record ? { record: r.q.record } : {}) });
+    const before = location.hash;
+    if (el.dataset.page) go(r.screen, { page: el.dataset.page, ...(r.q.record ? { record: r.q.record } : {}) });
+    else if (el.dataset.dialog) go(r.screen, { dialog: el.dataset.dialog, ...(r.q.record ? { record: r.q.record } : {}) });
     // A dialog's confirm button has both: it goes where it says, and only closes when it goes nowhere.
-    if (el.dataset.go) return go(el.dataset.go, el.dataset.record ? { record: el.dataset.record } : {});
-    if (el.dataset.close !== undefined) return go(r.screen, r.q.record ? { record: r.q.record } : {});
+    else if (el.dataset.go) go(el.dataset.go, el.dataset.record ? { record: el.dataset.record } : {});
+    else if (el.dataset.close !== undefined) go(r.screen, r.q.record ? { record: r.q.record } : {});
+    if (moved && location.hash === before) render();  // it stayed on the page: show the record as it is now
   });
   document.addEventListener("change", (e) => {
     if (e.target.classList.contains("role-switch")) {
