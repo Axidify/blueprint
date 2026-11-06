@@ -42,6 +42,7 @@ for (const shot of shots) {
       await page.goto("about:blank");
       await page.goto(base + shot.hash);
       await page.waitForSelector("#app > *");
+      await page.evaluate(() => document.fonts.ready);  // the fonts the mock-up carries, before the text is measured
     }
     await page.waitForTimeout(150);
     const fits = await page.evaluate(() =>

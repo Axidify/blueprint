@@ -10,6 +10,7 @@ import sys
 import threading
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 import pytest
 import yaml
@@ -2315,3 +2316,316 @@ def test_a_half_empty_new_request_borrows_from_another_record_not_the_open_twin(
     assert waiting, "the sample still has requests waiting at the same stage"
     assert fresh["fields"]["reason"] and fresh["fields"]["reason"] not in [x["reason"] for x in waiting], f"not the twin of a waiting request: {fresh}"
     assert fresh["fields"]["leave_type"] in ("Annual Leave", "Medical Leave", "Emergency Leave")
+
+
+# ---------------------------------------------------------------------- the client's look
+LOOK_SCRIPT = support.ROOT / "tests" / "mockup_look.mjs"
+
+
+def tiny_png(width=40, height=10):
+    """A made-up logo: a small red-and-white PNG."""
+    import struct
+    import zlib
+
+    rows = b"".join(b"\0" + b"".join(bytes((200, 30, 60, 255)) if (x // 5) % 2 else bytes((255, 255, 255, 255)) for x in range(width))
+                    for _ in range(height))
+
+    def chunk(kind, data):
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b""))
+
+
+def look_project(folder, **look):
+    """The sample in a folder of its own, with a logo file in spec/ and the look settings given."""
+    spec = sample()
+    spec["project"].update(look)
+    project = folder / "looks"
+    support.write_spec(project, spec)
+    (project / "spec" / "client-logo.png").write_bytes(tiny_png())
+    return project
+
+
+def quiet_build(project):
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(sys, "stdout", io.StringIO())
+        return mockup.build(project)
+
+
+@pytest.mark.parametrize("look, said", [
+    ({"corners": "wobbly"}, "project: corners 'wobbly' must be one of square, small, normal, round"),
+    ({"menu": "purple"}, "project: menu 'purple' must be one of light, dark"),
+    ({"header": "red"}, "project: header 'red' must be one of light, dark, brand"),
+    ({"font": "Lato; color: red"}, "project: font 'Lato; color: red' must be the font's name, as written in Word (e.g. Roboto)"),
+    ({"font_file": "lato.woff2"}, "project: font_file needs font, the name of the font in that file"),
+    ({"logo": "../secret.png"}, "project: logo '../secret.png' must be a file in the project's spec folder ending .png, .jpg, .jpeg, .svg, .gif, .webp"),
+    ({"logo": "logo.pdf"}, "project: logo 'logo.pdf' must be a file in the project's spec folder ending .png, .jpg, .jpeg, .svg, .gif, .webp"),
+])
+def test_the_look_settings_are_checked(look, said):
+    spec = sample()
+    spec["project"].update(look)
+    assert said in mockup.validate(spec)
+
+
+def test_the_look_settings_build_in_any_case_and_a_spec_without_them_is_clean():
+    spec = sample()
+    assert mockup.validate(spec) == []
+    spec["project"].update(corners="Square", menu="DARK", header="brand", font="Lato")
+    assert mockup.validate(spec) == []
+
+
+def test_a_logo_or_font_file_must_be_in_the_spec_folder(tmp_path, capsys):
+    project = look_project(tmp_path, logo="missing.png")
+    with pytest.raises(SystemExit):
+        mockup.build(project)
+    assert f"project: logo 'missing.png' is not in {project / 'spec'}" in capsys.readouterr().out
+
+
+def test_the_logo_font_and_look_reach_the_mockup(tmp_path):
+    project = look_project(tmp_path, logo="client-logo.png", font="Brand Sans", font_file="brand.woff2", corners="square", menu="dark")
+    (project / "spec" / "brand.woff2").write_bytes(b"wOF2 made-up font")
+    quiet_build(project)
+    assets = project / "mockup" / "assets"
+    assert (assets / "logo.png").read_bytes() == (project / "spec" / "client-logo.png").read_bytes()
+    assert '"logo": "assets/logo.png"' in (project / "mockup" / "build.js").read_text(encoding="utf-8")
+    index = (project / "mockup" / "index.html").read_text(encoding="utf-8")
+    assert "assets/look.css" in index and "assets/fonts.css" in index
+    assert index.index("assets/theme.css") < index.index("assets/look.css"), "the client's look is drawn over the theme"
+    fonts = (assets / "fonts.css").read_text(encoding="utf-8")
+    assert 'font-family: "Brand Sans"' in fonts and "url(data:font/woff2;base64," in fonts and "font-weight: 400" in fonts
+    spec = (project / "mockup" / "spec.js").read_text(encoding="utf-8")
+    assert '"corners": "square"' in spec and '"menu": "dark"' in spec
+    # Taking the logo and the font out takes them out of the mock-up too.
+    support.write_spec(project, sample())
+    quiet_build(project)
+    assert not list(assets.glob("logo.*")) and not (assets / "fonts.css").exists()
+    assert '"logo": null' in (project / "mockup" / "build.js").read_text(encoding="utf-8")
+
+
+@pytest.mark.skipif(not (mockup.FONT_PACKAGE / mockup.BUNDLED_FONTS["Geist"]).is_file(), reason="needs the Node packages (npm install)")
+def test_desk_carries_geist_and_joget_carries_no_font(tmp_path):
+    desk = look_project(tmp_path / "desk", theme="desk")
+    quiet_build(desk)
+    fonts = (desk / "mockup" / "assets" / "fonts.css").read_text(encoding="utf-8")
+    assert 'font-family: "Geist"' in fonts and 'font-family: "Geist Mono"' in fonts and "font-weight: 100 900" in fonts
+    joget = look_project(tmp_path / "joget", theme="joget")
+    quiet_build(joget)
+    assert not (joget / "mockup" / "assets" / "fonts.css").exists()
+    assert "fonts.css" not in (joget / "mockup" / "index.html").read_text(encoding="utf-8")
+
+
+def test_every_corner_of_the_clients_screens_follows_the_corners_setting():
+    """A corner drawn in pixels must scale with --rs, or `corners: square` would leave it round. The
+    presenter's own tools (fb-, cw-tag) keep theirs."""
+    import re
+
+    for css in [mockup.ENGINE / "base.css", *sorted((mockup.ENGINE / "themes").glob("*.css"))]:
+        rule = ""
+        for line in css.read_text(encoding="utf-8").splitlines():
+            if line[:1] not in (" ", "\t", "") and "{" in line:
+                rule = line  # the selector a continued line belongs to
+            if "fb-" in rule or "cw-tag" in rule:
+                continue
+            for value in re.findall(r"border-radius:\s*([^;}]+)", line):
+                value = value.strip()
+                assert value in ("0", "50%") or "var(--rs)" in value, f"{css.name}: {line.strip()[:90]}"
+
+
+@pytest.mark.parametrize("change", [
+    lambda p: p.update(logo="client-logo.png"),
+    lambda p: p.update(font="Lato"),
+    lambda p: p.update(corners="square"),
+    lambda p: p.update(menu="dark"),
+    lambda p: p.update(header="brand"),
+], ids=["logo", "font", "corners", "menu", "header"])
+def test_the_clients_look_changes_the_pictures(change, tmp_path):
+    project = look_project(tmp_path)
+    spec = sample()
+    before = mockup.fingerprint(spec, project)
+    change(spec["project"])
+    assert mockup.fingerprint(spec, project) != before
+
+
+def test_a_new_logo_file_changes_the_pictures(tmp_path):
+    project = look_project(tmp_path, logo="client-logo.png")
+    spec = sample()
+    spec["project"]["logo"] = "client-logo.png"
+    before = mockup.fingerprint(spec, project)
+    (project / "spec" / "client-logo.png").write_bytes(tiny_png(width=60))
+    assert mockup.fingerprint(spec, project) != before
+
+
+def test_a_logo_file_the_spec_does_not_name_leaves_the_pictures(tmp_path):
+    """A client logo kept for the document's cover changes nothing on screen until the spec names it."""
+    spec = sample()
+    bare = tmp_path / "bare"
+    support.write_spec(bare, spec)
+    with_logo = look_project(tmp_path)
+    assert mockup.fingerprint(spec, bare) == mockup.fingerprint(spec, with_logo)
+
+
+def test_contrast_with_white():
+    assert mockup.contrast_with_white("#FFFFFF") == pytest.approx(1)
+    assert mockup.contrast_with_white("#000") == pytest.approx(21)
+    assert mockup.contrast_with_white("not a colour") is None
+    assert mockup.contrast_with_white("#1F5FBF") > 4.5
+
+
+def test_look_notes_name_hard_to_read_colours_fonts_not_carried_and_custom_work_on_joget():
+    spec = sample()
+    assert mockup.look_notes(spec) == [], "the sample's look is plain joget on Joget, in a colour white reads on"
+    spec["project"].update(primary_color="#FFCC00", font="Lato", menu="dark")
+    notes = " ".join(mockup.look_notes(spec))
+    assert "White words on #FFCC00" in notes and "hard to read" in notes
+    assert "Lato is not carried in the mock-up" in notes
+    assert "custom theme work" in notes and "platform-fit" in notes
+    spec["project"].update(platform="Custom web build", font_file="lato.woff2", primary_color="#0B3D91")
+    assert mockup.look_notes(spec) == []
+
+
+def test_look_shows_the_look_in_effect(tmp_path, capsys):
+    project = look_project(tmp_path, theme="desk", corners="small")
+    mockup.show_look(project)
+    said = capsys.readouterr().out
+    assert "Theme:            desk (calm and ordered" in said
+    assert "Corners:          small" in said and "Side menu:        as the theme draws it" in said
+    assert "Font:             Geist, the theme's own" in said
+    assert "the letters LRS (client-logo.png is in the spec folder: set logo to show one)" in said
+
+
+def fake_shots(command, quiet=False):
+    """The screenshot script, faked: one small picture per planned shot."""
+    plan, out = Path(command[3]), Path(command[4])
+    out.mkdir(parents=True, exist_ok=True)
+    shots = json.loads(plan.read_text(encoding="utf-8"))
+    for shot in shots:
+        (out / f"{shot['name']}.png").write_bytes(tiny_png())
+    return 0, "", [s["name"] for s in shots]
+
+
+def test_trying_a_look_saves_pictures_now_and_as_tried_and_changes_nothing(tmp_path, monkeypatch, capsys):
+    project = look_project(tmp_path)
+    spec_before = (project / "spec" / "app.yaml").read_text(encoding="utf-8")
+    monkeypatch.setattr(mockup, "run_shots", fake_shots)
+    mockup.try_look(project, ["menu=dark", "logo=client-logo.png", "theme=desk"])
+    said = capsys.readouterr().out
+    preview = project / "mockup" / mockup.LOOK_PREVIEW
+    names = sorted(p.name for p in preview.glob("*.png"))
+    assert names == sorted(f"{n}-{label}.png" for n in ("login", "my-applications", "new-application", "approvals") for label in ("now", "try"))
+    assert (project / "spec" / "app.yaml").read_text(encoding="utf-8") == spec_before, "the project is not changed"
+    assert not (project / "mockup" / "index.html").exists(), "the project's own mock-up is not built"
+    assert 'menu: "dark"' in said and "custom theme work" in said
+
+
+def test_trying_a_look_that_does_not_build_keeps_the_last_preview(tmp_path, monkeypatch):
+    project = look_project(tmp_path)
+    monkeypatch.setattr(mockup, "run_shots", fake_shots)
+    mockup.try_look(project, ["corners=round"])
+    with pytest.raises(SystemExit) as stop:
+        mockup.try_look(project, ["corners=wobbly", "logo=nope.png", "theme=plaid"])
+    said = str(stop.value)
+    assert "corners 'wobbly'" in said and "logo 'nope.png' is not in" in said and "theme 'plaid' is not one of" in said
+    assert (project / "mockup" / mockup.LOOK_PREVIEW / "login-try.png").is_file()
+    with pytest.raises(SystemExit, match="key is one of"):
+        mockup.try_look(project, ["colour=red"])
+
+
+def test_the_look_preview_is_never_kept_with_a_version(tmp_path, monkeypatch):
+    project = look_project(tmp_path)
+    monkeypatch.setattr(mockup, "run_shots", fake_shots)
+    mockup.try_look(project, ["menu=light"])
+    quiet_build(project)
+    version = project / "mockup" / "versions" / "v0.1"
+    assert (version / "index.html").is_file() and not (version / mockup.LOOK_PREVIEW).exists()
+
+
+def test_the_look_in_the_browser_from_the_folder(tmp_path):
+    """The mock-up opened from its folder: the logo shows, the carried font loads and the settings draw."""
+    node = shutil.which("node")
+    if not node or not (support.ROOT / "node_modules" / "playwright-core").is_dir():
+        pytest.skip("needs Node.js and the Node packages (run setup.cmd or `npm install`)")
+    project = look_project(tmp_path, theme="desk", logo="client-logo.png", corners="square", menu="dark", header="brand", primary_color="#0B3D91")
+    quiet_build(project)
+    run = subprocess.run([node, str(LOOK_SCRIPT), str(project / "mockup" / "index.html"), "approvals", "manager"],
+                         cwd=support.ROOT, capture_output=True, text=True, encoding="utf-8", timeout=120)
+    if run.returncode == 77:
+        pytest.skip(f"Microsoft Edge could not be started: {run.stderr.strip()[:200]}")
+    assert run.returncode == 0, run.stderr
+    seen = json.loads(run.stdout.strip().splitlines()[-1])
+    assert seen["errors"] == []
+    login = seen["login"]
+    assert login["data"] == {"theme": "desk", "corners": "square", "menu": "dark", "header": "brand"}
+    assert login["logo"] == {"loaded": True, "alt": "Sample Client Sdn. Bhd."} and not login["letters"]
+    assert login["cardCorners"] == "0px"
+    if (mockup.FONT_PACKAGE / mockup.BUNDLED_FONTS["Geist"]).is_file():
+        assert "Geist" in login["fonts"], "the carried font loads from a page opened from its folder"
+    people = seen["list"].pop("people")
+    assert seen["list"] == {"topbar": "rgb(11, 61, 145)", "sidebar": "rgb(29, 29, 31)", "logo": True, "buttonCorners": "0px"}
+    # People carry their initials in a data colour; the cell's text stays the name.
+    assert people and all(p["initials"] and p["text"] and p["initials"] == "".join(w[0] for w in p["text"].split()[:2]).upper() for p in people)
+    assert {p["text"] for p in people} >= {"Ahmad Faiz", "Nur Aisyah", "Daniel Tan"},         "the signed-in manager, and every name in the list's Employee column, also one no role signs in as"
+    tints = {p["tone"]: p["tint"] for p in people}
+    assert all(t not in ("rgba(0, 0, 0, 0)", "rgb(255, 255, 255)") for t in tints.values()), "initials sit on a tint"
+    assert len(set(tints.values())) == len(tints), "each data colour gives its own tint"
+    same = {}
+    for p in people:
+        assert same.setdefault(p["text"], p["tone"]) == p["tone"], "the same person always in the same colour"
+
+
+# ---------------------------------------------------------------------- colours: one loud accent, a data pair, greys
+@pytest.mark.parametrize("colours", [["#1597B0"], "#1597B0", ["#1597B0", "teal"], ["1597B0", "#D55181"], ["#1597B0", "#D55181", "#3478D4"]])
+def test_data_colors_are_two_hex_colours(colours):
+    spec = sample()
+    spec["project"]["data_colors"] = colours
+    assert any(e.startswith("project: data_colors") for e in mockup.validate(spec))
+    spec["project"]["data_colors"] = ["#1597B0", "#d55181"]
+    assert mockup.validate(spec) == []
+
+
+def test_data_colours_change_the_pictures_only_when_set(tmp_path):
+    spec = sample()
+    plain = mockup.fingerprint(spec)
+    spec["project"]["data_colors"] = list(mockup.DESK_DATA)
+    assert mockup.fingerprint(spec) != plain
+
+
+@pytest.mark.parametrize("colour, clash", [("#34C759", "green"), ("#FF9500", "orange"), ("#D70015", "red"), ("#6A2CF0", "violet or indigo"),
+                                           ("#1F5FBF", None), ("#1597B0", None), ("#D55181", None), ("#8E3B78", None), ("#1D1D1F", None)])
+def test_a_colour_that_reads_as_status_or_is_violet_is_named(colour, clash):
+    said = mockup.colour_clash(colour)
+    assert (said is None) if clash is None else (clash in said)
+
+
+def test_desk_notes_an_accent_or_data_colour_that_breaks_the_rules():
+    spec = sample()
+    spec["project"].update(theme="desk", platform="Custom web build", primary_color="#1F5FBF", data_colors=["#1597B0", "#D55181"])
+    assert mockup.look_notes(spec) == []
+    spec["project"].update(primary_color="#2E7D32", data_colors=["#1597B0", "#7B3FF2"])
+    notes = " ".join(mockup.look_notes(spec))
+    assert "The accent #2E7D32 is close to the green that means status" in notes
+    assert "A data colour #7B3FF2 is violet or indigo" in notes
+    spec["project"]["theme"] = "modern"
+    assert not any("data colour" in n or "The accent" in n for n in mockup.look_notes(spec)), "only desk keeps to the design language"
+
+
+def test_look_shows_the_data_colours(tmp_path, capsys):
+    mockup.show_look(look_project(tmp_path / "desk", theme="desk"))
+    assert "Data colours:     #1597B0 and #D55181, the theme's own (people's initials)" in capsys.readouterr().out
+    mockup.show_look(look_project(tmp_path / "joget"))
+    assert "Data colours:     not used by this theme" in capsys.readouterr().out
+
+
+def test_a_pair_can_be_tried(tmp_path, monkeypatch, capsys):
+    project = look_project(tmp_path, theme="desk")
+    monkeypatch.setattr(mockup, "run_shots", fake_shots)
+    mockup.try_look(project, ["data_colors=#0E6E7E,#D55181"])
+    assert 'data_colors: ["#0E6E7E", "#D55181"]' in capsys.readouterr().out
+
+
+def test_desk_follows_the_design_languages_sizes():
+    """docs/design-language.md: the row of buttons a screen ends with is 44px, cards are 24px apart, list text is
+    the 15px body size and columns are 16px apart."""
+    css = (mockup.ENGINE / "themes" / "desk.css").read_text(encoding="utf-8")
+    for rule in (".form-buttons .btn { height: 44px;", "gap: 24px; margin-bottom: 24px; }", "table.datalist { font-size: calc(15px * var(--ts)); }",
+                 ".datalist th { padding: 10px 8px;", "#app .datalist td { padding: 13px 8px;"):
+        assert rule in css, rule

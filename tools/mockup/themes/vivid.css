@@ -38,18 +38,18 @@ body { background: var(--bg); }
 .content > * { position: relative; z-index: 1; }
 .page-head h2 { color: #fff; font-size: calc(28px * var(--ts)); }
 .page-head p { color: rgba(255,255,255,.8); }
-.status-bar { display: inline-flex; align-items: center; gap: 8px; background: #fff; padding: 6px 8px 6px 14px; border-radius: 999px; box-shadow: var(--shadow); }
+.status-bar { display: inline-flex; align-items: center; gap: 8px; background: #fff; padding: 6px 8px 6px 14px; border-radius: calc(999px * var(--rs)); box-shadow: var(--shadow); }
 
 /* Cards */
 .stat, .table-wrap, .form-section, .list-tools, .tabs { box-shadow: 0 10px 30px rgba(15,23,42,.08); border-color: transparent; }
 .stat-value { background: linear-gradient(120deg, var(--text), color-mix(in srgb, var(--accent) 70%, var(--text))); -webkit-background-clip: text; background-clip: text; color: transparent; font-size: calc(34px * var(--ts)); }
 .list-tools { box-shadow: none; }
-.list-tools:has(.filter) { background: #fff; border-radius: var(--radius); padding: 14px 16px; margin-bottom: 14px; box-shadow: 0 10px 30px rgba(15,23,42,.08); }
-.list-tools:not(:has(.filter)) .toolbar { background: #fff; padding: 8px; border-radius: var(--radius); box-shadow: 0 10px 30px rgba(15,23,42,.08); }
-.tabs { background: #fff; border-radius: var(--radius); padding: 0 8px; border-bottom: 0; }
+.list-tools:has(.filter) { background: #fff; border-radius: calc(var(--radius) * var(--rs)); padding: 14px 16px; margin-bottom: 14px; box-shadow: 0 10px 30px rgba(15,23,42,.08); }
+.list-tools:not(:has(.filter)) .toolbar { background: #fff; padding: 8px; border-radius: calc(var(--radius) * var(--rs)); box-shadow: 0 10px 30px rgba(15,23,42,.08); }
+.tabs { background: #fff; border-radius: calc(var(--radius) * var(--rs)); padding: 0 8px; border-bottom: 0; }
 .datalist th { background: #fff; border-bottom: 2px solid #eef1f6; }
 .form-section h3::before { background: var(--grad); width: 5px; }
-.flow { border-radius: var(--radius); }
+.flow { border-radius: calc(var(--radius) * var(--rs)); }
 
 /* Buttons */
 .btn.primary, .btn.primary:hover { background: var(--grad); border: 0; box-shadow: 0 8px 20px color-mix(in srgb, var(--accent2) 35%, transparent); }

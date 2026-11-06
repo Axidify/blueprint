@@ -14,6 +14,7 @@ The workspace is never part of a change.
 | A skill (new, renamed, removed, or what it does) | `docs/skills.md`, the skills list in `CLAUDE.md` |
 | A tool or its options | `docs/tools.md`, and its tests in `tests/` (see [Tests](#tests)) |
 | The spec format or mock-up engine | `docs/spec-format.md` |
+| How mock-ups or Blueprint's own pages look | `docs/design-language.md` (agree the change first) |
 | Register fields or the Excel layout | `docs/register.md` |
 | The estimate file, its rules or its Excel layout | `docs/estimates.md` |
 | Setup, workspace, company profile or branding | `docs/workspace.md`, `docs/getting-started.md`, `docs/troubleshooting.md` if relevant |

@@ -12,6 +12,28 @@ See [docs/maintaining.md](docs/maintaining.md).
 ## [Unreleased]
 
 ### Added
+- **Make the mock-up look like the client's own systems.** Say "use their logo", "dark menu", "squarer
+  corners" or "make it look like their intranet": the new `mockup-design` skill sets the look, or learns it
+  from screenshots of the client's systems, their brand guidelines or their website. It shows the main screens
+  before and after (`python -I tools/mockup.py look <project> --try ...`) and changes the project only once
+  you are happy. It warns when white words are hard to read on the brand colour, and when the look is custom
+  work on a Joget platform.
+- **Blueprint's design language is written down** in `docs/design-language.md`: Apple as the reference,
+  the colours, type sizes, spacing, corners, buttons, tables and words that mock-ups and Blueprint's own pages
+  follow. The design skill reads it before every change of look.
+- **The `desk` mock-up follows Apple's sizes more closely:** the row of buttons a screen ends with is 44px
+  and level (Back, Reject and Approve together), dashboard figures sit 24px apart like every other card, and
+  lists use the same 15px text as the rest of the screen, with short values kept on one line while the list
+  fits, so every list still fits the 1000px screenshots.
+- **A colour system for mock-ups:** one loud accent for what to press, a complementary pair for data, and
+  greys for everything else. In `desk` the pair (teal and pink unless the spec sets `data_colors`) draws
+  people's initials beside their names, the same colour for the same person everywhere. The design skill
+  picks a client's colours by the same rules, and `look` warns when an accent or data colour could be read
+  as a status, or is violet or indigo.
+- **The client's logo, font, corners, side menu and top bar** can be set in the spec (`logo`, `font`,
+  `font_file`, `corners`, `menu`, `header`) and work with every theme. A project that sets none of them
+  looks exactly as before, and a logo kept only for the document's cover stays off the mock-up until the
+  spec names it.
 - **A guided tour for newcomers.** Say "give me a tour" for a ten-minute first run on a copy of the made-up
   sample: a quick review into the Excel register, the clickable mock-up, a comment turned into a live
   change, and the generated requirements document. It never touches your projects or client documents,
@@ -234,6 +256,8 @@ See [docs/maintaining.md](docs/maintaining.md).
   of it.
 
 ### Fixed
+- **The `desk` mock-up now looks the same on every laptop.** It carries its font (Geist) with it, so a client
+  opening the mock-up on their own laptop, or over the network, no longer sees it in a fallback font.
 - **Filters are kept when you open a record and come back.** The list used to show every row again.
 - **The Feedback button no longer covers the last buttons of a page**, such as Export or Approve.
 - **The outline in feedback mode is no longer cut off** on a column heading or anything else inside a table.

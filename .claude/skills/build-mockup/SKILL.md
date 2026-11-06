@@ -21,7 +21,9 @@ so every decision put into the spec shows up in both. Format: `docs/spec-format.
     existing project's theme unless the user asks (its screenshots would be out of date).
     In `desk`, write titles, menu items, labels and buttons in sentence case ("New application", "Leave
     type"), give the screen's main action `style: primary` and leave the rest unstyled.
-  - Brand colour, and the client logo (put it at `spec/client-logo.png`).
+  - Brand colour, and the client logo: put it at `spec/client-logo.png` (the document's cover) and set
+    `logo: client-logo.png` to show it in the mock-up too. For the rest of the client's look (font,
+    corners, menu, top bar), or to learn it from their own systems, use the `mockup-design` skill.
 
 ## 2. Write the spec
 

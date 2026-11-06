@@ -1,0 +1,47 @@
+/* The client's own look on top of any theme: the project's corners, menu, header and logo (project.corners,
+   menu, header and logo in the spec; docs/spec-format.md, The client's look). Loaded after the theme. The
+   engine marks the page (data-corners, data-menu, data-header, has-logo) only for what the spec sets, so a
+   spec without them is drawn exactly as its theme draws it. */
+
+/* Corners, as a share of what the theme draws. */
+html[data-corners="square"] { --rs: 0; }
+html[data-corners="small"] { --rs: .5; }
+html[data-corners="round"] { --rs: 1.6; }
+
+/* A dark side menu. */
+html[data-menu="dark"] {
+  --sidebar-bg: #1D1D1F; --sidebar-text: rgba(255, 255, 255, .72); --sidebar-hover: rgba(255, 255, 255, .08);
+  --sidebar-active: rgba(255, 255, 255, .14); --sidebar-active-text: #fff;
+}
+html[data-menu="dark"] .sidebar { border-right-color: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
+html[data-menu="dark"] .sidebar::before { color: rgba(255, 255, 255, .4); }
+html[data-menu="dark"] .menu-item.active { border-left-color: #fff; }
+
+/* A light side menu. */
+html[data-menu="light"] {
+  --sidebar-bg: #FFFFFF; --sidebar-text: #3A3A3C; --sidebar-hover: rgba(0, 0, 0, .04);
+  --sidebar-active: color-mix(in srgb, var(--primary) 10%, #fff); --sidebar-active-text: color-mix(in srgb, var(--primary) 85%, #000);
+}
+html[data-menu="light"] .sidebar { border-right: 1px solid var(--border); }
+html[data-menu="light"] .sidebar::before { color: #8E8E93; }
+html[data-menu="light"] .menu-item.active { box-shadow: none; }
+html[data-menu="light"] .menu-item.active::before { background: currentColor; }
+
+/* The top bar: light, dark or in the project's colour. */
+html[data-header="light"] { --topbar-bg: #FFFFFF; --topbar-text: #1D1D1F; }
+html[data-header="dark"] { --topbar-bg: #1D1D1F; --topbar-text: #FFFFFF; }
+html[data-header="brand"] { --topbar-bg: var(--primary); --topbar-text: #FFFFFF; }
+html[data-header] .topbar { background: var(--topbar-bg); color: var(--topbar-text); -webkit-backdrop-filter: none; backdrop-filter: none; }
+html[data-header="light"] .topbar { border-bottom: 1px solid var(--border); }
+html[data-header="dark"] .topbar, html[data-header="brand"] .topbar { border-bottom: 0; box-shadow: none; }
+html[data-header="light"] .topbar-right .user, html[data-header="light"] .topbar-right .logout { color: #1D1D1F; }
+html[data-header="dark"] .topbar-right .user, html[data-header="brand"] .topbar-right .user,
+html[data-header="dark"] .topbar-right .logout, html[data-header="brand"] .topbar-right .logout { color: rgba(255, 255, 255, .88); }
+html[data-header="dark"][data-theme="modern"] .topbar-right .user, html[data-header="brand"][data-theme="modern"] .topbar-right .user { background-color: rgba(255, 255, 255, .12); }
+html[data-header="dark"] .topbar .brand-mark, html[data-header="brand"] .topbar .brand-mark { background: rgba(255, 255, 255, .2); box-shadow: none; }
+html[data-header="light"] .topbar .brand-mark { background: var(--primary); }
+
+/* The client's logo in place of the letters: in the top bar, and larger on the sign-in page. */
+.brand-logo { display: block; height: 28px; max-width: 160px; object-fit: contain; }
+.brand-logo.big { height: 56px; max-width: 240px; margin: 0 auto; }
+html[data-header="dark"] .topbar .brand-logo, html[data-header="brand"] .topbar .brand-logo { padding: 3px 6px; border-radius: calc(6px * var(--rs)); background: #fff; height: 32px; }

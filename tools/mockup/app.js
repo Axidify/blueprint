@@ -85,6 +85,25 @@
         showing: (n, total) => `Showing ${n} of ${total} records` };
   // project.text_size: larger text on the client's screens (the presenter's tools keep their size).
   document.documentElement.style.setProperty("--ts", { large: 1.12, larger: 1.25 }[String(P.text_size || "").toLowerCase()] || 1);
+  // The client's own look on top of the theme (assets/look.css): only what the spec sets, so a spec without
+  // these is drawn as its theme draws it. The build checked the values.
+  for (const key of ["corners", "menu", "header"]) {
+    if (P[key]) document.documentElement.dataset[key] = String(P[key]).toLowerCase();
+  }
+  // project.font: the client's font first, then the theme's own as the fallback.
+  if (P.font) {
+    const root = document.documentElement;
+    root.style.setProperty("--font", `"${String(P.font).replace(/["\\]/g, "")}", ${getComputedStyle(root).getPropertyValue("--font").trim() || "sans-serif"}`);
+  }
+  // project.logo: the client's logo in place of the letters (the build copied it into assets/).
+  const LOGO = BUILD.logo || "";
+  if (LOGO) document.documentElement.classList.add("has-logo");
+  // project.data_colors: the complementary pair for data (people's initials), as the desk design
+  // language spends extra colour only on data. The desk theme sets teal and pink when the spec names none.
+  if (Array.isArray(P.data_colors)) P.data_colors.slice(0, 2).forEach((c, i) => document.documentElement.style.setProperty(`--data-${i + 1}`, String(c)));
+  const brandMark = (big) => (LOGO
+    ? `<img class="brand-logo${big ? " big" : ""}" src="${esc(LOGO)}" alt="${esc(P.client || P.name)}">`
+    : `<span class="brand-mark${big ? " big" : ""}">${esc(P.short_name || P.name[0])}</span>`);
   // With a red brand colour the main button and a danger button would be two reds side by side (Approve
   // next to Reject). The danger button is then drawn as an outline, so the two cannot be mistaken.
   (function () {
@@ -306,6 +325,35 @@
   // sample record in the same status); a new id after the list's own; the signed-in person and the time for
   // fields such as submitted_by and submitted; and, where the list's records show their progress, a first step
   // done by whoever is signed in now and the next one waiting. It then shows in every list and count it matches.
+  // People in the desk theme: initials on a soft tint of one of the data colours, the same one for the same
+  // person everywhere. A person is anyone a role signs in as or a step of a record's progress names. The
+  // initials are drawn by CSS, so the cell's text stays the name.
+  const PEOPLE = new Set([...S.roles.map((x) => x.user),
+    ...Object.values(S.data || {}).flatMap((rows) => (Array.isArray(rows) ? rows : []).flatMap((x) => (x && Array.isArray(x.timeline) ? x.timeline.map((s) => s && s.by) : [])))]
+    .filter((n) => n != null && String(n).trim()).map((n) => String(n).trim().toLowerCase()));
+  // `column`: the value is in a list column that holds people, so it is a person even if no role signs in as it.
+  const person = (name, column) => {
+    const text = String(name == null ? "" : name).trim();
+    if (!DESK || !text || !(column || PEOPLE.has(text.toLowerCase()))) return esc(name);
+    const initials = text.split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+    const tone = ([...text.toLowerCase()].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % 2) + 1;
+    return `<span class="person" data-initials="${esc(initials)}" data-tone="${tone}">${esc(text)}</span>`;
+  };
+  // A value kept on one line in a list: one word of up to 20 letters (always), or two words of up to 18
+  // together (while the list fits: fitLists).
+  const ONE_WORD = /^\S{1,20}$/;
+  const TWO_WORDS = /^(?=.{1,18}$)\S+ \S+$/;
+  const shortClass = (v) => (ONE_WORD.test(v) ? 'class="nb" ' : TWO_WORDS.test(v) ? 'class="nb2" ' : "");
+  // Two short words stay on one line only while their list fits its card: in a list too wide for the screen
+  // they wrap again, so the screen (and its screenshot) keeps its width.
+  function fitLists() {
+    app.querySelectorAll(".table-wrap").forEach((wrap) => {
+      const cells = wrap.querySelectorAll("td.nb2, td.nb2-off");
+      cells.forEach((td) => td.classList.replace("nb2-off", "nb2"));
+      if (wrap.scrollWidth > wrap.clientWidth + 1) cells.forEach((td) => td.classList.replace("nb2", "nb2-off"));
+    });
+  }
+  window.addEventListener("resize", () => fitLists());
   const WHO = /^(submitted_by|created_by|requested_by|raised_by|applied_by|prepared_by|reported_by|requester|requestor|applicant|employee|staff|initiator|submitter|owner)$/i;
   const WHEN = /^(submitted|created|requested|raised|applied|applied_on|date_submitted|date_created|date_requested|submission_date|request_date|application_date|(submitted|created|requested|raised)_(at|on|date|time))$/i;
   function creatingEntry(r, label, dialog) {
@@ -472,9 +520,9 @@
       .map((s) => `<a class="menu-item ${s.id === r.screen ? "active" : ""}" data-el="menu:${esc(s.menu)}" href="#/${s.id}${r.q.clean ? "?clean=1" : ""}">${esc(s.menu)}</a>`).join("");
     return `
       <header class="topbar" data-el="region:header">
-        <div class="brand" data-el="region:system name"><span class="brand-mark">${esc(P.short_name || P.name[0])}</span><span>${esc(P.name)}</span></div>
+        <div class="brand" data-el="region:system name">${brandMark(false)}<span>${esc(P.name)}</span></div>
         <div class="topbar-right">
-          <span class="user" data-el="header:user">${role.user ? `${esc(role.user)} · ` : ""}${esc(role.name)}</span>
+          <span class="user" data-el="header:user">${role.user ? `${person(role.user)} · ` : ""}${esc(role.name)}</span>
           <a class="logout" href="#/login" data-el="header:logout">${W.logout}</a>
         </div>
       </header>
@@ -488,7 +536,7 @@
     return `
       <div class="login-wrap" data-el="region:sign-in page">
         <div class="login-card" data-el="section:Login">
-          <div class="login-brand"><span class="brand-mark big">${esc(P.short_name || P.name[0])}</span><h1>${esc(P.name)}</h1><p>${esc(P.client)}</p></div>
+          <div class="login-brand">${brandMark(true)}<h1>${esc(P.name)}</h1><p>${esc(P.client)}</p></div>
           <label class="f-label">Username</label><input class="f-input" data-el="field:username" placeholder="Network ID">
           <label class="f-label">Password</label><input class="f-input" type="password" data-el="field:password" placeholder="Password">
           <button class="btn primary block" data-el="button:Login" data-go="${firstScreen(S.roles[0].id)}" data-role="${S.roles[0].id}">${W.login}</button>
@@ -527,7 +575,9 @@
     // Each row carries the values its filters and search boxes look at (also fields that are not columns).
     const watched = [...(list.filters || []), ...(list.search || [])];
     const watchedValues = (row) => esc(JSON.stringify(Object.fromEntries(watched.map((f) => [f, row[f] == null ? "" : String(row[f])]))));
-    const body = data.length ? data.map((row) => `<tr data-row="${watchedValues(row)}" data-el="row:${esc(row[key])}">${cols.map((c) => `<td ${/^\S{1,20}$/.test(String(row[c.field] == null ? "" : row[c.field])) ? 'class="nb" ' : ""}data-el="cell:${esc(c.label)}|${esc(row[key])}">${c.chip ? `<span class="chip ${statusClass(row[c.field])}">${esc(row[c.field])}</span>` : esc(row[c.field])}</td>`).join("")}${(list.actions || []).length ? `<td class="actions" data-el="cell:Action|${esc(row[key])}">${list.actions.filter((a) => matches(a.when, row) && (!a.roles || a.roles.includes(r.role))).map((a) => `<a href="#" class="link" data-el="action:${esc(a.label)}" ${a.to ? `data-go="${a.to}"` : ""} ${a.to || a.set_status != null ? `data-record="${esc(row[key])}"` : ""} ${a.set_status != null ? `${moveAttr(a)} data-list="${esc(list.data)}"` : ""} ${a.toast ? `data-toast="${esc(a.toast)}"` : ""}>${esc(a.label)}</a>`).join(" ")}</td>` : ""}</tr>`).join("")
+    // A column holds people when any of its values is a person: then every name in it gets its initials.
+    const peopleCols = new Set(cols.filter((c) => !c.chip && data.some((row) => PEOPLE.has(String(row[c.field] == null ? "" : row[c.field]).trim().toLowerCase()))).map((c) => c.field));
+    const body = data.length ? data.map((row) => `<tr data-row="${watchedValues(row)}" data-el="row:${esc(row[key])}">${cols.map((c) => `<td ${shortClass(String(row[c.field] == null ? "" : row[c.field]))}data-el="cell:${esc(c.label)}|${esc(row[key])}">${c.chip ? `<span class="chip ${statusClass(row[c.field])}">${esc(row[c.field])}</span>` : person(row[c.field], peopleCols.has(c.field))}</td>`).join("")}${(list.actions || []).length ? `<td class="actions" data-el="cell:Action|${esc(row[key])}">${list.actions.filter((a) => matches(a.when, row) && (!a.roles || a.roles.includes(r.role))).map((a) => `<a href="#" class="link" data-el="action:${esc(a.label)}" ${a.to ? `data-go="${a.to}"` : ""} ${a.to || a.set_status != null ? `data-record="${esc(row[key])}"` : ""} ${a.set_status != null ? `${moveAttr(a)} data-list="${esc(list.data)}"` : ""} ${a.toast ? `data-toast="${esc(a.toast)}"` : ""}>${esc(a.label)}</a>`).join(" ")}</td>` : ""}</tr>`).join("")
       : `<tr><td colspan="${cols.length + 1}" class="empty">${esc(list.empty || "No records found")}</td></tr>`;
     // One block for the list: its toolbar row, the table and the count (the desk theme draws it as one card).
     return `<div class="list-block">
@@ -633,7 +683,7 @@
     const word = (s) => (s.status != null && s.status !== "" ? s.status : s.at ? "Done" : W.waiting);
     return `<section class="form-section" data-el="section:Approval Progress"><h3>${W.progress}</h3><table class="datalist compact"><thead><tr><th>${W.step}</th><th>${W.by}</th><th>${W.at}</th><th>Status</th>${comments ? `<th>${W.comment}</th>` : ""}</tr></thead><tbody>${steps.map((s) => {
       const cell = (head) => `data-el="cell:${head}|${esc(s.step)}"`;
-      return `<tr data-el="row:${esc(s.step)}"><td ${cell("Step")}>${esc(s.step)}</td><td ${cell("Handled By")}>${esc(s.by) || "-"}</td><td ${cell("Date & Time")}>${esc(s.at) || "-"}</td><td ${cell("Status")}><span class="chip ${statusClass(word(s))}">${esc(word(s))}</span></td>${comments ? `<td ${cell("Comment")}>${esc(s.comment) || "-"}</td>` : ""}</tr>`;
+      return `<tr data-el="row:${esc(s.step)}"><td ${cell("Step")}>${esc(s.step)}</td><td ${cell("Handled By")}>${s.by ? person(s.by) : "-"}</td><td ${cell("Date & Time")}>${esc(s.at) || "-"}</td><td ${cell("Status")}><span class="chip ${statusClass(word(s))}">${esc(word(s))}</span></td>${comments ? `<td ${cell("Comment")}>${esc(s.comment) || "-"}</td>` : ""}</tr>`;
     }).join("")}</tbody></table></section>`;
   }
 
@@ -856,6 +906,7 @@
     }
     if (r.q.dialog) app.insertAdjacentHTML("beforeend", renderDialog(r.q.dialog));
     app.dataset.screen = screen.id || "login";
+    fitLists();
     restoreTyped();
     syncFakes();
     if (typed.required) markRequired();
