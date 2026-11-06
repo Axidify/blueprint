@@ -11,6 +11,8 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-07
+
 ### Added
 - **`project.py migrate <project>`** moves a project to the new folder layout (`--dry-run` lists every
   move, `--all` does every project, `--undo` moves it back exactly). It refuses, saying why, while the
@@ -734,7 +736,8 @@ First release.
 - One-step setup (`setup.cmd`) with a machine check, `present.cmd` for sessions, shared Claude Code
   permissions and a start-up status greeting.
 
-[Unreleased]: https://github.com/Axidify/blueprint/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/Axidify/blueprint/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/Axidify/blueprint/compare/v0.10.0...v1.0.0
 [0.10.0]: https://github.com/Axidify/blueprint/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/Axidify/blueprint/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/Axidify/blueprint/compare/v0.8.0...v0.8.1
