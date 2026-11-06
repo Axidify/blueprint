@@ -601,3 +601,25 @@ def test_a_long_quote_in_a_reference_is_shortened_and_the_columns_replace_the_ol
     for name in ("For client", "Internal fixes", "All items"):
         header = sheet_rows(workbook[name])[0]
         assert "Reference" not in header and header.index("Where") == header.index("Document") + 1
+
+
+def test_the_workbook_follows_the_design_language(rendered):
+    """docs/design-language.md, Spreadsheets: a quiet header, no gridlines, severity and status as a dot and a
+    coloured word, the client's response as a field to fill in, and the internal sheets marked."""
+    import sheets
+
+    wb = load_workbook(register.layout.register_xlsx(rendered))
+    ws = wb["For client"]
+    header = [c.value for c in ws[1]]
+    head = ws.cell(row=1, column=1)
+    assert head.fill.fgColor.rgb.endswith(sheets.HEAD_FILL) and head.font.color.rgb.endswith(sheets.GREY) and head.font.bold
+    assert not ws.sheet_view.showGridLines
+    response = header.index("Client response") + 1
+    assert ws.cell(row=1, column=response).font.color.rgb.endswith(sheets.ACCENT), "the column to fill in, in the accent"
+    assert ws.cell(row=2, column=response).fill.fgColor.rgb.endswith(sheets.INPUT_FILL)
+    for name in ("Severity", "Status"):
+        cell = ws.cell(row=2, column=header.index(name) + 1)
+        assert cell.number_format == sheets.DOT_FORMAT and cell.value.lower() == cell.value.lower().lstrip("● "), "the value is the word alone"
+    rules = {rule.formula[0] for rng in ws.conditional_formatting for rule in rng.rules}
+    assert {'"High"', '"asked"', '"resolved"'} <= rules
+    assert "Internal" in wb["Internal fixes"].oddHeader.center.text and not ws.oddHeader.center.text

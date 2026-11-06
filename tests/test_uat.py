@@ -303,3 +303,18 @@ def test_a_move_the_system_makes_on_its_own_is_a_case_without_a_button(project, 
     assert len(auto) == 1
     assert "on its own" in all_text(auto[0]) and auto[0]["todo"]
     assert not [c for c in scripts["cases"] if c["title"] == "From Approved to Cancelled"]
+
+
+def test_the_workbook_follows_the_design_language(rendered):
+    """docs/design-language.md, Spreadsheets: the testers' columns as fields to fill in, results as a dot and a word."""
+    import sheets
+
+    path, _, _ = rendered
+    ws = load_workbook(path.with_suffix(".xlsx"))[uat.STEPS_SHEET]
+    header = [c.value for c in ws[1]]
+    for name, by_tester in ((n, t) for n, _, t in uat.STEP_COLUMNS):
+        cell = ws.cell(row=2, column=header.index(name) + 1)
+        assert cell.fill.fgColor.rgb.endswith(sheets.INPUT_FILL) == by_tester, name
+    result = ws.cell(row=2, column=header.index("Pass/Fail") + 1)
+    assert result.number_format == sheets.DOT_FORMAT
+    assert {'"Pass"', '"Fail"', '"Blocked"', '"Not run"'} <= {rule.formula[0] for rng in ws.conditional_formatting for rule in rng.rules}

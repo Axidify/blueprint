@@ -18,6 +18,7 @@ from openpyxl import load_workbook
 import support
 
 import estimate
+import sheets
 
 PLATFORM = "Sample Platform"
 STARTER = support.ROOT / "templates" / "knowledge"
@@ -1044,7 +1045,7 @@ def test_rates_needed_sheet_is_a_form_for_the_lead_developer(rendered):
     assert rows[3] == ["Integration, per endpoint   BB-07", "Mapping", "2 for Item L02", "", ""], "the input cells are empty"
     assert len(rows) == 4
     for cell in (sheet["D4"], sheet["E4"]):
-        assert cell.fill.fgColor.rgb.endswith("FFF2CC") and cell.border.left.style == "thin", "they read as a form"
+        assert cell.fill.fgColor.rgb.endswith(sheets.INPUT_FILL) and cell.border.left.style == "thin", "they read as a form"
 
 
 def test_rates_needed_lists_each_block_once_with_all_its_lines(tmp_path, kb, run):

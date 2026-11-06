@@ -459,7 +459,6 @@ def render(project, reg, overwrite=False, returned=None):
     not in the command around it, so that no caller can write the file without it. `returned` is a copy
     that came back from the client: what was typed into it is taken next, by the same rules."""
     from openpyxl import Workbook
-    from openpyxl.styles import Alignment, Font, PatternFill
     from openpyxl.utils import get_column_letter
     from openpyxl.worksheet.datavalidation import DataValidation
 
@@ -489,27 +488,31 @@ def render(project, reg, overwrite=False, returned=None):
         else:
             print(f"Nothing new in {name}: no answer or status differs from what it held when it was written.")
 
-    header_fill = PatternFill("solid", fgColor="1F3864")
-    sev_fill = {"high": "F8CBAD", "medium": "FFE699", "low": "E2EFDA"}
-    wrap = Alignment(wrap_text=True, vertical="top")
+    import sheets
+
+    # Severity and status as a dot and a coloured word (docs/design-language.md, Spreadsheets): high blocks
+    # sign-off, an answered item needs us, an asked one waits on the client.
+    sev_tones = {"High": "red", "Medium": "orange", "Low": "grey"}
+    status_tones = {"open": "grey", "asked": "accent", "answered": "orange", "resolved": "green", "wont-fix": "grey"}
+    internal = "Internal: not for the client"
     items = sorted(reg["items"], key=lambda it: (it["status"] in ("resolved", "wont-fix"),
                                                  SEV_ORDER.get(it["severity"], 9), it["id"]))
 
-    def sheet(ws, columns, rows):
+    def sheet(ws, columns, rows, fill_in=(), mark=None):
+        sheets.setup(ws, [width for _, width, _ in columns], freeze="B2", internal=mark)
+        fill_cols = [c for c, (name, _, _) in enumerate(columns, 1) if name in fill_in]
         for c, (name, width, _) in enumerate(columns, 1):
-            cell = ws.cell(row=1, column=c, value=name)
-            cell.font = Font(bold=True, color="FFFFFF")
-            cell.fill = header_fill
-            cell.alignment = wrap
-            ws.column_dimensions[get_column_letter(c)].width = width
+            ws.cell(row=1, column=c, value=name)
         for r, it in enumerate(rows, 2):
             for c, (name, _, key) in enumerate(columns, 1):
                 value = key(it) if callable(key) else it.get(key, "")
-                cell = ws.cell(row=r, column=c, value=value)
-                cell.alignment = wrap
-                if name == "Severity":
-                    cell.fill = PatternFill("solid", fgColor=sev_fill.get(it["severity"], "FFFFFF"))
-        ws.freeze_panes = "B2"
+                ws.cell(row=r, column=c, value=value)
+        sheets.header(ws, 1, len(columns), fill_in=fill_cols)
+        sheets.rows(ws, 2, len(rows) + 1, len(columns), fill_in=fill_cols)
+        for name, tones in (("Severity", sev_tones), ("Status", status_tones)):
+            col = get_column_letter(next(i for i, c in enumerate(columns, 1) if c[0] == name))
+            if rows:
+                sheets.status(ws, f"{col}2:{col}{len(rows) + 1}", tones)
         if rows:
             ws.auto_filter.ref = f"A1:{get_column_letter(len(columns))}{len(rows) + 1}"
             col = next(i for i, c in enumerate(columns, 1) if c[0] == "Status")
@@ -538,21 +541,27 @@ def render(project, reg, overwrite=False, returned=None):
     wb = Workbook()
     ws = wb.active
     ws.title = "For client"
-    sheet(ws, client_cols, [it for it in items if it["audience"] == "client"])
-    sheet(wb.create_sheet("Internal fixes"), internal_cols, [it for it in items if it["audience"] == "internal"])
-    sheet(wb.create_sheet("All items"), all_cols, items)
+    sheet(ws, client_cols, [it for it in items if it["audience"] == "client"], fill_in=("Client response",))
+    sheet(wb.create_sheet("Internal fixes"), internal_cols, [it for it in items if it["audience"] == "internal"], mark=internal)
+    sheet(wb.create_sheet("All items"), all_cols, items, fill_in=("Answer / decision",), mark=internal)
 
-    s = wb.create_sheet("Summary")
-    s.column_dimensions["A"].width = 28
-    s.column_dimensions["B"].width = 12
+    s = sheets.setup(wb.create_sheet("Summary"), [28, 12], internal=internal, landscape=False, titles=None)
     rows = [(reg.get("project", ""), ""), ("Client: " + reg.get("client", ""), ""), ("", ""), ("Total items", len(items))]
     for label, field in (("By status", "status"), ("By severity", "severity"), ("By audience", "audience"),
                          ("By category", "category")):
         rows += [("", ""), (label, "")]
         rows += sorted(Counter(it[field] for it in items).items())
     for r, (a, b) in enumerate(rows, 1):
-        s.cell(row=r, column=1, value=a).font = Font(bold=(b == "" and a != ""))
-        s.cell(row=r, column=2, value=b)
+        left, right = s.cell(row=r, column=1, value=a), s.cell(row=r, column=2, value=b)
+        if r == 1:
+            sheets.title(s, "A1", a)
+        elif r == 2:
+            sheets.label(left)
+        elif b == "" and a != "":
+            sheets.section(left)
+        else:
+            sheets.label(left)
+            sheets.value(right, bold=a == "Total items")
 
     # What each item held as this file is written, so the next render can tell what was typed in Excel since.
     kept = wb.create_sheet(RENDERED)

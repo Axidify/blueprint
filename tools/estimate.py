@@ -485,13 +485,16 @@ def compute(est, project, kdir):
 
 # ---------------------------------------------------------------- Excel
 
-# The look of the workbook: true greys, hairlines between rows, status as a coloured word, and the one
-# accent colour for the headline only.
-XL_FONT = "Calibri"
-INK, GREY = "1D1D1F", "6E6E73"
-HEAD_FILL, HEAD_LINE, ROW_LINE = "F5F5F7", "D2D2D7", "E5E5EA"
-GREEN, ORANGE, RED, ACCENT = "248A3D", "C93400", "D70015", "1F5FBF"
-INPUT_FILL = "FFF2CC"  # a cell to fill in, as on the UAT workbook
+# The look of the workbook, shared with the register, the UAT workbook and the CR log (tools/sheets.py,
+# docs/design-language.md): true greys, hairlines between rows, status as a coloured word, the one accent
+# colour for the headline and for the cells to fill in.
+import sheets  # noqa: E402
+
+XL_FONT = sheets.FONT
+INK, GREY = sheets.INK, sheets.GREY
+HEAD_FILL, HEAD_LINE, ROW_LINE = sheets.HEAD_FILL, sheets.HEAD_LINE, sheets.ROW_LINE
+GREEN, ORANGE, RED, ACCENT = sheets.GREEN, sheets.ORANGE, sheets.RED, sheets.ACCENT
+INPUT_FILL, INPUT_LINE = sheets.INPUT_FILL, sheets.INPUT_LINE  # a cell to fill in, as on every workbook
 INTERNAL = "Internal: not for the client"
 DASH = "—"
 RATES_SHEET = "Rates needed"
@@ -539,7 +542,7 @@ def render_xlsx(est, res, out):
         cell = ws.cell(row=r, column=c, value=value)
         if not isinstance(value, CellRichText):
             cell.font = Font(name=XL_FONT, size=size, bold=bold, color=color)
-        cell.alignment = Alignment(wrap_text=wrap, vertical="top", indent=indent,
+        cell.alignment = Alignment(wrap_text=wrap, vertical="center", indent=indent,
                                    horizontal=align or ("right" if numeric or value == DASH else "left"))
         if numeric:
             cell.number_format = fmt or ("#,##0" if float(value).is_integer() else "#,##0.0")
@@ -849,7 +852,7 @@ def render_xlsx(est, res, out):
         check = DataValidation(type="decimal", operator="greaterThanOrEqual", formula1="0", allow_blank=True,
                                error="Write mandays per unit as a number, such as 1.5", errorTitle="Mandays per unit")
         rn.add_data_validation(check)
-        thin = Side(style="thin", color=HEAD_LINE)
+        thin = Side(style="thin", color=INPUT_LINE)
         for r, (code, members) in enumerate(sorted(need.items()), 4):
             known = res["blocks"].get(code) or {}
             put(rn, r, 1, rich((known.get("name") or code, INK, 11, False), (f"   {code}" if known.get("name") else "", GREY, 9, False)))

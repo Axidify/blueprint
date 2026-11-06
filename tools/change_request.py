@@ -536,24 +536,25 @@ def sized_text(res):
 # ---------------------------------------------------------------- Excel
 def render_xlsx(log, sizing, out):
     from openpyxl import Workbook
-    from openpyxl.styles import Alignment, Font, PatternFill
     from openpyxl.utils import get_column_letter
 
-    fill = PatternFill("solid", fgColor="1F3864")
-    wrap = Alignment(wrap_text=True, vertical="top")
+    import sheets
 
-    def table(ws, columns, rows):
+    def table(ws, columns, rows, tones=None):
+        sheets.setup(ws, [width for _, width in columns], freeze="B2", internal=INTERNAL_MARK)
         for c, (name, width) in enumerate(columns, 1):
-            cell = ws.cell(row=1, column=c, value=name)
-            cell.font, cell.fill, cell.alignment = Font(bold=True, color="FFFFFF"), fill, wrap
-            ws.column_dimensions[get_column_letter(c)].width = width
+            ws.cell(row=1, column=c, value=name)
         for r, row in enumerate(rows, 2):
             for c, value in enumerate(row, 1):
-                ws.cell(row=r, column=c, value=round(value, 2) if isinstance(value, float) else value).alignment = wrap
-        ws.freeze_panes = "B2"
+                ws.cell(row=r, column=c, value=round(value, 2) if isinstance(value, float) else value)
+        sheets.header(ws, 1, len(columns))
+        sheets.rows(ws, 2, len(rows) + 1, len(columns))
         if rows:
             ws.auto_filter.ref = f"A1:{get_column_letter(len(columns))}{len(rows) + 1}"
-        ws.oddHeader.center.text = INTERNAL_MARK
+            # Verdict and status as a dot and a coloured word.
+            for name, words in (tones or {}).items():
+                col = get_column_letter(next(i for i, (n, _) in enumerate(columns, 1) if n == name))
+                sheets.status(ws, f"{col}2:{col}{len(rows) + 1}", words)
 
     crs = [cr for cr in log.get("crs", []) if isinstance(cr, dict)]
     wb = Workbook()
@@ -576,7 +577,9 @@ def render_xlsx(log, sizing, out):
     table(ws, [("ID", 9), ("Raised", 11), ("Asked by", 18), ("Title", 28), ("Request", 45), ("Verdict", 11),
                ("Signed document says", 50), ("Reasoning", 40), ("Gap pattern", 14), ("Status", 10), ("Sized low (MD)", 10),
                ("Sized high (MD)", 10), ("Sizing", 34), ("Sold (MD)", 9), ("Sold by", 16), ("Price", 14), ("Timeline", 12),
-               ("Register", 12), ("Checked against", 11), ("Notes", 36)], rows)
+               ("Register", 12), ("Checked against", 11), ("Notes", 36)], rows,
+          tones={"Verdict": {"In scope": "green", "Ambiguous": "orange", "New": "accent"},
+                 "Status": {"raised": "grey", "quoted": "accent", "approved": "green", "rejected": "red", "built": "green"}})
 
     s = wb.create_sheet("Sizing")
     rows = []
@@ -593,9 +596,7 @@ def render_xlsx(log, sizing, out):
     table(s, [("CR", 9), ("Line", 7), ("Item", 30), ("Block", 10), ("Building block", 26), ("Count", 7), ("Rate (MD)", 10),
               ("Rate from", 30), ("Low (MD)", 9), ("High (MD)", 9), ("Note / assumptions", 50)], rows)
 
-    t = wb.create_sheet("Summary")
-    t.column_dimensions["A"].width = 40
-    t.column_dimensions["B"].width = 14
+    t = sheets.setup(wb.create_sheet("Summary"), [40, 14], internal=INTERNAL_MARK, landscape=False, titles=None)
     co = workspace.company()
     sold = sum(cr.get("sold_md") or 0 for cr in crs if cr.get("status") in ("approved", "built"))
     summary = [(f"Change requests: {log.get('project', '')}", ""), (INTERNAL_MARK, ""), ("", ""), ("Requests logged", len(crs))]
@@ -608,9 +609,14 @@ def render_xlsx(log, sizing, out):
     if co.get("day_rate") and sold:
         summary.append((f"Value at {(co.get('currency') or '').strip()} {co['day_rate']:,} a day".replace("  ", " "), sold * co["day_rate"]))
     for r, (a, b) in enumerate(summary, 1):
-        t.cell(row=r, column=1, value=a).font = Font(bold=(b == "" and a != ""))
-        t.cell(row=r, column=2, value=b)
-    t.oddHeader.center.text = INTERNAL_MARK
+        left, right = t.cell(row=r, column=1, value=a), t.cell(row=r, column=2, value=b)
+        if r == 1:
+            sheets.title(t, "A1", a)
+        elif b == "" and a != "":
+            sheets.section(left) if r > 2 else sheets.label(left)
+        else:
+            sheets.label(left)
+            sheets.value(right, bold=a == "Requests logged")
     try:
         wb.save(out)
     except PermissionError:

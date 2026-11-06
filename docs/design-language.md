@@ -260,6 +260,26 @@ The data pair, then the next data colours in order; context in grey. Green, oran
 mean done, late and refused. Labelled bars are one colour. A donut is a thin ring with a list beside it, not
 leader lines.
 
+## Spreadsheets
+
+The register, the estimate, the UAT workbook and the CR log share one look (`tools/sheets.py`), so they read as
+one family:
+
+| Part | Look |
+|---|---|
+| Font | Calibri: every copy of Office has it, and Geist cannot travel inside an Excel file |
+| Title | 18pt bold ink; the line under it in secondary grey |
+| Header row | 10pt bold secondary grey on the ground grey `#F5F5F7`, a strong line `#D2D2D7` under it |
+| Rows | 11pt ink, wrapped and middle-aligned, a hairline `#E5E5EA` under each; no gridlines |
+| Status, severity, result | A dot and a coloured word (green, orange, red, grey, the accent), by conditional formats so the colour follows the word when someone changes it; the cell holds the word alone |
+| Cells to fill in | Cobalt tint `#EDF2FA` with a thin Cobalt edge `#A9C0E5`, and the column's header in Cobalt |
+| Numbers | Right-aligned |
+| Printing | Landscape A4, one page wide, the header row repeated, "Page n of n"; a sheet that is not for the client says "Internal: not for the client" at the top |
+
+Only the look is set by the shared style: the sheets, columns, values and their places stay as each tool writes
+them, so what Blueprint reads back from a returned workbook (the client's answers, the testers' results) does
+not move.
+
 ## Words
 
 Sentence case for buttons, titles, labels and menu items. Plain words, verb first on buttons. No "please",

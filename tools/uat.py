@@ -1008,22 +1008,19 @@ def group_rows(scripts, spec):
 
 def render_xlsx(scripts, spec, out):
     from openpyxl import Workbook
-    from openpyxl.styles import Alignment, Font, PatternFill
     from openpyxl.utils import get_column_letter
     from openpyxl.worksheet.datavalidation import DataValidation
 
+    import sheets
+
     m = Model(spec)
-    header_fill = PatternFill("solid", fgColor="1F3864")
-    fill_in = PatternFill("solid", fgColor="FFF2CC")
-    wrap = Alignment(wrap_text=True, vertical="top")
     wb = Workbook()
     s = wb.active
     s.title = "Summary"
-    ws = wb.create_sheet(STEPS_SHEET)
+    ws = sheets.setup(wb.create_sheet(STEPS_SHEET), [width for _, width, _ in STEP_COLUMNS], freeze="C2")
+    tester_cols = [c for c, (_, _, by_tester) in enumerate(STEP_COLUMNS, 1) if by_tester]
     for c, (name, width, _) in enumerate(STEP_COLUMNS, 1):
-        cell = ws.cell(row=1, column=c, value=name)
-        cell.font, cell.fill, cell.alignment = Font(bold=True, color="FFFFFF"), header_fill, wrap
-        ws.column_dimensions[get_column_letter(c)].width = width
+        ws.cell(row=1, column=c, value=name)
     r = 1
     for case, k, step, role in step_rows(scripts, m):
         r += 1
@@ -1031,14 +1028,14 @@ def render_xlsx(scripts, spec, out):
                   k, m.title(step["screen"]) if step.get("screen") else "", step["action"], step["expected"],
                   ", ".join(case.get("requirements") or []), "", "", "", None, ""]
         for c, value in enumerate(values, 1):
-            cell = ws.cell(row=r, column=c, value=value)
-            cell.alignment = wrap
-            if STEP_COLUMNS[c - 1][2]:
-                cell.fill = fill_in
+            ws.cell(row=r, column=c, value=value)
         ws.cell(row=r, column=14).number_format = "d mmm yyyy"
-    ws.freeze_panes = "C2"
+    sheets.header(ws, 1, len(STEP_COLUMNS), fill_in=tester_cols)
+    sheets.rows(ws, 2, r, len(STEP_COLUMNS), fill_in=tester_cols)
     col = {name: get_column_letter(i) for i, (name, _, _) in enumerate(STEP_COLUMNS, 1)}
     if r > 1:
+        # A result as a dot and a coloured word, following what the tester picks.
+        sheets.status(ws, f"{col['Pass/Fail']}2:{col['Pass/Fail']}{r}", {"Pass": "green", "Fail": "red", "Blocked": "orange", "Not run": "grey"})
         ws.auto_filter.ref = f"A1:{get_column_letter(len(STEP_COLUMNS))}{r}"
         dv = DataValidation(type="list", formula1='"' + ",".join(RESULTS) + '"', allow_blank=True,
                             showErrorMessage=True, errorTitle="Pass/Fail", error="Choose Pass, Fail, Blocked or Not run")
@@ -1050,14 +1047,9 @@ def render_xlsx(scripts, spec, out):
         dates.add(f"{col['Date']}2:{col['Date']}{r}")
 
     sm = summary(scripts, spec)
-    s.column_dimensions["A"].width = 16
-    s.column_dimensions["B"].width = 44
-    for letter in "CDEF":
-        s.column_dimensions[letter].width = 13
-    s.column_dimensions["G"].width = 40
-    s["A1"] = f"{scripts['project']}: user acceptance test"
-    s["A1"].font = Font(bold=True, size=14)
-    s["A2"] = f"Written from {scripts.get('based_on') or 'v' + scripts['spec_version']} · {readable(scripts['date'])}"
+    sheets.setup(s, [22, 44, 13, 13, 13, 13, 40], titles=None)
+    sheets.title(s, "A1", f"{scripts['project']}: user acceptance test",
+                 f"Written from {scripts.get('based_on') or 'v' + scripts['spec_version']} · {readable(scripts['date'])}")
     rows = [("Scenarios", sm["cases"]), ("Steps", sm["steps"]),
             ("Requirements covered", f"{sm['covered']} of {sm['requirements']}" + (f" ({sm['excluded']} not tested, see below)" if sm["excluded"] else ""))]
     rng = f"'{STEPS_SHEET}'!{col['Pass/Fail']}2:{col['Pass/Fail']}{max(r, 2)}"
@@ -1066,37 +1058,39 @@ def render_xlsx(scripts, spec, out):
              ("Steps not run yet", f'={sm["steps"]}-COUNTIF({rng},"Pass")-COUNTIF({rng},"Fail")-COUNTIF({rng},"Blocked")')]
     line = 4
     for label, value in rows:
-        s.cell(row=line, column=1, value=label).font = Font(bold=True)
-        s.cell(row=line, column=2, value=value).alignment = Alignment(horizontal="left")
+        sheets.label(s.cell(row=line, column=1, value=label))
+        sheets.value(s.cell(row=line, column=2, value=value), bold=label == "Scenarios")
         line += 1
     line += 1
-    s.cell(row=line, column=1, value="Coverage by requirement group").font = Font(bold=True, size=12)
+    sheets.section(s.cell(row=line, column=1, value="Coverage by requirement group"))
     line += 1
+    head = line
     for c, name in enumerate(["Group", "Title", "Requirements", "Covered", "Not tested", "Scenarios", "Scenario ids"], 1):
-        cell = s.cell(row=line, column=c, value=name)
-        cell.font, cell.fill = Font(bold=True, color="FFFFFF"), header_fill
+        s.cell(row=line, column=c, value=name)
     for g in group_rows(scripts, spec):
         line += 1
         for c, value in enumerate([g["id"], g["title"], g["total"], g["covered"], g["excluded"], len(g["cases"]), ", ".join(g["cases"])], 1):
-            s.cell(row=line, column=c, value=value).alignment = wrap
+            s.cell(row=line, column=c, value=value)
+    sheets.header(s, head, 7)
+    sheets.rows(s, head + 1, line, 7)
     line += 2
-    s.cell(row=line, column=1, value="Scenarios by kind").font = Font(bold=True, size=12)
+    sheets.section(s.cell(row=line, column=1, value="Scenarios by kind"))
     for kind, label in TYPES.items():
         if sm["by_type"].get(kind):
             line += 1
-            s.cell(row=line, column=1, value=label)
-            s.cell(row=line, column=3, value=sm["by_type"][kind])
+            sheets.label(s.cell(row=line, column=1, value=label))
+            sheets.value(s.cell(row=line, column=3, value=sm["by_type"][kind]))
     reqs, by, excluded = coverage(scripts, spec)
     left_out = [(rid, reqs[rid][1], excluded[rid]) for rid in reqs if not by[rid] and rid in excluded]
     if left_out:
-        x = wb.create_sheet("Not tested")
-        for c, (name, width) in enumerate((("Requirement", 16), ("Text", 60), ("Why it is not tested", 60)), 1):
-            cell = x.cell(row=1, column=c, value=name)
-            cell.font, cell.fill = Font(bold=True, color="FFFFFF"), header_fill
-            x.column_dimensions[get_column_letter(c)].width = width
+        x = sheets.setup(wb.create_sheet("Not tested"), [16, 60, 60], freeze="A2")
+        for c, name in enumerate(("Requirement", "Text", "Why it is not tested"), 1):
+            x.cell(row=1, column=c, value=name)
         for n, (rid, text, reason) in enumerate(left_out, 2):
             for c, value in enumerate((rid, m.text(text), reason), 1):
-                x.cell(row=n, column=c, value=value).alignment = wrap
+                x.cell(row=n, column=c, value=value)
+        sheets.header(x, 1, 3)
+        sheets.rows(x, 2, len(left_out) + 1, 3)
     wb.active = 1
     try:
         wb.save(str(out))
