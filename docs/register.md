@@ -19,8 +19,12 @@ Internal fixes never appear on the client sheet.
 
 ## Statuses
 
-`open` → `asked` → `answered` → `resolved` (or `wont-fix`). When the client answers, put the answer in
-**Client response** and tell Blueprint ("the client answered R-012 and R-019"). Resolved client items
+`open` → `asked` → `answered` → `resolved` (or `wont-fix`). When the client answers, type the answer into
+**Client response** in `register.xlsx`, or change the **Status** from its drop-down, save the file and
+tell Blueprint ("the client answered R-012 and R-019"). Blueprint reads the Excel file before it writes
+it again, so what you typed goes into the register and is not lost; an answer moves an open question to
+`answered`. Close the file in Excel first, or Blueprint cannot write it. If you and Blueprint both changed
+the same item, it stops and shows the two values so you can say which is right. Resolved client items
 drop out of the Open Issues section at the next generation. Those with an answer move to **Decisions
 made** in the same chapter, with the answer and `resolved_in`, so the document the client signs records
 what was agreed. Write the answer as you want the client to read it.

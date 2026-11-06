@@ -108,10 +108,12 @@ screens:
     roles: [employee]
     description: The employee's own applications with summary counts and filters.
     stats:
-      - {label: Pending, value: 1}
-      - {label: Approved, value: 1}
-      - {label: Rejected, value: 0}
-      - {label: Leave balance (days), value: 13}
+      # count: worked out from the list below, and described in the document. A figure typed in with
+      # value needs a formula: what it counts, in words.
+      - {label: Pending, count: {status: Pending Approval}}
+      - {label: Approved, count: {status: Approved}}
+      - {label: Rejected, count: {status: Rejected}}
+      - {label: Leave balance (days), value: 13, formula: "The employee's entitlement for the year, less the days of approved applications."}
     list:
       data: applications
       where: {employee: "Nur Aisyah"}
@@ -256,8 +258,12 @@ requirements:
       - "System shall inform the line manager by e-mail when an application is cancelled."
 
 integrations:
-  - {system: Active Directory, purpose: "User sign-in and line manager lookup", direction: Inbound, notes: "Line manager taken from the AD manager attribute"}
-  - {system: SMTP, purpose: "E-mail notifications", direction: Outbound, notes: ""}
+  - {system: Active Directory, purpose: "User sign-in and line manager lookup", direction: Inbound, notes: "Line manager taken from the AD manager attribute",
+     trigger: "Sign-in, and submitting an application", data: "Network ID in; name, e-mail and line manager back",
+     on_failure: "Sign-in is refused with a message; an application cannot be submitted without a line manager"}
+  - {system: SMTP, purpose: "E-mail notifications", direction: Outbound, notes: "",
+     trigger: "A status change of an application", data: "Recipient, subject and the application's details",
+     on_failure: "The e-mail is retried three times; the application's status is not affected"}
 
 nfr:
   - {area: Users, requirement: "Up to 300 employees, 30 concurrent users"}

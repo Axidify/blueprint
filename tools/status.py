@@ -13,34 +13,48 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def read(path, load, problems):
+    """A project file, or None when it is missing or cannot be read (then the problem is noted)."""
+    if not path.exists():
+        return None
+    try:
+        return load(path.read_text(encoding="utf-8"))
+    except Exception as e:
+        problems.append(f"{path.name} could not be read ({type(e).__name__}): ask Blueprint to check it")
+        return None
+
+
 def project_status(p):
-    s = {"slug": p.name, "docs": sorted(x.name for x in (p / "docs").glob("*") if x.is_file()) if (p / "docs").exists() else []}
-    reg = p / "register.json"
-    if reg.exists():
-        r = json.loads(reg.read_text(encoding="utf-8"))
-        s["name"] = r.get("project", p.name)
-        items = r.get("items", [])
-        c = Counter((i["audience"], i["status"] in ("resolved", "wont-fix")) for i in items)
-        s["client_open"] = c[("client", False)]
-        s["internal_open"] = c[("internal", False)]
-        s["high_open"] = sum(1 for i in items if i["severity"] == "high" and i["status"] not in ("resolved", "wont-fix"))
-    spec = p / "spec" / "app.yaml"
-    if spec.exists():
-        import yaml
-        s["spec_version"] = (yaml.safe_load(spec.read_text(encoding="utf-8")).get("project") or {}).get("version")
+    """What a project holds. A damaged file is noted under "problems" and the rest is still reported: this
+    runs at the start of every session, and one bad file must not hide every project."""
+    import yaml
+
+    problems = []
+    s = {"slug": p.name, "problems": problems,
+         "docs": sorted(x.name for x in (p / "docs").glob("*") if x.is_file()) if (p / "docs").exists() else []}
+    r = read(p / "register.json", json.loads, problems)
+    if isinstance(r, dict):
+        s["name"] = r.get("project") or p.name
+        items = [i for i in r.get("items") or [] if isinstance(i, dict)]
+        closed = lambda i: i.get("status") in ("resolved", "wont-fix")
+        s["client_open"] = sum(1 for i in items if i.get("audience") == "client" and not closed(i))
+        s["internal_open"] = sum(1 for i in items if i.get("audience") == "internal" and not closed(i))
+        s["high_open"] = sum(1 for i in items if i.get("severity") == "high" and not closed(i))
+    elif r is not None:
+        problems.append("register.json is not a register: ask Blueprint to check it")
+    spec = read(p / "spec" / "app.yaml", yaml.safe_load, problems)
+    if isinstance(spec, dict):
+        s["spec_version"] = (spec.get("project") or {}).get("version")
     outs = sorted((p / "output").glob("*.docx"), key=lambda x: x.stat().st_mtime) if (p / "output").exists() else []
     if outs:
         s["latest_doc"] = outs[-1].name
-    fb = p / "feedback" / "feedback.json"
-    if fb.exists():
-        items = json.loads(fb.read_text(encoding="utf-8"))
-        s["feedback_unprocessed"] = sum(1 for i in items if not i.get("status"))
+    fb = read(p / "feedback" / "feedback.json", json.loads, problems)
+    if isinstance(fb, list):
+        s["feedback_unprocessed"] = sum(1 for i in fb if isinstance(i, dict) and not i.get("status"))
     s["actuals"] = (ROOT / "knowledge" / "actuals" / f"{p.name}.md").exists()
-    iss = p / "output" / "issued.json"
-    if iss.exists():
-        issues = json.loads(iss.read_text(encoding="utf-8"))
-        if issues:
-            s["last_issued"] = issues[-1]
+    issues = read(p / "output" / "issued.json", json.loads, problems)
+    if isinstance(issues, list) and issues and isinstance(issues[-1], dict):
+        s["last_issued"] = issues[-1]
     return s
 
 
@@ -71,13 +85,17 @@ def main():
     if not projects:
         print("- No projects on this machine yet. Type /start to create one.")
     for p in projects:
-        s = project_status(p)
+        try:
+            s = project_status(p)
+        except Exception as e:  # whatever is wrong with one project, the others are still shown
+            print(f"- {p.name}: could not be read ({type(e).__name__}): ask Blueprint to check this project")
+            continue
         bits = []
         if s.get("spec_version"):
             bits.append(f"spec v{s['spec_version']}")
         if s.get("last_issued"):
             li = s["last_issued"]
-            bits.append(f"v{li['version']} issued to {li['to']} on {li['date']}")
+            bits.append(f"v{li.get('version', '?')} issued to {li.get('to', '?')} on {li.get('date', '?')}")
         elif s.get("latest_doc"):
             bits.append("document generated, not issued")
         if "client_open" in s:
@@ -86,6 +104,8 @@ def main():
             bits.append("delivered, actuals logged")
         line = f"- {s.get('name', s['slug'])} ({s['slug']}): " + ("; ".join(bits) or "documents only")
         print(line)
+        for problem in s["problems"]:
+            print(f"    ! {problem}")
         nxt = next_step(s)
         if nxt and not brief:
             print(f"    next: {nxt}")

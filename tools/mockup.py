@@ -357,6 +357,24 @@ def make_server(mock, fb_file, host, port):
     return MockupServer((host, port), Handler)
 
 
+def lan_addresses():
+    """This machine's addresses on the local network (not 127.0.0.1), for others in the room to open. The
+    one the network traffic leaves by comes first: the others are often virtual adapters nobody can reach."""
+    usable = lambda a: bool(a) and not a.startswith("127.") and a != "0.0.0.0"
+    main, others = None, set()
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("10.255.255.255", 1))  # sends nothing: it only asks which network interface would be used
+            main = s.getsockname()[0]
+    except OSError:
+        pass
+    try:
+        others.update(info[4][0] for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET))
+    except OSError:
+        pass
+    return ([main] if usable(main) else []) + sorted(a for a in others if usable(a) and a != main)
+
+
 def serve(project, port, lan, version=None):
     if not version:
         build(project)
@@ -375,7 +393,16 @@ def serve(project, port, lan, version=None):
                  f"that is still open.\nClose that window and start again, or use another port by adding "
                  f"--port {port + 1}.\n(The system said: {e})")
     url = f"http://localhost:{port}/"
-    print(f"Serving {mock} at {url}{' (also on your network)' if lan else ''}")
+    print(f"Serving {mock} at {url}")
+    if lan:
+        addresses = lan_addresses()
+        if addresses:
+            print(f"Others on the same network open: http://{addresses[0]}:{port}/"
+                  + (f"   (if that does not work: {', '.join(f'http://{a}:{port}/' for a in addresses[1:])})" if addresses[1:] else ""))
+            print("If they cannot reach it, allow Python through the firewall when your system asks.")
+        else:
+            print(f"Others on the same network open http://<this machine's address>:{port}/ "
+                  "(the address could not be worked out: look it up in your network settings).")
     print(f"Feedback is saved to {fb_file}. Press Ctrl+C to stop.")
     try:
         webbrowser.open(url)
@@ -423,7 +450,7 @@ RECORD = "taken-from.json"  # in mockup/screenshots/: which screens the pictures
 DRAWN_PROJECT = ("name", "short_name", "client", "theme", "primary_color")
 # Spec text only the requirements document prints. Changing it does not change a screen.
 DOCUMENT_ONLY = {"description", "caption", "meaning", "scope", "source", "validation", "length", "sort", "access",
-                 "doc_table", "srs_table"}
+                 "doc_table", "srs_table", "formula"}
 CONDITIONS = {"where", "when", "count"}  # their keys are data field names, never spec keys: kept whole
 
 

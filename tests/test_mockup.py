@@ -209,7 +209,11 @@ def test_what_the_mockup_draws_changes_the_fingerprint(change):
     lambda s: s["roles"][0].update(description="Reworded.", scope="Reworded"),
     lambda s: s["statuses"][0].update(meaning="Reworded."),
     lambda s: s.update(overview=["Reworded."], signoff=[{"name": "A. Person", "organisation": "Client"}], glossary=[{"term": "LM", "meaning": "Line manager"}]),
-], ids=["requirement", "version-and-cover", "screen-description", "field-rule", "role-text", "status-meaning", "document-chapters"])
+    lambda s: next(x for x in s["screens"] if x.get("stats"))["stats"][-1].update(formula="Reworded: what it counts."),
+    lambda s: s["statuses"][0].update(edit="all", cancel="none", next=[]),
+    lambda s: s["integrations"][0].update(trigger="Reworded.", on_failure="Reworded."),
+], ids=["requirement", "version-and-cover", "screen-description", "field-rule", "role-text", "status-meaning", "document-chapters",
+        "figure-formula", "status-rules", "integration-details"])
 def test_what_only_the_document_prints_leaves_the_fingerprint(change):
     spec = mockup_spec()
     before = mockup.fingerprint(spec)
@@ -543,4 +547,47 @@ def test_try_again_saves_the_kept_comment_once(browser):
     state = browser["afterRetry"]
     assert state["kept"] == [] and state["unsentPins"] == 0 and state["pins"] == 2
     assert "Saved to the project folder." in state["panel"] and "not saved" not in state["toggle"]
-    assert [c["text"] for c in state["file"]] == ["saved while the server is up", "typed while the server is down"]
+    assert [c["text"] for c in state["file"]] == ["saved while the server is up", "typed while the server is down", "from another laptop"]
+
+
+def test_a_comment_saved_by_someone_else_appears_without_a_reload(browser):
+    """Each page used to show only the comments that were there when it loaded, so people in the room did
+    not see each other's comments, and the same comment had a different number on every laptop."""
+    state = browser["afterOthers"]
+    assert state["pins"] == browser["afterRetry"]["pins"] + 1 and "from another laptop" in state["panel"]
+    assert browser["numbersShown"] == ["1", "2"], "a pin shows the number the comment was saved under (FB-001 is 1)"
+    assert browser["numbersAfterOthers"] == ["1", "2", "3"]
+
+
+def test_lan_addresses_are_this_machines_and_never_the_loopback(monkeypatch):
+    for address in mockup.lan_addresses():
+        assert address.count(".") == 3 and not address.startswith("127.")
+
+    class NoNetwork:
+        def __init__(self, *a, **k):
+            raise OSError("no network")
+
+    monkeypatch.setattr(mockup.socket, "socket", NoNetwork)
+    monkeypatch.setattr(mockup.socket, "getaddrinfo", lambda *a, **k: [(None, None, None, None, ("127.0.0.1", 0)), (None, None, None, None, ("192.168.1.20", 0))])
+    assert mockup.lan_addresses() == ["192.168.1.20"]
+
+
+def test_serving_for_the_room_prints_the_address_to_share(built, monkeypatch, capsys):
+    class Stop(Exception):
+        pass
+
+    class Server:
+        def serve_forever(self):
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(mockup, "make_server", lambda *a, **k: Server())
+    monkeypatch.setattr(mockup.webbrowser, "open", lambda url: None)
+    monkeypatch.setattr(mockup, "lan_addresses", lambda: ["192.168.1.20"])
+    mockup.serve(built, 8765, lan=True)
+    out = capsys.readouterr().out
+    assert "Others on the same network open: http://192.168.1.20:8765/" in out
+    monkeypatch.setattr(mockup, "lan_addresses", lambda: [])
+    mockup.serve(built, 8765, lan=True)
+    assert "the address could not be worked out" in capsys.readouterr().out
+    mockup.serve(built, 8765, lan=False)
+    assert "Others on the same network" not in capsys.readouterr().out

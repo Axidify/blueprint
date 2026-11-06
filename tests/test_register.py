@@ -136,7 +136,9 @@ def workbook(tmp_path, monkeypatch, capsys):
 
 
 def test_workbook_has_the_four_sheets(workbook):
-    assert workbook.sheetnames == ["For client", "Internal fixes", "All items", "Summary"]
+    shown = [ws.title for ws in workbook.worksheets if ws.sheet_state == "visible"]
+    assert shown == ["For client", "Internal fixes", "All items", "Summary"]
+    assert workbook[register.RENDERED].sheet_state == "veryHidden", "the note of what was written is out of sight"
 
 
 def test_internal_items_never_reach_the_client_sheet(workbook):
@@ -176,3 +178,150 @@ def test_summary_counts(workbook):
     assert summary["Total items"] == 4
     assert (summary["client"], summary["internal"]) == (3, 1)
     assert (summary["high"], summary["medium"], summary["low"]) == (1, 2, 1)
+
+
+# ====================================================================== what was typed into the Excel file
+def type_into(project, sheet, item_id, column, value):
+    """Change one cell of register.xlsx, as the BA does in Excel."""
+    path = project / "register.xlsx"
+    wb = load_workbook(path)
+    ws = wb[sheet]
+    head = [c.value for c in ws[1]]
+    row = next(r for r in range(2, ws.max_row + 1) if ws.cell(row=r, column=head.index("ID") + 1).value == item_id)
+    ws.cell(row=row, column=head.index(column) + 1, value=value)
+    wb.save(path)
+
+
+def item(project, item_id):
+    return next(it for it in json.loads((project / "register.json").read_text(encoding="utf-8"))["items"] if it["id"] == item_id)
+
+
+def cell(project, sheet, item_id, column):
+    ws = load_workbook(project / "register.xlsx")[sheet]
+    head = [c.value for c in ws[1]]
+    row = next(r for r in ws.iter_rows(min_row=2, values_only=True) if r[head.index("ID")] == item_id)
+    return row[head.index(column)] or ""
+
+
+@pytest.fixture
+def rendered(tmp_path, monkeypatch, capsys):
+    project = write_register(tmp_path / "typed", GOOD)
+    run(monkeypatch, "render", project)
+    capsys.readouterr()
+    return project
+
+
+OPEN_CLIENT = next(it["id"] for it in GOOD["items"] if it["audience"] == "client" and it["status"] == "open" and not it.get("answer"))
+
+
+def test_an_answer_typed_into_excel_is_kept_when_the_file_is_written_again(rendered, monkeypatch, capsys):
+    """The BA types the client's answers into register.xlsx. The next render used to write the file afresh
+    from register.json and the answers were gone, without a word."""
+    type_into(rendered, "For client", OPEN_CLIENT, "Client response", "Only the requester, before approval.")
+    run(monkeypatch, "render", rendered)
+    out = capsys.readouterr().out
+    assert "Taken from register.xlsx into register.json:" in out and f"{OPEN_CLIENT} answer: Only the requester, before approval." in out
+    assert item(rendered, OPEN_CLIENT)["answer"] == "Only the requester, before approval."
+    assert item(rendered, OPEN_CLIENT)["status"] == "answered", "an answer moves an open question to answered"
+    assert cell(rendered, "For client", OPEN_CLIENT, "Client response") == "Only the requester, before approval."
+    assert cell(rendered, "All items", OPEN_CLIENT, "Answer / decision") == "Only the requester, before approval."
+
+
+def test_a_status_changed_in_excel_is_kept(rendered, monkeypatch, capsys):
+    type_into(rendered, "For client", OPEN_CLIENT, "Status", "asked")
+    type_into(rendered, "Internal fixes", "R-004", "Status", "resolved")
+    run(monkeypatch, "render", rendered)
+    assert item(rendered, OPEN_CLIENT)["status"] == "asked" and item(rendered, "R-004")["status"] == "resolved"
+
+
+def test_an_answer_with_its_own_status_keeps_that_status(rendered, monkeypatch, capsys):
+    type_into(rendered, "For client", OPEN_CLIENT, "Client response", "Agreed.")
+    type_into(rendered, "For client", OPEN_CLIENT, "Status", "resolved")
+    run(monkeypatch, "render", rendered)
+    assert (item(rendered, OPEN_CLIENT)["answer"], item(rendered, OPEN_CLIENT)["status"]) == ("Agreed.", "resolved")
+
+
+def test_a_change_in_the_register_since_the_file_was_written_is_not_an_edit_in_excel(rendered, monkeypatch, capsys):
+    """Blueprint updates register.json and then renders: the Excel file is simply behind, nothing was typed."""
+    reg = json.loads((rendered / "register.json").read_text(encoding="utf-8"))
+    next(it for it in reg["items"] if it["id"] == OPEN_CLIENT).update(status="resolved", answer="Decided in workshop 2.")
+    write_register(rendered, reg)
+    run(monkeypatch, "render", rendered)
+    assert "Taken from register.xlsx" not in capsys.readouterr().out
+    assert item(rendered, OPEN_CLIENT)["answer"] == "Decided in workshop 2."
+    assert cell(rendered, "For client", OPEN_CLIENT, "Client response") == "Decided in workshop 2."
+
+
+def test_rendering_twice_changes_nothing(rendered, monkeypatch, capsys):
+    before = (rendered / "register.json").read_bytes()
+    run(monkeypatch, "render", rendered)
+    assert (rendered / "register.json").read_bytes() == before and "Taken from" not in capsys.readouterr().out
+
+
+def test_excel_and_the_register_both_changed_stops_and_writes_nothing(rendered, monkeypatch, capsys):
+    type_into(rendered, "For client", OPEN_CLIENT, "Client response", "The client says A.")
+    reg = json.loads((rendered / "register.json").read_text(encoding="utf-8"))
+    next(it for it in reg["items"] if it["id"] == OPEN_CLIENT)["answer"] = "Blueprint recorded B."
+    write_register(rendered, reg)
+    with pytest.raises(SystemExit) as stop:
+        run(monkeypatch, "render", rendered)
+    out = capsys.readouterr().out
+    assert stop.value.code == 1 and "disagree. Nothing was written" in out
+    assert f"{OPEN_CLIENT} answer: Excel has 'The client says A.', register.json has 'Blueprint recorded B.'" in out
+    assert cell(rendered, "For client", OPEN_CLIENT, "Client response") == "The client says A.", "the Excel file is untouched"
+    assert item(rendered, OPEN_CLIENT)["answer"] == "Blueprint recorded B."
+
+    monkeypatch.setattr(sys, "argv", ["register.py", "render", str(rendered), "--overwrite"])
+    register.main()
+    assert cell(rendered, "For client", OPEN_CLIENT, "Client response") == "Blueprint recorded B.", "--overwrite takes the register"
+
+
+def test_two_sheets_edited_differently_is_a_conflict(rendered, monkeypatch, capsys):
+    type_into(rendered, "For client", OPEN_CLIENT, "Client response", "Yes.")
+    type_into(rendered, "All items", OPEN_CLIENT, "Answer / decision", "No.")
+    with pytest.raises(SystemExit):
+        run(monkeypatch, "render", rendered)
+    assert "the sheets of the Excel file disagree" in capsys.readouterr().out
+
+
+def test_a_status_excel_does_not_know_is_refused(rendered, monkeypatch, capsys):
+    type_into(rendered, "For client", OPEN_CLIENT, "Status", "done")
+    with pytest.raises(SystemExit):
+        run(monkeypatch, "render", rendered)
+    assert f"{OPEN_CLIENT} status: 'done' in Excel is not one of" in capsys.readouterr().out
+    assert item(rendered, OPEN_CLIENT)["status"] == "open"
+
+
+def test_a_file_from_an_older_blueprint_still_gives_up_its_answers(rendered, monkeypatch, capsys):
+    """It has no hidden sheet. An answer in Excel where the register has none is taken; anything else in it
+    is left, because it cannot be told from the file simply being behind."""
+    path = rendered / "register.xlsx"
+    wb = load_workbook(path)
+    del wb[register.RENDERED]
+    wb.save(path)
+    type_into(rendered, "For client", OPEN_CLIENT, "Client response", "Typed into the old file.")
+    type_into(rendered, "Internal fixes", "R-004", "Status", "resolved")
+    run(monkeypatch, "render", rendered)
+    assert item(rendered, OPEN_CLIENT)["answer"] == "Typed into the old file."
+    assert item(rendered, "R-004")["status"] == "open", "a status alone is not taken from a file without the note"
+
+
+def test_an_excel_file_that_is_open_gives_a_plain_message(rendered, monkeypatch, capsys):
+    from openpyxl import Workbook
+
+    def locked(self, path):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(Workbook, "save", locked)
+    with pytest.raises(SystemExit) as stop:
+        run(monkeypatch, "render", rendered)
+    assert "close it in Excel and run this again" in str(stop.value)
+
+
+def test_an_unknown_option_shows_the_usage(tmp_path, monkeypatch):
+    project = write_register(tmp_path / "usage", GOOD)
+    monkeypatch.setattr(sys, "argv", ["register.py", "render", str(project), "--force"])
+    with pytest.raises(SystemExit) as stop:
+        register.main()
+    assert "--overwrite" in str(stop.value)
+

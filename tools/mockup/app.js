@@ -7,7 +7,10 @@
  * Filters and search boxes on lists work on the sample rows (Search applies, Clear Filters resets), and what
  * is typed into a form is kept while moving between its steps or opening a dialog.
  *
- * Feedback mode: press "Feedback" (or F2), click any element, type a comment. Comments are saved to the
+ * Feedback mode: press "Feedback" (or F2), click any element, type a comment. Comments saved by other
+ * people in the room appear within a few seconds, and each shows the number it was saved under.
+ *
+ * In short: press "Feedback" (or F2), click any element, type a comment. Comments are saved to the
  * mock-up server (tools/mockup.py serve) when the page is served over http, otherwise to localStorage
  * with an Export button. A comment the server does not take is kept in localStorage and sent again later.
  */
@@ -411,14 +414,38 @@
     // Send the unsent comments, oldest first. True when none are left.
     async resend() {
       while (this.unsent.length) {
+        let saved;
         try {
           const res = await fetch("api/feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(this.unsent[0]) });
           if (!res.ok) throw new Error(res.status);
+          saved = await res.json();
         } catch (e) { break; }
+        // The comment as the server saved it carries its number (FB-007): show that from now on.
+        const at = this.items.indexOf(this.unsent[0]);
+        if (at >= 0 && saved && saved.id) this.items[at] = saved;
         this.unsent.shift();
         this.store(this.unsentKey, this.unsent);
       }
       return !this.unsent.length;
+    },
+    // The number shown on a pin and in the panel: the one the server gave the comment (FB-007 is 7), so
+    // everyone in the room sees the same number for the same comment. Not yet saved: a dot.
+    number(c) {
+      if (c.id) return String(parseInt(String(c.id).replace(/\D/g, ""), 10) || c.id);
+      return this.remote ? "\u2022" : String(this.items.indexOf(c) + 1);
+    },
+    // Comments other people saved since this page was loaded: asked for every few seconds while presenting.
+    async sync() {
+      if (!this.remote || document.body.classList.contains("clean")) return;
+      let list;
+      try {
+        const res = await fetch("api/feedback");
+        if (!res.ok) return;
+        list = await res.json();
+      } catch (e) { return; }
+      const before = this.items.map((c) => c.id || "").join(",");
+      this.items = list.concat(this.unsent);
+      if (this.items.map((c) => c.id || "").join(",") !== before) this.refresh();
     },
     async save(item) {
       this.items.push(item);
@@ -456,7 +483,7 @@
         const pin = document.createElement("div");
         const unsent = this.unsent.includes(c);
         pin.className = unsent ? "fb-pin unsent" : "fb-pin";
-        pin.textContent = this.items.indexOf(c) + 1;
+        pin.textContent = this.number(c);
         pin.title = (unsent ? "NOT SAVED YET: " : "") + c.text;
         const rect = target ? target.getBoundingClientRect() : { right: c.x, top: c.y };
         pin.style.left = `${rect.right + window.scrollX - 12}px`;
@@ -470,7 +497,7 @@
       panel.hidden = false;
       const list = this.forScreen();
       panel.innerHTML = `<div class="fb-panel-head">Feedback on this screen (${list.length})</div>
-        ${list.map((c) => `<div class="fb-item"><b>#${this.items.indexOf(c) + 1}</b> <span class="fb-el">${esc(c.element || "screen")}</span><div>${esc(c.text)}</div><div class="fb-meta">${esc(c.author || "")} ${esc(c.role || "")} · ${esc(c.time.slice(0, 16).replace("T", " "))}</div></div>`).join("") || "<p>No feedback yet. Click any element to add a comment.</p>"}
+        ${list.map((c) => `<div class="fb-item"><b>#${esc(this.number(c))}</b> <span class="fb-el">${esc(c.element || "screen")}</span><div>${esc(c.text)}</div><div class="fb-meta">${esc(c.author || "")} ${esc(c.role || "")} · ${esc(String(c.time || c.received || "").slice(0, 16).replace("T", " "))}</div></div>`).join("") || "<p>No feedback yet. Click any element to add a comment.</p>"}
         ${!this.remote ? `<button class="btn small" id="fb-export">Export feedback (${this.items.length})</button>`
           : !this.unsent.length ? `<p class="fb-meta">Saved to the project folder.</p>`
           : `<div class="fb-warn"><b>${this.unsent.length} comment${this.unsent.length > 1 ? "s" : ""} not saved to the project yet.</b> The mock-up server is not answering. Check that the window that started the mock-up is still open, then try again. The comments are kept in this browser until then.</div>
@@ -532,4 +559,5 @@
   document.getElementById("fb-toggle").onclick = () => feedback.toggle();
 
   feedback.load().then(() => { render(); feedback.refresh(); });
+  setInterval(() => feedback.sync(), 5000);
 })();

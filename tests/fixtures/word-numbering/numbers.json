@@ -1,0 +1,86 @@
+[
+ {
+  "label": "1",
+  "text": "Introduction"
+ },
+ {
+  "label": "1.1",
+  "text": "Purpose"
+ },
+ {
+  "label": "1.2",
+  "text": "Scope"
+ },
+ {
+  "label": "",
+  "text": "Body text of the scope."
+ },
+ {
+  "label": "2",
+  "text": "Requirements"
+ },
+ {
+  "label": "2.1",
+  "text": "Roles"
+ },
+ {
+  "label": "2.1.1",
+  "text": "Administrator"
+ },
+ {
+  "label": "2.1.2",
+  "text": "Requester"
+ },
+ {
+  "label": "2.2",
+  "text": "Rules"
+ },
+ {
+  "label": "I.",
+  "text": "LIST-A first"
+ },
+ {
+  "label": "II.",
+  "text": "LIST-A second"
+ },
+ {
+  "label": "III.",
+  "text": "LIST-A third"
+ },
+ {
+  "label": "",
+  "text": "Between the lists."
+ },
+ {
+  "label": "a)",
+  "text": "LIST-B first"
+ },
+ {
+  "label": "b)",
+  "text": "LIST-B second"
+ },
+ {
+  "label": "",
+  "text": "Before the restarted list."
+ },
+ {
+  "label": "I.",
+  "text": "LIST-C first"
+ },
+ {
+  "label": "II.",
+  "text": "LIST-C second"
+ },
+ {
+  "label": "3",
+  "text": "Reports"
+ },
+ {
+  "label": "3.1",
+  "text": "Monthly"
+ },
+ {
+  "label": "4",
+  "text": "Appendix"
+ }
+]

@@ -1,9 +1,15 @@
 """Project register: validate register.json and render register.xlsx for the BA.
 
 Usage:
-    python -I tools/register.py render   projects/<slug>
+    python -I tools/register.py render   projects/<slug> [--overwrite]
     python -I tools/register.py validate projects/<slug>
     python -I tools/register.py next-id  projects/<slug>
+
+render writes register.xlsx from register.json. First it takes over what was typed into the existing
+register.xlsx since it was written: a client's answer (Client response, Answer / decision) or a changed
+Status. Those go into register.json, so they are not lost when the Excel file is written again. When
+Excel and register.json both changed the same thing, it stops and says so; --overwrite writes the file
+from register.json regardless and drops what was typed in Excel.
 
 register.json:
 {
@@ -44,6 +50,86 @@ STAGES = {"sow", "workshop-1", "mockup", "workshop-2", "requirements-draft", "re
           "srs-draft", "srs-final"}  # the last two are the names used before 0.4.0
 REQUIRED = ["id", "type", "audience", "severity", "category", "stage", "source", "finding", "status", "raised"]
 SEV_ORDER = {"high": 0, "medium": 1, "low": 2}
+RENDERED = "_rendered"  # a hidden sheet: the status and answer of every item as the file was written
+EDITABLE = {"Status": "status", "Client response": "answer", "Answer / decision": "answer"}  # column -> field
+
+
+def text(value):
+    return "" if value is None else str(value).strip()
+
+
+def excel_edits(project, reg):
+    """What was typed into register.xlsx since it was written: ({(id, field): value}, conflicts).
+
+    The hidden sheet says what each cell held when the file was written, so an edit made in Excel can be
+    told from a change made in register.json since. A file written by an older Blueprint has no such
+    sheet; there the one safe sign of an edit is an answer in Excel where the register has none."""
+    from openpyxl import load_workbook
+
+    path = Path(project) / "register.xlsx"
+    if not path.exists():
+        return {}, []
+    try:
+        wb = load_workbook(path)
+    except Exception as e:
+        sys.exit(f"Cannot read {path} to see whether anything was typed into it ({type(e).__name__}). Close it in Excel "
+                 "and run this again, or add --overwrite to write it afresh from register.json.")
+    written = None
+    if RENDERED in wb.sheetnames:
+        written = {text(r[0]): {"status": text(r[1]), "answer": text(r[2])}
+                   for r in wb[RENDERED].iter_rows(min_row=2, values_only=True) if r and r[0]}
+    items = {it.get("id"): it for it in reg.get("items", [])}
+    found = {}  # (id, field) -> {value: sheet}
+    for ws in wb.worksheets:
+        header = [text(c.value) for c in next(ws.iter_rows(min_row=1, max_row=1), [])]
+        if ws.title == RENDERED or "ID" not in header:
+            continue
+        columns = {EDITABLE[name]: i for i, name in enumerate(header) if name in EDITABLE}
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            rid = text(row[header.index("ID")])
+            if rid not in items:
+                continue
+            for field, i in columns.items():
+                value = text(row[i])
+                if written is not None:
+                    if rid not in written or value == written[rid][field]:
+                        continue
+                elif field != "answer" or not value or text(items[rid].get("answer")):
+                    continue
+                found.setdefault((rid, field), {})[value] = ws.title
+    edits, conflicts = {}, []
+    for (rid, field), values in sorted(found.items()):
+        if len(values) > 1:
+            conflicts.append(f"{rid} {field}: the sheets of the Excel file disagree ("
+                             + "; ".join(f"'{sheet}' has '{value}'" for value, sheet in values.items()) + ")")
+            continue
+        value = next(iter(values))
+        now = text(items[rid].get(field))
+        was = written[rid][field] if written is not None else ""
+        if now == value:
+            continue
+        if now != was:
+            conflicts.append(f"{rid} {field}: Excel has '{value}', register.json has '{now}'; both changed since the Excel file was written")
+        elif field == "status" and value not in STATUSES:
+            conflicts.append(f"{rid} status: '{value}' in Excel is not one of {', '.join(sorted(STATUSES))}")
+        else:
+            edits[(rid, field)] = value
+    return edits, conflicts
+
+
+def take_excel_edits(project, reg, edits):
+    """Put the edits into the register and save register.json. Returns what was done, one line each."""
+    items = {it["id"]: it for it in reg["items"]}
+    done = []
+    for (rid, field), value in sorted(edits.items()):
+        items[rid][field] = value
+        done.append(f"{rid} {field}: {value if len(value) <= 70 else value[:67] + '...'}")
+        # An answer came in and nobody moved the status: it is answered (not yet resolved).
+        if field == "answer" and value and (rid, "status") not in edits and items[rid].get("status") in ("open", "asked"):
+            items[rid]["status"] = "answered"
+            done.append(f"{rid} status: answered (it has an answer now)")
+    (Path(project) / "register.json").write_text(json.dumps(reg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return done
 
 
 def load(project):
@@ -77,11 +163,25 @@ def next_id(reg):
     return f"R-{(max(nums) if nums else 0) + 1:03d}"
 
 
-def render(project, reg):
+def render(project, reg, overwrite=False):
+    """Write register.xlsx. Unless `overwrite`, what was typed into the existing file is taken into the
+    register first (and register.json saved), so writing the file again never loses it. This happens here,
+    not in the command around it, so that no caller can write the file without it."""
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill
     from openpyxl.utils import get_column_letter
     from openpyxl.worksheet.datavalidation import DataValidation
+
+    if not overwrite:
+        edits, conflicts = excel_edits(project, reg)
+        if conflicts:
+            print("register.xlsx and register.json disagree. Nothing was written:")
+            print("\n".join(f"  - {c}" for c in conflicts))
+            print("Put the value you want into register.json, then run this again with --overwrite.")
+            sys.exit(1)
+        if edits:
+            print("Taken from register.xlsx into register.json:")
+            print("\n".join(f"  - {line}" for line in take_excel_edits(project, reg, edits)))
 
     header_fill = PatternFill("solid", fgColor="1F3864")
     sev_fill = {"high": "F8CBAD", "medium": "FFE699", "low": "E2EFDA"}
@@ -146,15 +246,28 @@ def render(project, reg):
         s.cell(row=r, column=1, value=a).font = Font(bold=(b == "" and a != ""))
         s.cell(row=r, column=2, value=b)
 
+    # What each item held as this file is written, so the next render can tell what was typed in Excel since.
+    kept = wb.create_sheet(RENDERED)
+    kept.append(["id", "status", "answer"])
+    for it in items:
+        kept.append([it["id"], it["status"], it.get("answer") or ""])
+    kept.sheet_state = "veryHidden"
+
     out = Path(project) / "register.xlsx"
-    wb.save(out)
+    try:
+        wb.save(out)
+    except PermissionError:
+        sys.exit(f"Cannot write {out}: close it in Excel and run this again.")
     return out
 
 
 def main():
-    if len(sys.argv) != 3 or sys.argv[1] not in ("render", "validate", "next-id"):
+    flags = [a for a in sys.argv[1:] if a.startswith("--")]
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    if len(args) != 2 or args[0] not in ("render", "validate", "next-id") or any(f != "--overwrite" for f in flags):
         sys.exit(__doc__)
-    cmd, project = sys.argv[1], sys.argv[2]
+    cmd, project = args
+    sys.stdout.reconfigure(encoding="utf-8") if hasattr(sys.stdout, "reconfigure") else None
     reg = load(project)
     if cmd == "next-id":
         print(next_id(reg))
@@ -166,7 +279,7 @@ def main():
     if cmd == "validate":
         print(f"OK: {len(reg['items'])} items")
         return
-    out = render(project, reg)
+    out = render(project, reg, overwrite="--overwrite" in flags)
     c = Counter(it["audience"] for it in reg["items"])
     print(f"Wrote {out}: {c['client']} client items, {c['internal']} internal fixes")
 

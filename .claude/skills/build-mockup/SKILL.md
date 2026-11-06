@@ -29,8 +29,10 @@ so every decision put into the spec shows up in both. Format: `docs/spec-format.
    statuses it can move to). Leave a rule out when it is not decided and add a register question for it:
    never guess who may cancel or delete (GP-02).
 3. Screens: one per menu item, plus detail, review and dialog screens for each workflow step. Every list
-   gets explicit columns and filters (GP-05). Every KPI on a dashboard gets a `description` stating its
-   formula or saying it is still to be defined (GP-03).
+   gets explicit columns and filters (GP-05). Every figure on a dashboard says what it counts
+   (GP-03): use `count` where it can be counted from the screen's list (the document then describes it),
+   and give a typed-in `value` a `formula` in words. Leave the formula out when the client has not defined
+   the figure, and add a register question for it.
 4. Realistic sample data in the client's language (Malaysian names, real-looking reference numbers).
    Never use real customer data.
 5. Requirements: write the functional requirements you are confident about. Where something is not yet

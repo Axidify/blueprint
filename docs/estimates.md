@@ -29,7 +29,10 @@ Each estimate is a new dated file, so the folder shows how the figure moved as t
 Everything is in `knowledge/building-blocks.md`, shared by everyone using the workspace:
 
 - **Building-block rates**, per platform: mandays per unit in the `Rate (MD)` column, as a range (`2–4`)
-  or a single figure, with a confidence (`low`, `medium`, `high`). `TBD` means not set.
+  or a single figure, with a confidence (`low`, `medium`, `high`). `TBD` means not set. Only the figure the
+  cell starts with is the rate: after it you may write a unit or a note (`3 (was 5)`, `2–4 per form`). Write
+  decimals with a point. A cell that does not start with a number or a range (`1,5`, `from 2`) is not used:
+  its lines are not priced, and `blocks` and the estimate say the rate could not be read.
 - **Other work** (project management, testing, UAT support, training …): an `Other work` table with a share
   of the building-block subtotal (`10–15%`) or fixed mandays (`2–3 MD`) per item. Add, remove or rename
   rows to match how your company scopes projects. A workspace created before this table existed does not

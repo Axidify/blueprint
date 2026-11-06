@@ -20,6 +20,12 @@ python -I tools/doctor.py
 | "projects is a real folder with files in it" | Move the files into the workspace's `projects/` folder, delete the empty folder, run `setup.cmd` |
 | The requirements document shows a different font from the design | Run `setup.cmd` to install Geist and Geist Mono, restart Word, and generate again |
 | The requirements document has an old table of contents | Word was not available. Open the document, right-click the table of contents and choose Update Field |
+| An answer I typed into `register.xlsx` is gone | Fixed in this version: Blueprint now reads the Excel file before writing it again. For an answer lost earlier, type it in again and tell Blueprint the client answered |
+| Blueprint says `register.xlsx` and `register.json` disagree | The same item was changed in Excel and by Blueprint. It shows both values: tell Blueprint which one is right |
+| Blueprint says it cannot write `register.xlsx` | The file is open in Excel. Save and close it, then ask again |
+| Extraction says the folder already holds files that are not an earlier extraction | It was pointed at a folder with other files in it, and touched nothing. Ask Blueprint to review the document again; it uses a folder of its own under `reviews/` |
+| A line of an estimate is "not priced" and says the rate cannot be read | The rate cell in `knowledge/building-blocks.md` does not start with a number or a range. Write it as `3` or `2–4`, with a point for decimals; a note may follow the figure |
+| The start-up summary shows "! register.json could not be read" under a project | That project's file is damaged, often a half-synced copy from OneDrive or SharePoint. The other projects are unaffected. Ask Blueprint to check the file, or restore the last good version from the shared folder's version history |
 | The generator prints warnings | Fix them in the spec, not in the Word file (literal "section 3.2" references, requirements that mention the mock-up, missing images), then generate again |
 | The generator warns that the screens changed after the screenshots were taken, or that a screen has no picture | Take the screenshots again (ask Blueprint to, or run the command in the warning), then generate again. Until then the pictures may not show what the tables describe |
 | The text inside the document's screenshots is too small to read | The screenshots were taken with an older Blueprint, 1440 pixels wide. Take them again and regenerate: screens are now captured 1000 pixels wide, so their text prints about 40% larger |
@@ -39,6 +45,6 @@ python -I tools/doctor.py
 | A red message says a comment was NOT saved, or the Feedback button says "1 not saved" | The window that started the mock-up was closed, or the network dropped. The comment is kept in that browser. Start `present.cmd` for the project again, then press **Feedback** → **Try again**. If that is not possible, press **Export unsaved** and drop the file in `inbox/` |
 | `present.cmd` says the port is already in use | Another mock-up is still open. Close its window and start again, or run both at once with a different port for the second: `present.cmd <project> --port 8766` |
 | A status has the wrong colour in the mock-up | Give that status a `color` (`green`, `amber`, `red` or `grey`) in the spec's `statuses`, or ask Blueprint to. Then rebuild |
-| Others in the room cannot open the mock-up | Start it with `present.cmd <project> --lan`, allow it through Windows Firewall, and share your machine's address |
+| Others in the room cannot open the mock-up | Start it with `present.cmd <project> --lan` and share the address it prints. Allow Python through the firewall when your system asks, and make sure everyone is on the same network (a guest Wi-Fi often keeps laptops apart) |
 | Claude Code keeps asking permission for Blueprint's scripts | Open Claude Code in the app folder itself, so `.claude/settings.json` applies |
 | Two people's changes clash in a shared workspace | Agree who works on which project; synced folders cannot merge simultaneous edits to the same file |

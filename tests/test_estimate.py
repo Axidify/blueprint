@@ -196,13 +196,79 @@ def run(monkeypatch, capsys):
 ])
 def test_rate_cell_is_read_as_written(cell, expected):
     assert estimate.parse_rate(cell) == expected
+    assert estimate.rate_problem(cell) is None
+
+
+@pytest.mark.parametrize("cell, expected", [
+    ("3 (was 5)", (3, 3)), ("2 (calibrated on 3 projects)", (2, 2)), ("0.5 MD each (2023 rate)", (0.5, 0.5)),
+    ("2–4, see BB-07", (2, 4)), ("about 2 to 3 days", (2, 3)), ("~3", (3, 3)), ("approx. 1.5", (1.5, 1.5)),
+])
+def test_only_the_figure_a_rate_cell_starts_with_counts(cell, expected):
+    """Every number in the cell used to be collected, so a note turned a single rate into a range:
+    "3 (was 5)" was read as 3 to 5 mandays, and "0.5 MD each (2023 rate)" as 0.5 to 2023."""
+    assert estimate.parse_rate(cell) == expected
+    assert estimate.rate_problem(cell) is None
+
+
+@pytest.mark.parametrize("cell", ["1,5", "from 2", "up to 4", "1,5–2,5", "MD: 3"])
+def test_a_rate_that_cannot_be_read_is_not_guessed(cell):
+    """A decimal comma used to read as a range ("1,5" as 1 to 5). Now the cell is not priced, and says why."""
+    assert estimate.parse_rate(cell) is None
+    assert "is not a number or a range such as 2–4" in estimate.rate_problem(cell) and cell in estimate.rate_problem(cell)
+
+
+def test_a_line_whose_rate_cannot_be_read_is_not_priced_and_says_why(tmp_path, capsys, monkeypatch):
+    kb = tmp_path / "kb"
+    kb.mkdir()
+    (kb / "building-blocks.md").write_text(
+        "## Platform: Joget DX\n\n| ID | Building block | What drives the effort | Rate (MD) | Confidence |\n|---|---|---|---|---|\n"
+        "| BB-01 | Form | Fields | 1,5 | medium |\n| BB-02 | List | Columns | 2–4 | medium |\n\n"
+        "## Other work\n\n| ID | Work | Share |\n|---|---|---|\n| OW-01 | Project management | 10,5% |\n", encoding="utf-8")
+    est = {"project": "P", "platform": "Joget DX", "date": "2026-11-06", "basis": "spec v0.1", "basis_kind": "spec",
+           "assumptions": ["One developer."],
+           "lines": [{"id": "L01", "item": "Forms", "block": "BB-01", "count": 2}, {"id": "L02", "item": "Lists", "block": "BB-02", "count": 1},
+                     {"id": "L03", "item": "Project management", "other": "OW-01"}]}
+    res, errors = estimate.compute(est, tmp_path, kb)
+    assert errors == []
+    by_id = {l["id"]: l for l in res["lines"]}
+    assert not by_id["L01"]["priced"] and "cannot be read ('1,5' is not a number or a range" in by_id["L01"]["rate_from"]
+    assert not by_id["L03"]["priced"] and "the share in building-blocks.md cannot be read ('10,5%'" in by_id["L03"]["rate_from"]
+    assert by_id["L02"]["priced"] and res["total"] == (2, 4), "the readable line is priced as before"
+    monkeypatch.setattr(sys, "argv", ["estimate.py", "--knowledge", str(kb), "blocks", "Joget DX"])
+    estimate.main()
+    out = capsys.readouterr().out
+    assert "BB-01  Form  [RATE NOT READ: '1,5' is not a number or a range" in out and "OW-01  Project management  [SHARE NOT READ: '10,5%'" in out
+
+
+def test_the_newest_estimate_is_the_one_with_the_latest_date_then_the_highest_version(tmp_path):
+    """It went by the file name as text, so on one day "spec v0.9" counted as newer than "spec v0.10"."""
+    folder = tmp_path / "estimates"
+    folder.mkdir()
+    names = ["2026-11-06 estimate from spec v0.9.json", "2026-11-06 estimate from spec v0.10.json", "2026-11-06 estimate from brief.json",
+             "2026-10-30 estimate from spec v0.20.json", "2026-11-07 estimate from sow.json"]
+    for name in names:
+        (folder / name).write_text("{}", encoding="utf-8")
+    ordered = [p.name for p in sorted(folder.glob("*.json"), key=estimate.newest_first_key)]
+    assert ordered == ["2026-10-30 estimate from spec v0.20.json", "2026-11-06 estimate from brief.json",
+                       "2026-11-06 estimate from spec v0.9.json", "2026-11-06 estimate from spec v0.10.json", "2026-11-07 estimate from sow.json"]
+    (folder / "2026-11-07 estimate from sow.json").unlink()
+    assert sorted(folder.glob("*.json"), key=estimate.newest_first_key)[-1].name == "2026-11-06 estimate from spec v0.10.json"
+
+
+def test_an_estimate_file_without_a_date_in_its_name_is_ordered_by_the_date_inside(tmp_path):
+    folder = tmp_path / "estimates"
+    folder.mkdir()
+    (folder / "first try.json").write_text(json.dumps({"date": "2026-11-09"}), encoding="utf-8")
+    (folder / "2026-11-06 estimate from spec v0.1.json").write_text("{}", encoding="utf-8")
+    assert sorted(folder.glob("*.json"), key=estimate.newest_first_key)[-1].name == "first try.json"
 
 
 def test_blocks_come_from_the_platform_section(kb):
     blocks, platforms = estimate.read_blocks(PLATFORM, kb)
     assert platforms == [PLATFORM, "Other Platform"]
     assert list(blocks) == [f"BB-0{n}" for n in range(1, 9)], "BB-99 sits outside a platform section"
-    assert blocks["BB-04"] == {"name": "List with filters", "drivers": "Columns", "rate": (2, 4), "confidence": "medium"}
+    assert blocks["BB-04"] == {"name": "List with filters", "drivers": "Columns", "rate": (2, 4), "rate_problem": None,
+                               "confidence": "medium"}
     assert blocks["BB-07"]["rate"] is None and blocks["BB-07"]["confidence"] is None
 
     other, _ = estimate.read_blocks("other platform", kb)  # the platform name is matched without regard to case
@@ -268,9 +334,9 @@ def test_knowledge_folder_without_files_prices_nothing(tmp_path):
 
 def test_other_work_table(kb):
     assert estimate.read_other_work(kb) == {
-        "OW-01": {"name": "Project management", "share": (10, 15), "unit": "percent"},
-        "OW-02": {"name": "Requirement workshops", "share": (2, 3), "unit": "md"},
-        "OW-03": {"name": "Internal testing", "share": None, "unit": "percent"}}
+        "OW-01": {"name": "Project management", "share": (10, 15), "rate_problem": None, "unit": "percent"},
+        "OW-02": {"name": "Requirement workshops", "share": (2, 3), "rate_problem": None, "unit": "md"},
+        "OW-03": {"name": "Internal testing", "share": None, "rate_problem": None, "unit": "percent"}}
 
 
 def test_delivered_projects_are_counted_once_each(kb):

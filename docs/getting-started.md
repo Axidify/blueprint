@@ -78,4 +78,5 @@ is closed, the mock-up says in red that a comment was not saved and keeps it in 
 `present.cmd` again and press **Feedback** → **Try again**.
 
 To let people in the room comment from their own laptops, start it with
-`present.cmd <project> --lan` and share the address it prints.
+`present.cmd <project> --lan` and share the address it prints. Everyone sees each other's comments appear
+within a few seconds.

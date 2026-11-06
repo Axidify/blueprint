@@ -61,6 +61,7 @@ FRONT = ("cover", "at_a_glance", "about", "contents")
 CHAPTERS = ("users_access", "scope", "by_role", "requirements", "screens", "nfr", "timeline", "extras", "decisions", "signoff")
 STATUS_RULES = (("edit", "May edit"), ("cancel", "May cancel"), ("delete", "May delete"))  # plus `next`
 SCOPE_PARTS = (("in_scope", "In scope"), ("out_of_scope", "Out of scope"), ("assumptions", "Assumptions"))
+INTEGRATION_DETAILS = (("trigger", "Trigger"), ("data", "Data exchanged"), ("on_failure", "If it fails"))
 SCOPE_INTRO = ("What this version of {system} covers, what it leaves out, and what has been assumed. "
                "Work outside this scope is agreed separately as a change request.")
 DECISIONS_MADE_INTRO = "Questions raised during the requirement study and the answers given. These answers are part of what is signed."
@@ -245,6 +246,12 @@ def document_errors(spec):
         need(f"glossary entry {i}", x, "term", "meaning")
     for i, x in each("integrations"):
         need(f"integration {i}", x, "system")
+    for i, s in each("screens"):
+        for stat in (s.get("stats") or []) if isinstance(s, dict) else []:
+            if not isinstance(stat, dict) or not stat.get("label"):
+                errors.append(f"screen {s.get('id', i)}: every figure in 'stats' needs a label")
+            elif "formula" in stat and (not isinstance(stat["formula"], str) or not stat["formula"].strip()):
+                errors.append(f"screen {s.get('id', i)}, figure {stat['label']}: 'formula' must say in words how it is worked out")
     for i, x in each("signoff"):
         if not isinstance(x, dict):
             errors.append(f"signatory {i}: must have name, organisation and signing_for")
@@ -1101,6 +1108,16 @@ def build(project):
     for g in groups:
         for sid in g.get("screens", []) or []:
             reqs_for_screen.setdefault(sid, []).append(g["id"])
+    if has_screens:  # the spec links requirements to screens: say which screens nothing points at
+        linked = set(reqs_for_screen) | {sid for g in groups for i in g["items"] if isinstance(i, dict) for sid in i.get("screens") or []}
+        loose = [s["title"] for s in spec["screens"] if s.get("type") != "login" and s["id"] not in linked]
+        if loose:
+            notes.append(f"no requirement refers to {'this screen' if len(loose) == 1 else 'these screens'}: {', '.join(loose)}. "
+                         "Link each with `screens` on a requirement, or check whether a requirement is missing")
+    # A figure on a dashboard needs its meaning written down (GP-03). Strict once the spec gives any formula.
+    formulas_in_use = any("formula" in stat for s in spec["screens"] for stat in s.get("stats") or [])
+    figures_open = []
+    TBC = [("warning", "dot"), ("To be confirmed", "")]
 
     def role_names(ids):
         return ", ".join(r["name"] for r in roles if r["id"] in ids) or "All users"
@@ -1333,6 +1350,22 @@ def build(project):
                         [[[(x.get("system", ""), "medium")], fill(x.get("purpose", ""), f"integration {x.get('system', '')}"), x.get("direction", ""),
                           fill(x.get("notes", ""), f"integration {x.get('system', '')}")] for x in spec["integrations"]],
                         [3.6, 4.6, 2.2, tw - 10.4])
+                if any(key in x for x in spec["integrations"] for key, _ in INTEGRATION_DETAILS):
+                    # What starts each exchange, what goes across and what happens when it fails: the three
+                    # things an integration is usually found to be missing during testing (GP-10).
+                    w.para([("How each exchange works", "medium")], size=w.s["h3"], before=8, after=3, keep=True)
+                    each_w = (tw - 3.6) / 3
+                    w.table(["System"] + [label_ for _, label_ in INTEGRATION_DETAILS],
+                            [[[(x.get("system", ""), "medium")]]
+                             + [fill(x[key], f"integration {x.get('system', '')}") if x.get(key) else TBC for key, _ in INTEGRATION_DETAILS]
+                             for x in spec["integrations"]], [3.6] + [each_w] * 3)
+                    undecided_ = [x.get("system", "") for x in spec["integrations"] if any(not x.get(key) for key, _ in INTEGRATION_DETAILS)]
+                    if undecided_:
+                        warnings.append(f"integrations: trigger, data or failure handling still to be confirmed for {', '.join(undecided_)} "
+                                        "(set trigger, data and on_failure on each integration)")
+                else:
+                    notes.append("no integration details in the spec (for each integration: trigger, data, on_failure): "
+                                 "see docs/spec-format.md")
             if spec.get("notifications"):
                 sub("E-mail notifications")
                 w.table(["Event", "Sent to", "Template"],
@@ -1360,11 +1393,12 @@ def build(project):
             ch = number.split(".")[0]
             for i, r in enumerate(roles, 1):
                 w.heading(f"{ch}.{i} {r['name']}", 2)
+                mine = [s for s in screens if s["type"] != "login" and r["id"] in (s.get("roles") or role_ids)]
                 if r.get("description") or r.get("scope"):
                     where = f"role {r['id']}"  # the same place as in the roles table: a bad reference is reported once
+                    # Kept with the list under it: a role's heading and one line used to end a page on their own.
                     w.para([(fill(r.get("description", ""), where), ""),
-                            ((" Sees: " + fill(r["scope"], where) + ".") if r.get("scope") else "", "sec")])
-                mine = [s for s in screens if s["type"] != "login" and r["id"] in (s.get("roles") or role_ids)]
+                            ((" Sees: " + fill(r["scope"], where) + ".") if r.get("scope") else "", "sec")], keep=bool(mine))
                 if mine:
                     w.para([("Screens", "medium")], before=4, after=2, keep=True)
                     w.line_list([s["title"] for s in mine], [short(refs.get(f"screen:{s['id']}")) for s in mine])
@@ -1451,6 +1485,28 @@ def build(project):
                     else:
                         cap = s.get("caption") or s["title"]
                     w.figure(img, cap)
+                if s.get("stats"):
+                    column_label = {c["field"]: c["label"] for c in (s.get("list") or {}).get("columns") or []}
+
+                    def counts(stat):
+                        """What a figure counts: its formula, or, for one the mock-up counts from the list, the rule in words."""
+                        if stat.get("formula"):
+                            return fill(stat["formula"], f"screen {s['id']}, figure {stat['label']}")
+                        rule = stat.get("count")
+                        if rule == "all":
+                            return "The number of records in the list on this screen."
+                        if isinstance(rule, dict) and rule:
+                            parts = [f"{column_label.get(f, pretty(f))} is {' or '.join(str(v) for v in (vs if isinstance(vs, list) else [vs]))}"
+                                     for f, vs in rule.items()]
+                            return "The number of records in the list on this screen where " + " and ".join(parts) + "."
+                        return None
+
+                    missing = [stat["label"] for stat in s["stats"] if counts(stat) is None]
+                    w.para([("Figures", "medium")], before=6, after=2, keep=True)
+                    w.table(["Figure", "What it counts"], [[stat["label"], counts(stat) or TBC] for stat in s["stats"]], [5.0, tw - 5.0])
+                    if missing and formulas_in_use:
+                        warnings.append(f"screen {s['id']}: no formula for {', '.join(missing)} (add `formula` to each figure in stats)")
+                    figures_open += missing
                 if s.get("sections"):
                     rows, group = field_rows(s["sections"])
                     w.table(field_header, rows, field_widths, group_rows=group)
@@ -1604,6 +1660,9 @@ def build(project):
     print(f"Wrote {out}")
     print(f"  {w.figures} figures, {len(groups)} requirement groups, {len(open_items)} decisions needed, "
           f"{len(made_items)} decisions made, {len(signoff)} signatories")
+    if figures_open and not formulas_in_use:
+        notes.append(f"the figures {', '.join(dict.fromkeys(figures_open))} have no formula: the document shows them as to be confirmed. "
+                     "Add `formula` to each figure in stats (see docs/spec-format.md)")
     for note in notes:
         print(f"  Note: {note}")
     warnings = list(dict.fromkeys(warnings))

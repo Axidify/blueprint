@@ -37,6 +37,11 @@ requirement tables and screenshots all come from the spec, so they cannot contra
 - The spec has a `scope` (`in_scope`, `out_of_scope`, `assumptions`). Take it from the scope of work and
   the workshops; put under `out_of_scope` what the client might otherwise assume is included. If it is
   missing, draft it and show it to the user before generating: do not invent exclusions.
+- Every integration says what starts it, what goes across and what happens when it fails (`trigger`, `data`,
+  `on_failure`), and every dashboard figure typed in as a `value` has a `formula`. Where the client has not
+  decided one, leave it out and add a register question: the document shows "To be confirmed" there.
+- Read the notes the generator prints as well as the warnings. A note that no requirement refers to a
+  screen usually means a requirement is missing or a `screens` link was forgotten.
 - Every status has its rules (`edit`, `cancel`, `delete`, `next`), or a register question where one is
   not decided. The generator warns about rules still to be confirmed.
 - Version, dates, `status` and `history` in `project` are right for this issue.

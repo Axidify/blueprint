@@ -27,11 +27,11 @@ orange otherwise ("Draft for client review", "Not approved", "Awaiting final rev
 | Document at a glance | Counts (roles, screens, requirements, decisions needed), how to review it, sign-off status, version history | Spec, register |
 | About this document | Disclaimer, confidentiality, concept acknowledgement | Standard wording |
 | Contents | Chapters and sections (updated by Word) | |
-| 1 Users and access | Overview, roles with data scope, access matrix (ticks), process flow and statuses, status rules (who may edit, cancel or delete in each status, and where it moves next), external systems, e-mail notifications, terms | Spec |
+| 1 Users and access | Overview, roles with data scope, access matrix (ticks), process flow and statuses, status rules (who may edit, cancel or delete in each status, and where it moves next), external systems and how each exchange works (trigger, data, what happens on failure), e-mail notifications, terms | Spec |
 | 2 Scope and assumptions | What is in scope, what is out of scope, and what has been assumed. Left out when the spec has no scope | Spec `scope` |
 | 2 Requirements by role | Per role: what they see, their screens with section numbers, what they can do, e-mails they receive, decisions that affect them | Spec, register |
 | 3 Functional requirements | Each group with its requirements, priority (when set) and the screens it applies to | Spec `requirements` |
-| 4 Screens | Each screen: who uses it, screenshot, fields (type, required, rule or source), list columns, dialogs, linked requirements | Spec, mock-up |
+| 4 Screens | Each screen: who uses it, screenshot, what each figure on it counts, fields (type, required, rule or source), list columns, dialogs, linked requirements | Spec, mock-up |
 | 5 Non-functional requirements | Areas and measurable requirements, or a "to be confirmed" note | Spec `nfr` |
 | 6 Project timeline | Summary figures, a week-by-week chart of stages, activities and milestones (client activities highlighted), the milestones with what the client must do, and the assumptions behind the plan. Left out when the spec has no timeline | Spec `timeline` |
 | 7 onwards | Extra sections: environments, infrastructure … | Spec `extra_sections` |

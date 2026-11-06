@@ -19,7 +19,9 @@ python -I tools/status.py
 python -I tools/status.py --brief
 ```
 Lists the projects with their stage, open register items and suggested next step, plus files waiting in
-the inbox. The `--brief` form is what you see when Claude Code starts.
+the inbox. The `--brief` form is what you see when Claude Code starts. A project with a damaged register,
+spec or feedback file is still listed, with a line saying which file could not be read; the other projects
+are shown as usual.
 
 ### new_project.py
 
@@ -37,14 +39,32 @@ Turns a Word, PDF, Excel, Markdown or text file into `text.md` (reading order, t
 changes, comments), `meta.json` (metadata, counts, every TBC / TBD / "if applicable") and `images/`. For
 PDFs it also renders pages with diagrams or formulas to `pages/`.
 
+In a Word document, headings and numbered paragraphs carry the number Word shows in front of them
+(`## 3.2 Roles`, `- (a) ...`), worked out from the document's numbering definitions, because Word does not
+store those numbers in the text.
+
+A spreadsheet cell with a formula is given as its calculated value followed by the formula
+(`B4=15 (formula =SUM(B2:B3))`). Text files are read whether saved as UTF-8, as Notepad's "Unicode" or in
+the Windows encoding; `meta.json` says which.
+
+Give it a folder of its own. It replaces an earlier extraction there and leaves any other file in that
+folder alone; a folder that holds files and is not an earlier extraction (a project's `docs/`, say) is
+refused and nothing in it is touched.
+
 ### register.py
 
 ```bash
 python -I tools/register.py validate projects/<slug>
-python -I tools/register.py render   projects/<slug>
+python -I tools/register.py render   projects/<slug> [--overwrite]
 python -I tools/register.py next-id  projects/<slug>
 ```
 Validates `register.json`, renders `register.xlsx`, or prints the next free item ID.
+
+`render` first takes over what was typed into the existing `register.xlsx` since it was written (a
+client's answer, a changed status) and saves it in `register.json`, so the Excel file can be edited by
+the BA without losing anything. A hidden sheet in the file records what it held when written, which is
+how an edit in Excel is told from a change made in `register.json`. When both changed the same item it
+stops and lists them; `--overwrite` writes the file from `register.json` and drops what was typed.
 See [The register](register.md).
 
 ### mockup.py
@@ -64,6 +84,9 @@ was issued to the client is never replaced: bump `project.version` to keep a new
 
 `screenshots` also notes which screens the pictures show (`mockup/screenshots/taken-from.json`), so the
 document generator can warn when the spec's screens have changed since.
+
+With `--lan`, `serve` prints the address others on the same network open. Comments saved by anyone appear
+on every open copy of the mock-up within a few seconds, numbered as they are saved (`FB-007` shows as 7).
 
 `serve` takes its port for itself: when the port is already in use (another mock-up is still open) it
 stops and says so; close the other one or add `--port 8766`. A comment the server cannot save is kept in
@@ -104,8 +127,9 @@ writes a PDF.
   version) does not count as a change.
 - **The PDF always matches the Word file.** A PDF from an earlier run is removed before the new document
   is written. If the PDF or the document is open in another program, the run stops and says so.
-- **Notes** are printed for things worth knowing that do not hold a version back, such as a spec with no
-  status rules. Warnings do hold it back.
+- **Notes** are printed for things worth knowing that do not hold a version back: a spec with no status
+  rules, no integration details or no formulas for its figures, and screens no requirement refers to.
+  Warnings do hold it back.
 - **When the Word step fails it says why.** "Word not available" means Word is not installed; anything
   else is reported as a failure with the reason. Word is closed whatever happens, so it is never left
   running hidden with the document locked.
@@ -126,7 +150,8 @@ forms, lists, integrations and open register items. `render` checks an estimate 
 ranges, the confidence level and the comparison with the scope of work, and writes the Excel file next to
 it; lines with no rate or share are listed as not priced and left out of the total. `weeks` turns the
 estimate into working weeks for a team size (`--days` sets the working days a week, default 5), for
-drafting the project timeline. `render` and `weeks` take the newest file in `estimates/` unless you name
+drafting the project timeline. `render` and `weeks` take the newest file in `estimates/` (by the date its name starts with, then by
+version number, so "spec v0.10" is newer than "spec v0.9") unless you name
 one. Add `--knowledge <folder>` before the command to use another knowledge base.
 See [Estimates](estimates.md).
 

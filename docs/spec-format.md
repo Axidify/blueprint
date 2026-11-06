@@ -20,7 +20,7 @@ One YAML file per project drives both the clickable mock-up (`tools/mockup.py`) 
 | `requirements` | Functional requirement groups: `{id: FR-XXX-001, title, screens, priority, items: [...]}`. `screens` lists the screen ids the group applies to, so requirements and screens link to each other. `priority` (Must, Should, Could) is the group default; set it only when the client has agreed it. Items are numbered `.1`, `.2` … in the requirements document. An item is text, or `{text, priority, screens, tbc: R-019, note}`: `tbc` links an open register item (shown as "Decision needed R-019"), `note` is internal and not printed |
 | `signoff` | Everyone who signs: `{name, designation, department, organisation, signing_for, status}`. Client signatories are listed first; `status` is `Pending` (default) or `Signed`. Without it the requirements document has one client and one supplier block to fill in |
 | `notifications` | `{event, recipient, template}`. document section 1.6 |
-| `integrations` | `{system, purpose, direction, notes}` |
+| `integrations` | `{system, purpose, direction, notes}`, and how it works: `trigger` (what starts the exchange), `data` (what goes across) and `on_failure` (what happens when it fails). With these the document adds a table "How each exchange works"; one left out shows "To be confirmed" and is warned about |
 | `nfr` | `{area, requirement}` |
 | `glossary` | `{term, meaning}`. document section 1.5 |
 | `process_flow` | `{title, steps: [{name, role, optional, status}], reject, notes}`. Drawn as a diagram (mock-up URL `#/__flow`), screenshotted and placed in document section 1.3, so it always matches the statuses |
@@ -95,7 +95,7 @@ screenshot) and `caption`.
 | `type` | Keys |
 |---|---|
 | `login` | none |
-| `dashboard` | `stats: [{label, value}]` or computed `{label, count: all}` / `{label, count: {status: [...]}}` (counted over the screen's list data), optional `list`, `buttons` |
+| `dashboard` | `stats: [{label, value}]` or computed `{label, count: all}` / `{label, count: {status: [...]}}` (counted over the screen's list data), optional `list`, `buttons`. The document lists what each figure counts: a computed one is described from its rule; give a typed-in `value` a `formula`, in words ("Entitlement for the year, less approved days"), or it shows "To be confirmed" |
 | `list` | `list`, `buttons` |
 | `form` | `sections`, `buttons`; optional `data` so `?record=` pre-fills it |
 | `detail` | `data`, `record` (default record id), `fields_from` (reuse another screen's sections, read-only) or its own `sections`, optional `timeline: [{step, by, at, status, comment}]`, `buttons`, `screenshot_pages: all` (default: only page 1 is screenshotted). A record's own `timeline` and `notice` (e.g. a rejection notice) override the screen's |
@@ -190,6 +190,7 @@ screens, roles and dialogs, duplicate ids, status colours) and the parts only th
 requirement group needs an `id` (used once), a `title` and at least one item with text; a notification its
 `event` and `recipient`; a non-functional requirement its `area` and `requirement`; a glossary entry its
 `term` and `meaning`; every screen a `title`, every field and list column a `label`. Extra sections need
-titles that differ from each other, and table rows as long as their header. Status rules must name roles
+titles that differ from each other, and table rows as long as their header. Every figure in `stats` needs a
+`label`, and a `formula` must not be empty. Status rules must name roles
 and statuses that exist, and `scope` may hold only `in_scope`, `out_of_scope` and `assumptions`, each a list. Timeline weeks count from 1,
 and an activity's `end` is not before its `start`. Mistakes are listed together and nothing is written.

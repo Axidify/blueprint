@@ -95,12 +95,29 @@ def cells(line):
     return [c.strip() for c in line.strip().strip("|").split("|")]
 
 
+# A rate cell: an optional "about", a number or a range, then anything at all (a unit, "per form", a note).
+RATE = re.compile(r"^\s*(?:(?:about|around|approx\.?|approximately|circa|c\.)\s+|[~≈]\s*)?"
+                  r"(\d+(?:\.\d+)?)(?:\s*(?:-|–|—|to)\s*(\d+(?:\.\d+)?))?(?![\d.,]*\d)", re.I)
+
+
 def parse_rate(cell):
-    """'TBD' -> None; '2–4' -> (2, 4); '1 per migration' -> (1, 1)."""
-    nums = [float(n) for n in re.findall(r"\d+(?:\.\d+)?", re.split(r"\bper\b", cell)[0])]
-    if not nums:
+    """'TBD' -> None; '2–4' -> (2, 4); '1 per migration' -> (1, 1); '3 (was 5)' -> (3, 3).
+
+    Only the figure the cell starts with counts. Every number in the cell used to be collected, so a note
+    made a range: '3 (was 5)' read as 3 to 5, '0.5 MD each (2023 rate)' as 0.5 to 2023. A cell that has a
+    figure but does not start with a plain number or range ('1,5', 'from 2') gives None: see rate_problem."""
+    m = RATE.match(cell or "")
+    if not m:
         return None
-    return (nums[0], nums[1]) if len(nums) > 1 else (nums[0], nums[0])
+    low = float(m.group(1))
+    return (low, float(m.group(2))) if m.group(2) else (low, low)
+
+
+def rate_problem(cell):
+    """Why a rate cell with a figure in it could not be read, or None (also None for an empty or TBD cell)."""
+    if parse_rate(cell) is None and re.search(r"\d", cell or ""):
+        return f"'{cell.strip()}' is not a number or a range such as 2–4 (write decimals with a point)"
+    return None
 
 
 def read_blocks(platform, kdir):
@@ -129,7 +146,8 @@ def read_blocks(platform, kdir):
             if len(row) > next((i for name, i in cols.items() if name.startswith(key)), default) else ""
         conf = get("confidence", 4).lower()
         blocks[row[0]] = {"name": get("building block", 1), "drivers": get("what drives", 2),
-                          "rate": parse_rate(get("rate", 3)), "confidence": conf if conf in LEVELS else None}
+                          "rate": parse_rate(get("rate", 3)), "rate_problem": rate_problem(get("rate", 3)),
+                          "confidence": conf if conf in LEVELS else None}
     return blocks, platforms
 
 
@@ -148,7 +166,7 @@ def read_other_work(kdir):
         row = cells(line)
         if not re.match(r"^OW-\d+$", row[0]) or len(row) < 3:
             continue
-        out[row[0]] = {"name": row[1], "share": parse_rate(row[2]),
+        out[row[0]] = {"name": row[1], "share": parse_rate(row[2]), "rate_problem": rate_problem(row[2]),
                        "unit": "md" if re.search(r"\bMD\b|manday", row[2], re.I) else "percent"}
     return out
 
@@ -262,7 +280,9 @@ def compute(est, project, kdir):
                 out["calibrated"] = known["confidence"] in ("medium", "high")  # low: a figure not yet backed by actuals
             else:
                 rate = None
-                out.update(priced=False, rate_from="no rate set: not priced")
+                unread = known and known.get("rate_problem")
+                out.update(priced=False, rate_from=f"the rate in building-blocks.md cannot be read ({unread}): not priced" if unread
+                           else "no rate set: not priced")
             if rate and (rate[0] > rate[1] or rate[0] < 0):
                 errors.append(f"{where}: rate low must not be above rate high")
                 continue
@@ -274,7 +294,9 @@ def compute(est, project, kdir):
                 errors.append(f"{where}: {line['other']} is not in the Other work table of building-blocks.md")
                 continue
             if not known or not known["share"]:
-                out.update(priced=False, rate_from="no share set: not priced")
+                unread = known and known.get("rate_problem")
+                out.update(priced=False, rate_from=f"the share in building-blocks.md cannot be read ({unread}): not priced" if unread
+                           else "no share set: not priced")
             elif known["unit"] == "md":
                 out.update(low=known["share"][0], high=known["share"][1], rate_from="knowledge base")
             else:
@@ -603,6 +625,8 @@ def cmd_blocks(a):
     for bid, b in blocks.items():
         if b["rate"]:
             rate = f"{rng(*b['rate'])} per unit, {b['confidence'] or 'low'} confidence"
+        elif b.get("rate_problem"):
+            rate = f"RATE NOT READ: {b['rate_problem']}"
         else:
             rate = "no rate yet"
         print(f"{bid}  {b['name']}  [{rate}]  driven by: {b['drivers']}")
@@ -613,7 +637,8 @@ def cmd_blocks(a):
     print("\nOther work (share of the building-block subtotal, or mandays):" if other
           else "\nOther work: no 'Other work' table in building-blocks.md, so nothing is added around the build.")
     for oid, o in other.items():
-        share = rng(*o["share"], unit=" MD" if o["unit"] == "md" else "%") if o["share"] else "not set: left out"
+        share = (rng(*o["share"], unit=" MD" if o["unit"] == "md" else "%") if o["share"]
+                 else f"SHARE NOT READ: {o['rate_problem']}" if o.get("rate_problem") else "not set: left out")
         print(f"{oid}  {o['name']}  [{share}]")
     print(f"Delivered projects logged on {a.platform}: {len(on_platform)}"
           + (f" ({', '.join(sorted(on_platform))})" if on_platform else "")
@@ -712,6 +737,19 @@ def cmd_inventory(a):
         print(f"\nEarlier estimates: {', '.join(x.name for x in earlier)}")
 
 
+def newest_first_key(path):
+    """Orders estimate files oldest to newest: by the date the name starts with (or the date inside), then by
+    the name with its numbers read as numbers, so "spec v0.10" comes after "spec v0.9"."""
+    m = re.match(r"(\d{4}-\d{2}-\d{2})", path.name)
+    date = m.group(1) if m else ""
+    if not date:
+        try:
+            date = str(json.loads(path.read_text(encoding="utf-8")).get("date") or "")
+        except (OSError, ValueError, AttributeError):
+            date = ""
+    return date, [int(part) if part.isdigit() else part.lower() for part in re.split(r"(\d+)", path.name)]
+
+
 def load_estimate(a):
     """The estimate file named on the command line, or the newest in the project's estimates folder."""
     p = Path(a.project)
@@ -720,7 +758,7 @@ def load_estimate(a):
         if not path.exists():
             path = p / "estimates" / a.file
     else:
-        found = sorted((p / "estimates").glob("*.json")) if (p / "estimates").exists() else []
+        found = sorted((p / "estimates").glob("*.json"), key=newest_first_key) if (p / "estimates").exists() else []
         if not found:
             sys.exit(f"No estimate in {p / 'estimates'}")
         path = found[-1]

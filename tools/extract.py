@@ -14,6 +14,15 @@ Markers in text.md:
     [[C4: anchored text]]          text anchored to comment 4 (comments listed at the end)
     | a | b | c |                  a table row
     === PAGE 12 ===                page break (pdf)
+    B4=15 (formula =SUM(B2:B3))    a spreadsheet cell with a formula: its calculated value, then the formula
+
+Headings and numbered paragraphs of a Word document carry the number Word shows for them ("## 3.2 Roles",
+"- (a) ..."). Word does not store those numbers in the text: they are worked out here from the document's
+numbering definitions, so a finding can point to "section 3.2" as the reader sees it.
+
+The output folder is the extraction's own. An earlier extraction in it is replaced; any other file there
+is left alone. A folder that holds files and is not an earlier extraction (a project's docs/, say) is
+refused, and nothing in it is touched.
 """
 import json
 import re
@@ -31,6 +40,110 @@ OPEN_ITEM = re.compile(r"\bTBC\b|\bTBD\b|to be confirmed|to be determined|if app
 
 
 # ---------------------------------------------------------------- docx
+def roman(n):
+    out = ""
+    for value, letters in ((1000, "M"), (900, "CM"), (500, "D"), (400, "CD"), (100, "C"), (90, "XC"), (50, "L"), (40, "XL"),
+                           (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")):
+        while n >= value:
+            out, n = out + letters, n - value
+    return out
+
+
+def letters(n):
+    """1 -> A, 26 -> Z, 27 -> AA, 28 -> BB: Word repeats the letter."""
+    return chr(ord("A") + (n - 1) % 26) * ((n - 1) // 26 + 1) if n > 0 else ""
+
+
+FORMATS = {
+    "decimal": str, "decimalZero": lambda n: f"{n:02d}",
+    "upperRoman": roman, "lowerRoman": lambda n: roman(n).lower(),
+    "upperLetter": letters, "lowerLetter": lambda n: letters(n).lower(),
+    "none": lambda n: "",
+}
+
+
+class Numbering:
+    """The numbers Word shows in front of headings and numbered paragraphs.
+
+    Word keeps the definitions (word/numbering.xml: for each level a format such as "%1.%2", a number style
+    and a start value) and which paragraphs use them (in the paragraph, or in its style), and counts as it
+    lays the document out. This counts the same way, in document order."""
+
+    def __init__(self, z):
+        self.levels, self.nums, self.style_num, self.counters, self.used = {}, {}, {}, {}, set()
+        val = lambda el, tag: (el.find(W + tag).get(W + "val") if el is not None and el.find(W + tag) is not None else None)
+        if "word/numbering.xml" in z.namelist():
+            root = ET.fromstring(z.read("word/numbering.xml"))
+            for a in root.findall(W + "abstractNum"):
+                levels = {}
+                for lvl in a.findall(W + "lvl"):
+                    levels[int(lvl.get(W + "ilvl"))] = {"start": int(val(lvl, "start") or 1), "fmt": val(lvl, "numFmt") or "decimal",
+                                                       "text": val(lvl, "lvlText") or "", "style": val(lvl, "pStyle"),
+                                                       "legal": lvl.find(W + "isLgl") is not None}
+                self.levels[a.get(W + "abstractNumId")] = levels
+            for n in root.findall(W + "num"):
+                starts = {int(o.get(W + "ilvl")): int(val(o, "startOverride")) for o in n.findall(W + "lvlOverride")
+                          if val(o, "startOverride") is not None}
+                self.nums[n.get(W + "numId")] = {"abstract": val(n, "abstractNumId"), "starts": starts}
+        if "word/styles.xml" in z.namelist():
+            styles = {s.get(W + "styleId"): s for s in ET.fromstring(z.read("word/styles.xml")).findall(W + "style")}
+
+            def numbering_of(style_id, depth=0):
+                """(numId, ilvl) a style gives its paragraphs, looking through the styles it is based on."""
+                style = styles.get(style_id)
+                if style is None or depth > 20:
+                    return None, None
+                num_pr = style.find(f"{W}pPr/{W}numPr")
+                num_id, ilvl = (val(num_pr, "numId"), val(num_pr, "ilvl")) if num_pr is not None else (None, None)
+                if num_id is None:
+                    base = val(style, "basedOn")
+                    inherited = numbering_of(base, depth + 1) if base else (None, None)
+                    num_id, ilvl = inherited[0], ilvl if ilvl is not None else inherited[1]
+                return num_id, ilvl
+
+            for style_id in styles:
+                self.style_num[style_id] = numbering_of(style_id)
+
+    def label(self, p, style_id):
+        """The number in front of this paragraph ("3.2", "(a)", "Appendix B"), or "" when it has none.
+        Call it once for every paragraph, in order: it counts."""
+        num_pr = p.find(f"{W}pPr/{W}numPr")
+        direct = lambda tag: (num_pr.find(W + tag).get(W + "val") if num_pr is not None and num_pr.find(W + tag) is not None else None)
+        from_style = self.style_num.get(style_id, (None, None))
+        num_id = direct("numId") if direct("numId") is not None else from_style[0]
+        if num_id in (None, "0") or num_id not in self.nums:
+            return ""
+        levels = self.levels.get(self.nums[num_id]["abstract"]) or {}
+        ilvl = direct("ilvl") if direct("ilvl") is not None else from_style[1]
+        if ilvl is None:  # the list names the style of each level instead
+            ilvl = next((i for i, lvl in levels.items() if lvl["style"] == style_id), 0)
+        ilvl = int(ilvl)
+        if ilvl not in levels:
+            return ""
+        # Word keeps one running count for all the list instances (w:num) that share a definition: applying
+        # heading numbering paragraph by paragraph makes a new instance each time, and they still count on.
+        # An instance restarts a level only when it carries a start override, the first time it is used.
+        counts = self.counters.setdefault(self.nums[num_id]["abstract"], {})
+        restart = self.nums[num_id]["starts"].get(ilvl) if (num_id, ilvl) not in self.used else None
+        self.used.add((num_id, ilvl))
+        if restart is not None:
+            counts[ilvl] = restart
+        else:
+            counts[ilvl] = counts[ilvl] + 1 if ilvl in counts else levels[ilvl]["start"]
+        for deeper in [i for i in counts if i > ilvl]:
+            del counts[deeper]
+        level = levels[ilvl]
+        if level["fmt"] == "bullet":
+            return ""
+
+        def shown(match):
+            i = int(match.group(1)) - 1
+            fmt = "decimal" if level["legal"] and i != ilvl else (levels[i]["fmt"] if i in levels else "decimal")
+            return FORMATS.get(fmt, str)(counts.get(i, 0))  # a level not reached yet shows 0, as in Word
+
+        return re.sub(r"%(\d)", shown, level["text"]).strip()
+
+
 class Docx:
     def __init__(self, path, out):
         self.z = zipfile.ZipFile(path)
@@ -39,6 +152,8 @@ class Docx:
         self.counts = {"tracked_insertions": 0, "tracked_deletions": 0, "tables": 0}
         rels = ET.fromstring(self.z.read("word/_rels/document.xml.rels"))
         self.rels = {r.get("Id"): r.get("Target") for r in rels}
+        self.numbering = Numbering(self.z)
+        self.counts["numbered_headings"] = 0
 
     def image(self, rid):
         target = self.rels.get(rid)
@@ -83,21 +198,24 @@ class Docx:
     def paragraph(self, p):
         style = p.find(f"{W}pPr/{W}pStyle")
         style = style.get(W + "val") if style is not None else ""
+        number = self.numbering.label(p, style)  # before the empty check: Word counts an empty numbered paragraph too
         text = "".join(self.inline(c) for c in p if c.tag != W + "pPr").strip()
         if not text:
             return ""
+        numbered = f"{number} {text}" if number else text
         s = style.lower()
         if s == "title":
             return "# " + text
         m = re.match(r"heading(\d)", s)
         if m:
-            return "#" * (int(m.group(1)) + 1) + " " + text
+            self.counts["numbered_headings"] += bool(number)
+            return "#" * (int(m.group(1)) + 1) + " " + numbered
         if s.startswith("toc"):
             return "  (TOC) " + text
         if s == "caption":
             return "*Caption:* " + text
-        if "list" in s or p.find(f"{W}pPr/{W}numPr") is not None:
-            return "- " + text
+        if number or "list" in s or p.find(f"{W}pPr/{W}numPr") is not None:
+            return "- " + numbered
         return text
 
     def table(self, tbl):
@@ -147,7 +265,7 @@ def extract_pdf(path, out):
 
     doc = pymupdf.open(path)
     parts, images, rendered = [], [], []
-    (out / "pages").mkdir()
+    (out / "pages").mkdir(exist_ok=True)
     for i, page in enumerate(doc, 1):
         text = page.get_text("text")
         parts.append(f"=== PAGE {i} ===\n{text}")
@@ -177,11 +295,26 @@ def extract_xlsx(path):
     import openpyxl
 
     wb = openpyxl.load_workbook(path, data_only=False)
+    # The same file once more for what Excel last calculated: a total is a formula, and a review needs its
+    # figure ("15"), not only "=SUM(B2:B3)".
+    try:
+        values = openpyxl.load_workbook(path, data_only=True)
+    except Exception:
+        values = None
+
+    def shown(ws, c):
+        if not (isinstance(c.value, str) and c.value.startswith("=")):
+            return f"{c.coordinate}={c.value}"
+        result = values[ws.title][c.coordinate].value if values is not None and ws.title in values.sheetnames else None
+        if result is None:
+            return f"{c.coordinate}={c.value} (a formula; the file holds no calculated value for it)"
+        return f"{c.coordinate}={result} (formula {c.value})"
+
     parts = []
     for ws in wb:
         parts.append(f"## Sheet: {ws.title} ({ws.dimensions})")
         for row in ws.iter_rows():
-            cells = [f"{c.coordinate}={c.value}" for c in row if c.value is not None]
+            cells = [shown(ws, c) for c in row if c.value is not None]
             if cells:
                 parts.append(" | ".join(cells))
     props = wb.properties
@@ -189,13 +322,58 @@ def extract_xlsx(path):
     return "\n".join(parts), meta
 
 
+def read_text(path):
+    """A text file, whatever it was saved as: UTF-8 (with or without a byte-order mark), UTF-16 from Notepad's
+    "Unicode", or the Windows encoding older editors use. Returns (text, {"encoding": ...})."""
+    raw = path.read_bytes()
+    lines = lambda text: text.replace("\r\n", "\n").replace("\r", "\n")  # Windows and old Mac line ends
+    if raw[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        return lines(raw.decode("utf-16")), {"encoding": "utf-16"}
+    for encoding in ("utf-8-sig", "cp1252"):
+        try:
+            return lines(raw.decode(encoding)), {"encoding": "utf-8" if encoding == "utf-8-sig" else "windows-1252"}
+        except UnicodeDecodeError:
+            continue
+    return lines(raw.decode("latin-1")), {"encoding": "latin-1"}
+
+
+OURS = ("text.md", "meta.json", "images", "pages")  # what an extraction writes into its folder
+
+
+def prepare_output(out):
+    """Get the output folder ready, removing only what an earlier extraction wrote there. It used to delete
+    the whole folder first: pointed at a project's docs/ by mistake, that deleted the client's documents."""
+    if out.exists() and not out.is_dir():
+        sys.exit(f"{out} is a file. Give the extraction a folder of its own.")
+    if out.exists() and any(out.iterdir()):
+        try:
+            earlier = json.loads((out / "meta.json").read_text(encoding="utf-8"))
+            ours = isinstance(earlier, dict) and {"source", "counts"} <= set(earlier)
+        except (OSError, ValueError):
+            ours = False
+        if not ours:
+            names = sorted(p.name for p in out.iterdir())
+            listed = ", ".join(names[:5]) + (f" and {len(names) - 5} more" if len(names) > 5 else "")
+            sys.exit(f"{out} already holds files that are not an earlier extraction ({listed}). Nothing was touched.\n"
+                     "Give the extraction a folder of its own, for example projects/<slug>/reviews/<review>/extract.")
+        for name in OURS:
+            target = out / name
+            if target.is_dir():
+                shutil.rmtree(target)
+            elif target.exists():
+                target.unlink()
+    (out / "images").mkdir(parents=True, exist_ok=True)
+
+
 def main():
     if len(sys.argv) != 3:
         sys.exit(__doc__)
     src, out = Path(sys.argv[1]), Path(sys.argv[2])
-    if out.exists():
-        shutil.rmtree(out)
-    (out / "images").mkdir(parents=True)
+    if not src.is_file():
+        sys.exit(f"No such document: {src}")
+    if src.suffix.lower() not in (".docx", ".pdf", ".xlsx", ".md", ".txt"):
+        sys.exit(f"Unsupported file type: {src.suffix.lower()}")  # before the output folder is touched
+    prepare_output(out)
     ext = src.suffix.lower()
     images, counts = [], {}
     if ext == ".docx":
@@ -207,7 +385,7 @@ def main():
     elif ext == ".xlsx":
         text, meta = extract_xlsx(src)
     elif ext in (".md", ".txt"):
-        text, meta = src.read_text(encoding="utf-8"), {}
+        text, meta = read_text(src)
     else:
         sys.exit(f"Unsupported file type: {ext}")
 

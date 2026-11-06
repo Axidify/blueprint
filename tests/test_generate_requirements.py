@@ -1285,3 +1285,141 @@ def test_no_answered_questions_means_no_decisions_made_table(example):
     blocks = chapter(example.doc, TITLES["decisions"])
     assert "Decisions made" not in support.paragraphs(blocks) and "0 decisions made" in example.log
 
+
+# ====================================================================== what the figures on a screen count
+def figures_of(built, screen_id):
+    blocks = section_of(built, screen_id)
+    return rows(next(t for t in tables(blocks) if not support.is_figure(t) and header(t) == ["Figure", "What it counts"]))
+
+
+def test_every_figure_on_a_dashboard_says_what_it_counts(example):
+    """The requirements standard asks for the formula of every KPI (GP-03). Dashboard figures appeared in the
+    screenshot only; the document had nowhere to say what each one counts."""
+    assert figures_of(example, "my-applications") == [
+        ["Figure", "What it counts"],
+        ["Pending", "The number of records in the list on this screen where Status is Pending Approval."],
+        ["Approved", "The number of records in the list on this screen where Status is Approved."],
+        ["Rejected", "The number of records in the list on this screen where Status is Rejected."],
+        ["Leave balance (days)", "The employee's entitlement for the year, less the days of approved applications."]]
+    assert label_before(section_of(example, "my-applications"), next(
+        t for t in tables(section_of(example, "my-applications")) if not support.is_figure(t) and header(t)[0] == "Figure")) == "Figures"
+
+
+def dashboard(spec):
+    return next(s for s in spec["screens"] if s.get("stats"))
+
+
+def test_counted_figures_are_described_from_their_rule(tmp_path):
+    spec = support.load_spec(support.EXAMPLE)
+    dashboard(spec)["stats"] = [{"label": "All", "count": "all"},
+                                {"label": "Open", "count": {"status": ["Pending Approval", "Approved"], "leave_type": "Annual Leave"}},
+                                {"label": "Long", "count": {"days": 7}}]
+    result = support.generate(support.make_project(tmp_path / "counted", spec=spec))
+    assert figures_of(result, "my-applications")[1:] == [
+        ["All", "The number of records in the list on this screen."],
+        ["Open", "The number of records in the list on this screen where Status is Pending Approval or Approved and Leave Type is Annual Leave."],
+        ["Long", "The number of records in the list on this screen where Days is 7."]]
+    assert "WARNING" not in result.log and "Note:" not in result.log
+
+
+def test_a_typed_in_figure_without_a_formula_is_shown_and_warned_about(tmp_path):
+    spec = support.load_spec(support.EXAMPLE)
+    dashboard(spec)["stats"].append({"label": "Carried forward", "value": 3})
+    result = support.generate(support.make_project(tmp_path / "no-formula", spec=spec))
+    assert figures_of(result, "my-applications")[-1] == ["Carried forward", "● To be confirmed"]
+    assert "1 WARNING(S)" in result.log
+    assert "screen my-applications: no formula for Carried forward (add `formula` to each figure in stats)" in result.log
+
+
+def test_a_spec_that_never_gives_a_formula_gets_a_note_not_a_warning(wide):
+    """Projects written before formulas existed still generate cleanly."""
+    assert figures_of(wide, "my-bookings")[1:] == [["Pending", "● To be confirmed"], ["Returned", "● To be confirmed"]]
+    assert "Note: the figures Pending, Returned have no formula" in wide.log and "WARNING" not in wide.log
+
+
+def test_a_formula_may_hold_references(tmp_path):
+    spec = support.load_spec(support.EXAMPLE)
+    dashboard(spec)["stats"][-1]["formula"] = "As agreed for {client}, see {ref:screen:leave-types}."
+    result = support.generate(support.make_project(tmp_path / "formula-refs", spec=spec))
+    assert figures_of(result, "my-applications")[-1][1].startswith("As agreed for Sample Client Sdn. Bhd., see section ")
+
+
+@pytest.mark.parametrize("stat, said", [
+    ({"value": 3}, "screen my-applications: every figure in 'stats' needs a label"),
+    ({"label": "Balance", "value": 3, "formula": ""}, "screen my-applications, figure Balance: 'formula' must say in words how it is worked out"),
+], ids=["no-label", "empty-formula"])
+def test_a_mistake_in_a_figure_is_named(tmp_path, stat, said):
+    project = support.make_project(tmp_path / "leave-request")
+    spec = support.load_spec(project)
+    dashboard(spec)["stats"].append(stat)
+    support.write_spec(project, spec)
+    with pytest.raises(SystemExit) as stop:
+        generate_requirements.build(project)
+    assert said in str(stop.value)
+
+
+def test_a_formula_does_not_age_the_screenshots(tmp_path):
+    project = support.make_project(tmp_path / "leave-request")
+    spec = support.load_spec(project)
+    dashboard(spec)["stats"][-1]["formula"] = "Reworded: entitlement less approved days."
+    spec["integrations"][0]["on_failure"] = "Reworded."
+    support.write_spec(project, spec)
+    assert "WARNING" not in support.generate(project).log
+
+
+# ====================================================================== how each integration works
+def integration_tables(doc):
+    blocks = chapter(doc, TITLES["users_access"])
+    return blocks, [t for t in tables(blocks) if not support.is_figure(t) and header(t)[0] == "System"]
+
+
+def test_integrations_say_what_triggers_them_what_goes_across_and_what_happens_on_failure(example):
+    """The requirements standard asks for trigger, fields and failure handling per integration (GP-10). The
+    document had a purpose and a direction only."""
+    blocks, (summary, details) = integration_tables(example.doc)
+    assert header(summary) == ["System", "Purpose", "Direction", "Notes"]
+    assert rows(details) == [
+        ["System", "Trigger", "Data exchanged", "If it fails"],
+        ["Active Directory", "Sign-in, and submitting an application", "Network ID in; name, e-mail and line manager back",
+         "Sign-in is refused with a message; an application cannot be submitted without a line manager"],
+        ["SMTP", "A status change of an application", "Recipient, subject and the application's details",
+         "The e-mail is retried three times; the application's status is not affected"]]
+    assert label_before(blocks, details) == "How each exchange works"
+
+
+def test_an_integration_detail_not_yet_given_is_shown_and_warned_about(tmp_path):
+    spec = support.load_spec(support.EXAMPLE)
+    del spec["integrations"][1]["on_failure"]
+    result = support.generate(support.make_project(tmp_path / "open-integration", spec=spec))
+    assert rows(integration_tables(result.doc)[1][1])[2][3] == "● To be confirmed"
+    assert "1 WARNING(S)" in result.log
+    assert "integrations: trigger, data or failure handling still to be confirmed for SMTP" in result.log
+
+
+def test_integrations_without_details_get_a_note_not_a_warning(wide):
+    assert len(integration_tables(wide.doc)[1]) == 1, "the summary table only"
+    assert "Note: no integration details in the spec" in wide.log and "WARNING" not in wide.log
+
+
+# ====================================================================== screens nothing refers to
+def test_screens_that_no_requirement_refers_to_are_noted(wide):
+    """Where the spec links requirements to screens, a screen nothing points at may mean a missing requirement."""
+    assert "Note: no requirement refers to these screens: My Bookings, Audit Log." in wide.log
+
+
+def test_no_note_when_every_screen_is_referred_to_or_the_spec_does_not_link_at_all(tmp_path, example):
+    assert "no requirement refers to" not in example.log, "the sample does not link requirements to screens"
+    spec = support.load_spec(support.WIDE)
+    spec["requirements"][0]["screens"] += ["my-bookings"]
+    spec["requirements"][0]["items"].append({"text": "System shall keep an audit log.", "screens": ["audit-log"]})
+    result = support.generate(support.make_project(tmp_path / "all-linked", spec=spec))
+    assert "no requirement refers to" not in result.log
+
+
+# ====================================================================== a role's page
+def test_a_roles_introduction_stays_with_the_list_under_it(wide):
+    """A role's heading and its one line of description used to end a page on their own."""
+    blocks = chapter(wide.doc, TITLES["by_role"])
+    intro = next(b for b in blocks if hasattr(b, "text") and b.text.startswith("Books equipment and returns it."))
+    assert intro.paragraph_format.keep_with_next is True
+

@@ -19,6 +19,16 @@ See [docs/maintaining.md](docs/maintaining.md).
   too). The machine check knows where things are on a Mac. One step stays manual there: Word for Mac
   cannot be driven by Blueprint, so you update the table of contents and save the PDF yourself, and the
   PDF's signing fields are added on Windows only. Linux works the same way as a Mac.
+- **What each dashboard figure counts.** Every screen with figures now has a "Figures" table in the
+  document. A figure the mock-up counts from its list is described automatically ("the number of records
+  where Status is Pending Approval"); a figure typed in as a value takes a new `formula` in the spec, in
+  words. A figure with neither shows "To be confirmed".
+- **How each integration works.** An integration in the spec can now say what starts it (`trigger`), what
+  goes across (`data`) and what happens when it fails (`on_failure`); the document prints them in a second
+  table under the external systems. Something left out shows "To be confirmed" and is warned about.
+- **A note of screens no requirement refers to.** Where the spec links requirements to screens, generating
+  lists the screens nothing points at, which often means a requirement is missing. Notes do not hold a
+  version back; warnings do.
 - **Status rules in the document.** Each status in the spec can now say who may edit, cancel or delete a
   record while it is in that status, and which statuses it can move to (`edit`, `cancel`, `delete`,
   `next`). The document prints them as a "Status rules" table under the statuses. A rule you have not
@@ -33,6 +43,16 @@ See [docs/maintaining.md](docs/maintaining.md).
   register. Internal items and unanswered ones still never reach the document.
 
 ### Changed
+- **Reviews can point to the section numbers the reader sees.** In many Word documents the numbers in
+  front of headings and numbered paragraphs ("3.2", "(a)", "Appendix B") are produced by Word and are not
+  in the text. They are now worked out when a document is read, so findings can say "section 3.2" and
+  cross-references can be checked. Checked against Word itself: the numbers match what Word shows.
+  Documents with the numbers typed in are read as before.
+- **Everyone in the room sees every comment.** In a mock-up shared with `--lan`, a comment saved on one
+  laptop now appears on the others within a few seconds, without reloading, and has the same number
+  everywhere (the number it is saved under).
+- **`--lan` prints the address to share.** Starting a mock-up for the room now shows the address others
+  open, such as `http://192.168.1.20:8765/`; you no longer have to look up your machine's address.
 - **Filters and search boxes in the mock-up work.** On a list, choosing a filter value or typing in a
   search box and pressing **Search** (or Enter) now narrows the sample rows, the line under the list
   counts what is shown, and **Clear Filters** brings everything back. They used to do nothing, which
@@ -51,6 +71,34 @@ See [docs/maintaining.md](docs/maintaining.md).
   check says it is missing.
 
 ### Fixed
+- In the document, a role's heading and its one line of description no longer end a page on their own.
+- A comment without a time, for example one merged in from an exported file, no longer breaks the
+  Feedback panel in the mock-up.
+- **A note in a rate cell no longer changes the rate.** In `building-blocks.md`, every number in a rate
+  cell was read, so a note turned a single rate into a range: "3 (was 5)" was priced as 3 to 5 mandays,
+  and "0.5 MD each (2023 rate)" as 0.5 to 2023. Only the figure the cell starts with counts now. A cell
+  that does not start with a plain number or range, such as "1,5" with a decimal comma (which used to be
+  read as 1 to 5), is not priced, and the estimate says which cell could not be read. **Check your
+  estimates if any rate cell holds a second number.**
+- **The newest estimate is the newest.** With two estimates on one day, "spec v0.9" was taken as newer
+  than "spec v0.10". Estimates are now ordered by date and then by version number.
+- **One damaged project no longer hides all the others.** The summary shown when a session starts stopped
+  with an error if any project had an unreadable register, spec or feedback file. It now lists every
+  project and says which file of which project could not be read.
+- **Spreadsheet totals are read as figures.** A cell with a formula, such as the total of a scope of work,
+  was read as `=SUM(B2:B3)`. Its calculated value is now given with the formula.
+- **Text files saved in the Windows encoding or as "Unicode" in Notepad can be read.** They used to stop
+  the reading of the document with an error.
+- **Answers typed into the Excel register are no longer lost.** The register's Excel file was written
+  afresh from `register.json` every time, so a client's answer typed into **Client response**, or a
+  changed **Status**, vanished at the next update without a word. Blueprint now reads the Excel file
+  first and takes over what was typed since it was written; an answer also moves an open question to
+  "answered". If the same item was changed in Excel and by Blueprint, it stops and shows both values. A
+  register file that is open in Excel now gives a plain message asking you to close it.
+- **Reading a document can no longer delete other files.** The tool that turns a document into text
+  emptied its output folder first, whatever that folder was: pointed at a project's `docs/` by mistake,
+  it deleted the client's documents. It now replaces only an earlier extraction of its own, leaves any
+  other file in that folder alone, and refuses a folder that holds something else.
 - **The mock-up of an issued version is kept as the client saw it.** Rebuilding replaced the saved copy in
   `mockup/versions/` every time, also after that version had been issued, so showing "the version the
   client saw" could show something newer. The saved copy of an issued version is no longer replaced; the

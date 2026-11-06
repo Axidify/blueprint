@@ -141,5 +141,16 @@ await page.click("#fb-retry");
 await page.waitForTimeout(400);
 out.afterRetry = await feedbackState();
 
+// ---- a comment someone else saved (here: sent straight to the server) appears without a reload
+out.numbersShown = await page.evaluate(() => [...document.querySelectorAll(".fb-pin")].map((p) => p.textContent));
+await page.evaluate(() => fetch("api/feedback", { method: "POST", headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ screen: "approvals", element: "column:Employee", text: "from another laptop", author: "Someone else" }) }));
+const pinsBefore = out.afterRetry.pins;
+try {
+  await page.waitForFunction((n) => document.querySelectorAll(".fb-pin").length > n, pinsBefore, { timeout: 12000 });
+} catch (e) { /* reported below as no new pin */ }
+out.afterOthers = await feedbackState();
+out.numbersAfterOthers = await page.evaluate(() => [...document.querySelectorAll(".fb-pin")].map((p) => p.textContent));
+
 await browser.close();
 console.log(JSON.stringify(out));
