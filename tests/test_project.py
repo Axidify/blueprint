@@ -182,6 +182,18 @@ def test_file_cleans_characters_windows_cannot_store(projects, run, tmp_path):
     assert [f.name for f in (p / "docs").iterdir()] == ["2026-01-05 SOW- draft-final-.txt"]
 
 
+@pytest.mark.parametrize("text, name", [
+    ("Leave Request System", "Leave Request System"),
+    ("Import/Export Permit System", "Import-Export Permit System"),
+    ("Phase 2: Claims System", "Phase 2- Claims System"),
+    ('What? "Draft" <v1>|*', "What- -Draft- -v1-"),
+    ("  Ends with dots... ", "Ends with dots"),
+])
+def test_safe_name_is_a_name_windows_can_store(text, name):
+    """Shared with the document generator, which names the requirements document after the system."""
+    assert project_tool.safe_name(text) == name
+
+
 def test_file_needs_an_existing_file(projects, run, tmp_path):
     new_project(projects)
     with pytest.raises(SystemExit, match="No such file"):

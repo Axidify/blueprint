@@ -68,6 +68,13 @@ def is_issued(p, version):
     return next((i for i in load_issues(p) if str(i["version"]) == str(version)), None)
 
 
+def safe_name(text):
+    """Text as part of a file name Windows can store: \\ / : * ? " < > | become a hyphen. A colon is the
+    dangerous one: Windows accepts it and writes the file where nobody can see it. Also used for the name
+    of the generated requirements document."""
+    return re.sub(r"[\\/:*?\"<>|]+", "-", str(text).strip()).rstrip(". ")
+
+
 def read_only(path, on=True):
     mode = os.stat(path).st_mode
     os.chmod(path, (mode & ~stat.S_IWRITE) if on else (mode | stat.S_IWRITE))
@@ -112,7 +119,7 @@ def cmd_file(a):
     if not src.exists():
         sys.exit(f"No such file: {src}")
     date = a.date or dt.date.fromtimestamp(src.stat().st_mtime).isoformat()
-    kind = re.sub(r"[\\/:*?\"<>|]+", "-", a.kind.strip())
+    kind = safe_name(a.kind)
     name = f"{date} {kind}" + (f" on v{a.responds_to.lstrip('v')}" if a.responds_to else "") + src.suffix.lower()
     dest = p / "docs" / name
     n = 2

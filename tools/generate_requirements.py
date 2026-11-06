@@ -9,7 +9,9 @@ Reads  <project_dir>/spec/app.yaml, <project_dir>/mockup/screenshots/ + shots.js
 Uses   the company profile and branding from the workspace (see tools/workspace.py), and the document format:
        templates/document-format.yaml, overridden key by key by workspace/branding/document-format.yaml.
 Writes <project_dir>/output/<System> – <document title> v<version>.docx, a PDF when
-       Microsoft Word is installed, and a snapshot of the spec used.
+       Microsoft Word is installed, and a snapshot of the spec used. A PDF from an earlier run is removed
+       first, so the Word file and the PDF in output/ are always the same version of the content.
+Warns  when the screenshots were taken before the spec's screens last changed, or one is missing.
 
 Everything (access matrix, roles, statuses, screens, field tables) comes from the same spec as the
 mock-up, so the document cannot contradict the screens. Format reference: docs/document-format.md.
@@ -734,6 +736,7 @@ def as_word(value):
 def build(project):
     project = Path(project)
     spec = json.loads(json.dumps(yaml.safe_load((project / "spec" / "app.yaml").read_text(encoding="utf-8")), default=str))
+    import mockup  # the spec check, and whether the screenshots still show the spec
     import project as project_tool  # issued versions are locked
 
     issued = project_tool.is_issued(project, spec["project"].get("version", ""))
@@ -743,6 +746,9 @@ def build(project):
     shots_file = project / "mockup" / "shots.json"
     if not shots_file.exists():
         sys.exit("No screenshots yet. Run: python -I tools/mockup.py screenshots " + str(project))
+    errors = mockup.validate(spec)
+    if errors:
+        sys.exit("The spec has errors. Fix them, take the screenshots again, then generate:\n  " + "\n  ".join(errors))
     shots = json.loads(shots_file.read_text(encoding="utf-8"))
     shot_dir = project / "mockup" / "screenshots"
     fmt = load_format()
@@ -758,7 +764,7 @@ def build(project):
     open_items = [it for it in items if it["audience"] == "client" and it["status"] not in ("resolved", "wont-fix")]
     chapters, refs = plan_sections(spec, fmt, items)
     labels = fmt["labels"]
-    warnings = []
+    warnings = ["screenshots: " + problem for problem in mockup.screenshot_problems(project, spec)]
     roles = spec["roles"]
     role_ids = [r["id"] for r in roles]
     screens = spec["screens"]
@@ -1228,22 +1234,40 @@ def build(project):
 
     out_dir = project / "output"
     out_dir.mkdir(exist_ok=True)
-    out = out_dir / f"{P['name']} – {doc_title} v{version}.docx"
-    doc.save(str(out))
+    # The name on the cover may hold characters a file name cannot (a colon, a slash): the file name is cleaned.
+    out = out_dir / (project_tool.safe_name(f"{P['name']} – {doc_title} v{version}") + ".docx")
+    pdf = out.with_suffix(".pdf")
+    try:
+        # The PDF of an earlier run goes first: if the Word step fails below, no old PDF is left beside the
+        # new document for someone to send.
+        pdf.unlink(missing_ok=True)
+        doc.save(str(out))
+    except PermissionError:
+        sys.exit(f"Cannot replace the document in {out_dir}: {out.name} or its PDF is open in another program "
+                 "(or is read-only). Close it and generate again.")
     shutil.copy(project / "spec" / "app.yaml", out_dir / f"spec-v{version}.yaml")
     print(f"Wrote {out}")
     print(f"  {w.figures} figures, {len(groups)} requirement groups, {len(open_items)} decisions needed, {len(signoff)} signatories")
     if warnings:
-        print(f"  {len(warnings)} WARNING(S) - fix these in the spec before issuing:")
+        print(f"  {len(warnings)} WARNING(S) - fix these before issuing:")
         for x in warnings:
             print("   - " + x)
-    if finish_in_word(out):
-        placed = add_signature_fields(out.with_suffix(".pdf"), signers)
-        print(f"  Table of contents updated, fonts embedded; PDF written to {out.with_suffix('.pdf').name}"
+    done, why = finish_in_word(out)
+    if done:
+        placed = add_signature_fields(pdf, signers)
+        print(f"  Table of contents updated, fonts embedded; PDF written to {pdf.name}"
               f" with {placed} of {len(signers)} signing fields")
-    else:
+        return out
+    try:
         strip_markers(out)
+    except PermissionError:
+        print(f"  {out.name} is still held open by Word: close Word before opening or regenerating it.")
+    if why == NO_WORD:
         print("  Word not available: open the file and update the table of contents (right-click > Update Field).")
+    else:
+        print(f"  The Word step FAILED, so there is no PDF and the table of contents is not updated: {why}")
+        print("  Put that right and generate again, or open the file and update the table of contents yourself "
+              "(right-click > Update Field).")
     return out
 
 
@@ -1311,26 +1335,46 @@ def add_signature_fields(pdf_path, signers):
     return placed
 
 
+NO_WORD = "Microsoft Word is not installed"  # the one reason for no PDF that is not a fault
+
+
 def finish_in_word(docx_path):
-    """Update fields (contents, page numbers), embed the fonts and export a PDF, if Word is installed."""
+    """Update fields (contents, page numbers), embed the fonts and export a PDF, if Word is installed.
+
+    Returns (True, "") when Word wrote the PDF. Otherwise (False, why): NO_WORD on a machine without Word
+    (or without PowerShell), or what went wrong in words the person generating can act on."""
     import subprocess
 
     pdf = docx_path.with_suffix(".pdf")
+    quoted = lambda path: "'" + str(path.resolve()).replace("'", "''") + "'"  # an apostrophe in a name is doubled
     script = (
         "$ErrorActionPreference='Stop';"
         "$w=New-Object -ComObject Word.Application;$w.Visible=$false;"
-        f"$d=$w.Documents.Open('{docx_path.resolve()}');"
+        f"$d=$w.Documents.Open({quoted(docx_path)});"
         "foreach($t in $d.TablesOfContents){$t.Update()};$d.Fields.Update()|Out-Null;"
         "$d.EmbedTrueTypeFonts=$true;$d.SaveSubsetFonts=$true;"
-        f"$d.Save();$d.ExportAsFixedFormat('{pdf.resolve()}',17);"
+        f"$d.Save();$d.ExportAsFixedFormat({quoted(pdf)},17);"
         "$null=$d.Content.Find.Execute('BPSIG[0-9]{1,3}',$false,$false,$true,$false,$false,$true,1,$false,'',2);"
         "$d.Save();$d.Close();$w.Quit()"
     )
     try:
         r = subprocess.run(["powershell", "-NoProfile", "-Command", script], capture_output=True, timeout=240)
-        return r.returncode == 0 and pdf.exists()
-    except Exception:
-        return False
+    except FileNotFoundError:
+        return False, NO_WORD  # no PowerShell: not Windows, so no Word either
+    except subprocess.TimeoutExpired:
+        return False, "Word did not finish within 4 minutes. It may be waiting on a dialog: close Word and generate again"
+    except Exception as e:
+        return False, f"PowerShell could not be run ({e})"
+    if r.returncode == 0 and pdf.exists():
+        return True, ""
+    said = (r.stderr or b"").decode("oem" if sys.platform == "win32" else "utf-8", "replace")
+    if "80040154" in said or "Class not registered" in said:
+        return False, NO_WORD
+    if r.returncode == 0:
+        return False, "Word ran but wrote no PDF"
+    # PowerShell wraps long messages; the reason is the text before its "At line:1 char:..." location.
+    reason = " ".join(said.split("At line:")[0].split())
+    return False, reason[:400] or f"PowerShell ended with code {r.returncode}"
 
 
 if __name__ == "__main__":

@@ -171,6 +171,97 @@ def test_the_port_is_free_again_after_the_server_stops(built, tmp_path):
     second.server_close()
 
 
+# ---------------------------------------------------------------------- do the screenshots still show the spec?
+def form(spec):
+    return next(s for s in spec["screens"] if s["type"] == "form")
+
+
+@pytest.mark.parametrize("change", [
+    lambda s: form(s)["sections"][0]["fields"].append({"id": "phone", "label": "Contact Number", "type": "text"}),
+    lambda s: form(s)["sections"][0]["fields"][0].update(label="Staff Name"),
+    lambda s: s["screens"][1].update(title="My Leave"),
+    lambda s: s["data"]["applications"][0].update(status="Approved"),
+    lambda s: s["data"]["applications"].__setitem__(0, dict(reversed(list(s["data"]["applications"][0].items())))),
+    lambda s: s["roles"][0].update(name="Staff"),
+    lambda s: s["statuses"][0].update(color="amber"),
+    lambda s: s["dialogs"][0].update(title="Approve Leave"),
+    lambda s: s["project"].update(primary_color="#aa0000"),
+    lambda s: s["project"].update(theme="modern"),
+    lambda s: next(x for x in s["screens"] if x.get("list") and x["list"].get("where"))["list"].update(where={"status": "Approved"}),
+], ids=["new-field", "field-label", "screen-title", "sample-data", "data-key-order", "role-name", "status-colour",
+        "dialog-title", "colour", "theme", "list-filter"])
+def test_what_the_mockup_draws_changes_the_fingerprint(change):
+    spec = mockup_spec()
+    before = mockup.fingerprint(spec)
+    change(spec)
+    assert mockup.fingerprint(spec) != before
+
+
+@pytest.mark.parametrize("change", [
+    lambda s: s["requirements"][0]["items"].append("A new requirement."),
+    lambda s: s["project"].update(version="0.2", date="2026-12-01", status="Final", prepared_by="Someone"),
+    lambda s: s["screens"][1].update(description="Reworded.", caption="Reworded caption"),
+    lambda s: form(s)["sections"][0]["fields"][0].update(validation="Reworded", source="Reworded", length=250),
+    lambda s: s["roles"][0].update(description="Reworded.", scope="Reworded"),
+    lambda s: s["statuses"][0].update(meaning="Reworded."),
+    lambda s: s.update(overview=["Reworded."], signoff=[{"name": "A. Person", "organisation": "Client"}], glossary=[{"term": "LM", "meaning": "Line manager"}]),
+], ids=["requirement", "version-and-cover", "screen-description", "field-rule", "role-text", "status-meaning", "document-chapters"])
+def test_what_only_the_document_prints_leaves_the_fingerprint(change):
+    spec = mockup_spec()
+    before = mockup.fingerprint(spec)
+    change(spec)
+    assert mockup.fingerprint(spec) == before
+
+
+def test_a_condition_on_a_data_field_named_like_a_document_key_still_counts():
+    """`where: {source: Online}` filters the list on a data field called source: it changes the screen."""
+    spec = mockup_spec()
+    listing = next(x for x in spec["screens"] if x.get("list"))["list"]
+    listing["where"] = {"source": "Online"}
+    before = mockup.fingerprint(spec)
+    listing["where"] = {"source": "Counter"}
+    assert mockup.fingerprint(spec) != before
+
+
+def test_taking_screenshots_notes_the_screens_they_show(tmp_path, monkeypatch, capsys):
+    """The screenshot command with the browser step faked: it leaves the note the document generator reads,
+    in the folder and in the kept copy of this mock-up version."""
+    project = tmp_path / "leave-request"
+    support.write_spec(project, mockup_spec())
+    called = []
+    monkeypatch.setattr(mockup.subprocess, "run", lambda command, **kw: called.append(command) or subprocess.CompletedProcess(command, 0))
+    mockup.screenshots(project)
+    assert called and called[0][0] == "node"
+    note = json.loads((project / "mockup" / "screenshots" / mockup.RECORD).read_text(encoding="utf-8"))
+    assert note["screens"] == mockup.fingerprint(mockup.load_spec(project)) and note["taken"]
+    assert (project / "mockup" / "versions" / "v0.1" / "screenshots" / mockup.RECORD).is_file()
+
+
+def test_screenshot_problems_names_what_is_wrong(tmp_path):
+    project = support.make_project(tmp_path / "leave-request", spec=mockup_spec())
+    spec = mockup.load_spec(project)
+    assert mockup.screenshot_problems(project, spec) == []
+
+    (project / "mockup" / "screenshots" / "approvals.png").unlink()
+    (project / "mockup" / "screenshots" / "leave-types.png").unlink()
+    problems = mockup.screenshot_problems(project, spec)
+    assert len(problems) == 1 and problems[0].startswith("no picture for approvals, leave-types: ")
+
+    form(spec)["sections"][0]["fields"][0]["label"] = "Staff Name"
+    problems = mockup.screenshot_problems(project, spec)
+    assert len(problems) == 2 and problems[0].startswith("the screens in the spec changed after the screenshots were taken")
+    assert all(f"python -I tools/mockup.py screenshots {project}" in p for p in problems)
+
+
+def test_screenshot_problems_copes_with_a_damaged_note_or_list(tmp_path):
+    project = support.make_project(tmp_path / "leave-request", spec=mockup_spec())
+    spec = mockup.load_spec(project)
+    (project / "mockup" / "screenshots" / mockup.RECORD).write_text("not json", encoding="utf-8")
+    assert mockup.screenshot_problems(project, spec) == []  # no note to compare with: the list of shots still matches
+    (project / "mockup" / "shots.json").write_text("not json", encoding="utf-8")
+    assert len(mockup.screenshot_problems(project, spec)) == 1
+
+
 # ---------------------------------------------------------------------- in the browser
 @pytest.fixture(scope="module")
 def browser(built, tmp_path_factory):

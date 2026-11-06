@@ -16,6 +16,10 @@ python -I tools/doctor.py
 | The requirements document shows a different font from the design | Run `setup.cmd` to install Geist and Geist Mono, restart Word, and generate again |
 | The requirements document has an old table of contents | Word was not available. Open the document, right-click the table of contents and choose Update Field |
 | The generator prints warnings | Fix them in the spec, not in the Word file (literal "section 3.2" references, requirements that mention the mock-up, missing images), then generate again |
+| The generator warns that the screens changed after the screenshots were taken, or that a screen has no picture | Take the screenshots again (ask Blueprint to, or run the command in the warning), then generate again. Until then the pictures may not show what the tables describe |
+| The generator says the Word step FAILED | The reason is in the message. Most often the document or its PDF is open: close it, close any Word window that is waiting on a question, and generate again. The Word file is complete either way; only the PDF and the table of contents are missing |
+| The generator says it cannot replace the document | The document or its PDF is open in Word or a PDF viewer. Close it and generate again |
+| The file name of the document is not exactly the system name | Windows cannot store `\ / : * ? " < > \|` in a file name, so each becomes a hyphen in the file name. The name inside the document is unchanged |
 | The generator says a version is issued and locked | That version went to the client. Bump `project.version` in the spec (and add a history entry), then generate again |
 | I need to show the client an earlier mock-up | `present.cmd <project> --version 0.2` (every mock-up version is kept in `mockup/versions/`) |
 | `present.cmd` says no mock-up spec found | The project has no `spec/app.yaml` yet. Ask Blueprint to "build a mock-up" first |

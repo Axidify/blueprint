@@ -30,7 +30,7 @@ def sandbox(tmp_path_factory):
     monkeypatch = pytest.MonkeyPatch()
     real_finish_in_word = generate_requirements.finish_in_word
     folder = point_at(monkeypatch, tmp_path_factory.mktemp("workspace"))
-    monkeypatch.setattr(generate_requirements, "finish_in_word", lambda docx_path: False)
+    monkeypatch.setattr(generate_requirements, "finish_in_word", lambda docx_path: (False, generate_requirements.NO_WORD))
     yield types.SimpleNamespace(workspace=folder, finish_in_word=real_finish_in_word)
     monkeypatch.undo()
 

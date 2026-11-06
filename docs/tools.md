@@ -58,6 +58,9 @@ Builds the mock-up from the spec (self-contained: `mockup/index.html` opens with
 with feedback capture, captures screenshots with Edge, or lists saved feedback by screen.
 `present.cmd` runs `serve`. See [Spec format](spec-format.md).
 
+`screenshots` also notes which screens the pictures show (`mockup/screenshots/taken-from.json`), so the
+document generator can warn when the spec's screens have changed since.
+
 `serve` takes its port for itself: when the port is already in use (another mock-up is still open) it
 stops and says so; close the other one or add `--port 8766`. A comment the server cannot save is kept in
 the browser that made it, shown as not saved, and sent again with the next comment or with **Try again**
@@ -77,6 +80,18 @@ Generates the requirements document from the spec, screenshots (run `mockup.py s
 company profile, branding and [Document format](document-format.md). Prints warnings for anything to fix in the
 spec. With Word installed it also updates the table of contents and page numbers, embeds the fonts and
 writes a PDF.
+
+- **The spec is checked first**, with the same check the mock-up runs; errors stop the run.
+- **Screenshots are checked against the spec.** It warns when the screens changed after the screenshots
+  were taken (`mockup.py screenshots` notes what they show in `mockup/screenshots/taken-from.json`) and
+  when a screen has no picture. Text only the document prints (requirements, descriptions, rules, the
+  version) does not count as a change.
+- **The PDF always matches the Word file.** A PDF from an earlier run is removed before the new document
+  is written. If the PDF or the document is open in another program, the run stops and says so.
+- **When the Word step fails it says why.** "Word not available" means Word is not installed; anything
+  else is reported as a failure with the reason.
+- **The file name** is `<system> – <document title> v<version>`, with the characters Windows cannot store
+  (`\ / : * ? " < > |`) replaced by a hyphen. The name inside the document is as the spec has it.
 
 ### estimate.py
 

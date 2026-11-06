@@ -554,8 +554,8 @@ def test_signing_markers_are_written_then_stripped(tmp_path, monkeypatch):
 class FakeRun:
     """Stands in for subprocess.run: records the call, then fails or succeeds as told."""
 
-    def __init__(self, returncode=0, error=None, write_pdf=None):
-        self.returncode, self.error, self.write_pdf, self.calls = returncode, error, write_pdf, []
+    def __init__(self, returncode=0, error=None, write_pdf=None, stderr=b""):
+        self.returncode, self.error, self.write_pdf, self.stderr, self.calls = returncode, error, write_pdf, stderr, []
 
     def __call__(self, command, **kwargs):
         self.calls.append(command)
@@ -563,20 +563,30 @@ class FakeRun:
             raise self.error
         if self.write_pdf:
             self.write_pdf.write_bytes(b"%PDF-1.4")
-        return subprocess.CompletedProcess(command, self.returncode, b"", b"")
+        return subprocess.CompletedProcess(command, self.returncode, b"", self.stderr)
 
 
-@pytest.mark.parametrize("failure", [
-    FakeRun(error=FileNotFoundError("powershell")),                     # Linux, macOS: no PowerShell
-    FakeRun(returncode=1),                                               # Windows without Word
-    FakeRun(error=subprocess.TimeoutExpired("powershell", 240)),         # Word hangs
-    FakeRun(returncode=0),                                               # Word ran but wrote no PDF
-], ids=["no-powershell", "no-word", "timeout", "no-pdf"])
-def test_word_step_reports_failure_instead_of_raising(sandbox, tmp_path, monkeypatch, failure):
+NO_WORD_ERROR = (b"New-Object : Retrieving the COM class factory for component with CLSID {00000000-0000-0000-0000-000000000000} "
+                 b"failed due to the following error: 80040154 Class not registered\r\nAt line:1 char:36\r\n+ ... ")
+FILE_IN_USE_ERROR = (b'Exception calling "Open" with "1" argument(s): "This file is in use by another\r\napplication or user."'
+                     b"\r\nAt line:1 char:90\r\n+ ... $d=$w.Documents.Open(...)\r\n    + CategoryInfo : NotSpecified")
+
+
+@pytest.mark.parametrize("failure, why", [
+    (FakeRun(error=FileNotFoundError("powershell")), generate_requirements.NO_WORD),            # Linux, macOS: no PowerShell
+    (FakeRun(returncode=1, stderr=NO_WORD_ERROR), generate_requirements.NO_WORD),               # Windows without Word
+    (FakeRun(error=subprocess.TimeoutExpired("powershell", 240)), "did not finish within 4 minutes"),  # Word hangs
+    (FakeRun(returncode=0), "wrote no PDF"),                                                    # Word ran but wrote no PDF
+    (FakeRun(returncode=1, stderr=FILE_IN_USE_ERROR), "This file is in use by another application or user."),
+    (FakeRun(returncode=1), "PowerShell ended with code 1"),                                    # failed without saying why
+], ids=["no-powershell", "no-word", "timeout", "no-pdf", "file-in-use", "silent"])
+def test_word_step_says_why_it_failed_instead_of_raising(sandbox, tmp_path, monkeypatch, failure, why):
     monkeypatch.setattr(subprocess, "run", failure)
     docx = tmp_path / "doc.docx"
     Document().save(str(docx))
-    assert sandbox.finish_in_word(docx) is False
+    done, reason = sandbox.finish_in_word(docx)
+    assert done is False and why in reason
+    assert "At line" not in reason, "PowerShell's location lines are not part of the reason"
     assert failure.calls and failure.calls[0][0] == "powershell"
 
 
@@ -584,7 +594,20 @@ def test_word_step_succeeds_when_word_writes_the_pdf(sandbox, tmp_path, monkeypa
     docx = tmp_path / "doc.docx"
     Document().save(str(docx))
     monkeypatch.setattr(subprocess, "run", FakeRun(write_pdf=docx.with_suffix(".pdf")))
-    assert sandbox.finish_in_word(docx) is True
+    assert sandbox.finish_in_word(docx) == (True, "")
+
+
+def test_word_step_copes_with_an_apostrophe_in_the_name(sandbox, tmp_path, monkeypatch):
+    """The paths go into a PowerShell script in single quotes: an apostrophe used to end the quote early,
+    and the broken script was reported as "Word not available"."""
+    docx = tmp_path / "Staff's Claims System v0.1.docx"
+    Document().save(str(docx))
+    run = FakeRun(write_pdf=docx.with_suffix(".pdf"))
+    monkeypatch.setattr(subprocess, "run", run)
+    assert sandbox.finish_in_word(docx) == (True, "")
+    script = run.calls[0][-1]
+    assert script.count("Staff''s Claims System v0.1.docx'") == 1 and script.count("Staff''s Claims System v0.1.pdf'") == 1
+    assert "Staff's" not in script
 
 
 def test_generating_survives_a_missing_word(sandbox, tmp_path, monkeypatch):
@@ -592,8 +615,19 @@ def test_generating_survives_a_missing_word(sandbox, tmp_path, monkeypatch):
     monkeypatch.setattr(generate_requirements, "finish_in_word", sandbox.finish_in_word)
     monkeypatch.setattr(subprocess, "run", FakeRun(error=FileNotFoundError("powershell")))
     result = support.generate(support.make_project(tmp_path / "no-word"))
-    assert "Word not available" in result.log
+    assert "Word not available" in result.log and "FAILED" not in result.log
     assert len(support.signature_forms(chapter(result.doc, TITLES["signoff"]))) == 2
+    assert "BPSIG" not in all_text(result.doc)
+    assert list(result.project.glob("output/*.pdf")) == []
+
+
+def test_a_failed_word_step_is_not_called_word_not_available(sandbox, tmp_path, monkeypatch):
+    """Word is there but the step failed: the run says so, with the reason, and the document is still complete."""
+    monkeypatch.setattr(generate_requirements, "finish_in_word", sandbox.finish_in_word)
+    monkeypatch.setattr(subprocess, "run", FakeRun(returncode=1, stderr=FILE_IN_USE_ERROR))
+    result = support.generate(support.make_project(tmp_path / "word-failed"))
+    assert "The Word step FAILED" in result.log and "This file is in use by another application or user." in result.log
+    assert "Word not available" not in result.log
     assert "BPSIG" not in all_text(result.doc)
     assert list(result.project.glob("output/*.pdf")) == []
 
@@ -603,7 +637,140 @@ def test_word_step_on_a_machine_without_powershell(sandbox, tmp_path):
     """Nothing faked: what really happens on Linux (and in CI)."""
     docx = tmp_path / "doc.docx"
     Document().save(str(docx))
-    assert sandbox.finish_in_word(docx) is False
+    assert sandbox.finish_in_word(docx) == (False, generate_requirements.NO_WORD)
+
+
+# ====================================================================== the PDF of an earlier run
+def test_an_old_pdf_is_removed_when_no_new_one_is_written(tmp_path):
+    """Without this the new Word file sat beside the PDF of the previous content, under the same name."""
+    project = support.make_project(tmp_path / "old-pdf")
+    first = support.generate(project)
+    pdf = first.path.with_suffix(".pdf")
+    pdf.write_bytes(b"%PDF-1.4 the previous content")
+    spec = support.load_spec(project)
+    spec["overview"] = ["Reworded after the client's comments."]
+    support.write_spec(project, spec)
+    second = support.generate(project)
+    assert second.path == first.path and "Reworded after the client's comments." in all_text(second.doc)
+    assert not pdf.exists()
+
+
+def test_a_pdf_that_cannot_be_replaced_stops_the_run(tmp_path, monkeypatch):
+    """The PDF is open in a viewer: stop and say so, before a new Word file is written beside it."""
+    project = support.make_project(tmp_path / "open-pdf")
+    first = support.generate(project)
+    before = first.path.read_bytes()
+    pdf = first.path.with_suffix(".pdf")
+    pdf.write_bytes(b"%PDF-1.4 open in a viewer")
+    unlink = type(pdf).unlink
+
+    def locked(self, *args, **kwargs):
+        if self.suffix == ".pdf":
+            raise PermissionError(13, "The process cannot access the file because it is being used by another process")
+        return unlink(self, *args, **kwargs)
+
+    monkeypatch.setattr(type(pdf), "unlink", locked)
+    with pytest.raises(SystemExit, match="open in another program"):
+        generate_requirements.build(project)
+    assert first.path.read_bytes() == before and pdf.exists()
+
+
+# ====================================================================== file names
+def test_a_name_windows_cannot_store_is_cleaned_in_the_file_name_only(tmp_path):
+    """A colon used to send the document into a hidden stream of an empty file, and a slash into a folder
+    that does not exist. The name inside the document stays as the spec has it."""
+    spec = support.load_spec(support.EXAMPLE)
+    spec["project"]["name"] = "Import/Export: Permit System"
+    result = support.generate(support.make_project(tmp_path / "awkward-name", spec=spec))
+    assert result.path.name == "Import-Export- Permit System – Requirements Specification v0.1.docx"
+    produced = sorted(p.name for p in (result.project / "output").iterdir())
+    assert produced == [result.path.name, "spec-v0.1.yaml"]
+    assert result.path.stat().st_size > 10_000
+    assert result.doc.core_properties.title == "Import/Export: Permit System – Requirements Specification v0.1"
+    assert "Import/Export: Permit System" in all_text(result.doc)
+
+
+# ====================================================================== screenshots that no longer show the spec
+def change_spec(project, change):
+    spec = support.load_spec(project)
+    change(spec)
+    support.write_spec(project, spec)
+
+
+def first_form(spec):
+    return next(s for s in spec["screens"] if s["type"] == "form")
+
+
+REPORTS = {"id": "reports", "type": "list", "title": "Reports", "menu": "Reports", "roles": ["hr"],
+           "list": {"data": "applications", "columns": [{"field": "id", "label": "Ref No"}]}}
+PHONE = {"id": "phone", "label": "Contact Number", "type": "text"}
+
+
+def test_a_screen_changed_after_the_screenshots_is_reported(tmp_path):
+    project = support.make_project(tmp_path / "new-field")
+    change_spec(project, lambda spec: first_form(spec)["sections"][0]["fields"].append(PHONE))
+    result = support.generate(project)
+    assert "1 WARNING(S)" in result.log
+    assert "screenshots: the screens in the spec changed after the screenshots were taken" in result.log
+    assert f"python -I tools/mockup.py screenshots {project}" in result.log
+    assert "Contact Number" in all_text(result.doc), "the document is still written, from the spec"
+
+
+@pytest.mark.parametrize("change", [
+    lambda spec: spec["requirements"][0]["items"].append("The system shall keep a history of every change."),
+    lambda spec: spec["project"].update(version="0.2", status="Final draft", date="2026-12-01"),
+    lambda spec: spec["screens"][1].update(description="Reworded description of the first screen."),
+    lambda spec: first_form(spec)["sections"][0]["fields"][0].update(validation="Reworded rule", source="Reworded source"),
+    lambda spec: spec["roles"][0].update(description="Reworded role.", scope="Own applications"),
+    lambda spec: spec["statuses"][0].update(meaning="Reworded meaning."),
+    lambda spec: spec.update(overview=["Reworded overview."], nfr=[{"area": "Security", "requirement": "Single sign-on."}]),
+], ids=["requirement", "version-status-date", "screen-description", "field-rule", "role-text", "status-meaning", "overview-nfr"])
+def test_text_only_the_document_prints_does_not_age_the_screenshots(tmp_path, change):
+    project = support.make_project(tmp_path / "reworded")
+    change_spec(project, change)
+    assert "WARNING" not in support.generate(project).log
+
+
+def test_a_new_screen_without_a_picture_is_reported(tmp_path):
+    project = support.make_project(tmp_path / "new-screen")
+    change_spec(project, lambda spec: spec["screens"].append(REPORTS))
+    result = support.generate(project)
+    assert "2 WARNING(S)" in result.log
+    assert "screenshots: the screens in the spec changed after the screenshots were taken" in result.log
+    assert "screenshots: no picture for reports: the document has no figure there" in result.log
+
+
+def test_a_missing_picture_is_reported(tmp_path):
+    project = support.make_project(tmp_path / "lost-picture")
+    (project / "mockup" / "screenshots" / "approvals.png").unlink()
+    result = support.generate(project)
+    assert "1 WARNING(S)" in result.log and "screenshots: no picture for approvals:" in result.log
+
+
+def test_the_projects_own_process_flow_picture_stands_in_for_the_screenshot(tmp_path):
+    project = support.make_project(tmp_path / "own-flow", support.WIDE)  # the fixture project has a process flow
+    shot = project / "mockup" / "screenshots" / "process-flow.png"
+    shutil.move(str(shot), str(project / "spec" / "process-flow.png"))
+    assert "WARNING" not in support.generate(project).log
+
+
+def test_screenshots_from_an_older_blueprint_are_checked_by_their_list_only(tmp_path):
+    """They carry no note of the screens they show: a changed field cannot be told, an added screen can."""
+    project = support.make_project(tmp_path / "older")
+    (project / "mockup" / "screenshots" / "taken-from.json").unlink()
+    change_spec(project, lambda spec: first_form(spec)["sections"][0]["fields"].append(PHONE))
+    assert "WARNING" not in support.generate(project).log
+    change_spec(project, lambda spec: spec["screens"].append(REPORTS))
+    assert "the screens in the spec changed after the screenshots were taken" in support.generate(project).log
+
+
+def test_a_spec_with_errors_is_refused_with_the_errors(tmp_path):
+    project = support.make_project(tmp_path / "broken")
+    change_spec(project, lambda spec: spec["screens"][1].update(roles=["nobody"]))
+    with pytest.raises(SystemExit) as stop:
+        generate_requirements.build(project)
+    assert "The spec has errors" in str(stop.value) and "unknown role 'nobody'" in str(stop.value)
+    assert not (project / "output").exists()
 
 
 # ====================================================================== signing fields in the PDF

@@ -64,6 +64,7 @@ def fake_screenshots(project):
     (project / "mockup" / "shots.json").write_text(json.dumps(shots, indent=2), encoding="utf-8")
     for shot in shots:
         Image.new("RGB", (320, 200), "#dfe3ea").save(shot_dir / f"{shot['name']}.png")
+    mockup.record_screenshots(project, mockup.load_spec(project))  # as the real screenshot step does
     return shots
 
 

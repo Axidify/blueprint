@@ -16,11 +16,13 @@ serve        serves the mock-up on http://localhost:<port>; feedback comments ar
              It stops with a message when the port is already taken (another mock-up is still open):
              close that one, or pick another port with --port.
 screenshots  builds, then captures every screen (and extra shots from the spec) with Microsoft Edge into
-             <project_dir>/mockup/screenshots/, listed in shots.json.
+             <project_dir>/mockup/screenshots/, listed in shots.json. It notes which screens they show, so the
+             document generator can warn when the spec's screens have changed since.
 feedback     prints the saved comments, grouped by screen.
 """
 import argparse
 import datetime as dt
+import hashlib
 import http.server
 import json
 import shutil
@@ -294,6 +296,76 @@ def shot_list(spec):
     return shots
 
 
+# Are the saved screenshots still pictures of the spec? The document generator asks before it uses them.
+RECORD = "taken-from.json"  # in mockup/screenshots/: which screens the pictures show
+DRAWN_PROJECT = ("name", "short_name", "client", "theme", "primary_color")
+# Spec text only the requirements document prints. Changing it does not change a screen.
+DOCUMENT_ONLY = {"description", "caption", "meaning", "scope", "source", "validation", "length", "sort", "access",
+                 "doc_table", "srs_table"}
+CONDITIONS = {"where", "when", "count"}  # their keys are data field names, never spec keys: kept whole
+
+
+def drawn(spec):
+    """The part of a spec the mock-up draws: screens, dialogs, roles, statuses, sample data and the look.
+    Requirements, sign-off, the timeline and descriptions are left out, so rewording a requirement does not
+    make the screenshots look out of date."""
+    def strip(node):
+        if isinstance(node, dict):
+            return {k: (v if k in CONDITIONS else strip(v)) for k, v in node.items() if k not in DOCUMENT_ONLY}
+        if isinstance(node, list):
+            return [strip(x) for x in node]
+        return node
+
+    p = spec.get("project") or {}
+    part = {"project": {k: p.get(k) for k in DRAWN_PROJECT}, "data": spec.get("data")}
+    for key in ("roles", "statuses", "screens", "dialogs", "process_flow"):
+        part[key] = strip(spec.get(key))
+    return part
+
+
+def fingerprint(spec):
+    """One value that changes whenever something the mock-up draws changes (key order counts: the first key
+    of a data record is its identifier)."""
+    return hashlib.sha256(json.dumps(drawn(spec), ensure_ascii=False, default=str).encode("utf-8")).hexdigest()
+
+
+def record_screenshots(project, spec):
+    """Note which screens the screenshots just taken show."""
+    record = {"screens": fingerprint(spec), "taken": dt.datetime.now().isoformat(timespec="seconds")}
+    (Path(project) / "mockup" / "screenshots" / RECORD).write_text(json.dumps(record, indent=2), encoding="utf-8")
+
+
+def screenshot_problems(project, spec):
+    """What is wrong with the saved screenshots for this spec, as sentences for whoever generates the
+    document: taken before the screens last changed, or missing. Empty when they are in order.
+
+    Screenshots taken by an older Blueprint have no record of the screens they show; for those only the list
+    of shots is compared, which catches added and removed screens, steps, roles and dialogs."""
+    project = Path(project)
+    shot_dir = project / "mockup" / "screenshots"
+    retake = f"Take them again: python -I tools/mockup.py screenshots {project}"
+    expected = shot_list(spec)
+    try:
+        plan = json.loads((project / "mockup" / "shots.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        plan = None
+    try:
+        shown = json.loads((shot_dir / RECORD).read_text(encoding="utf-8")).get("screens")
+    except (OSError, ValueError, AttributeError):
+        shown = None
+    problems = []
+    if plan != expected or (shown is not None and shown != fingerprint(spec)):
+        problems.append("the screens in the spec changed after the screenshots were taken, so the pictures may not "
+                        f"show what the tables describe. {retake}")
+    own_flow = (project / "spec" / "process-flow.png").exists()  # the project's own diagram replaces the shot
+    missing = [s["name"] for s in expected
+               if not (shot_dir / f"{s['name']}.png").exists() and not (s["name"] == "process-flow" and own_flow)]
+    if missing:
+        more = f" and {len(missing) - 8} more" if len(missing) > 8 else ""
+        problems.append(f"no picture for {', '.join(missing[:8])}{more}: the document has no figure there. {retake}")
+    return problems
+
+
 def screenshots(project):
     spec = build(project)
     mock = (Path(project) / "mockup").resolve()
@@ -308,6 +380,7 @@ def screenshots(project):
     result = subprocess.run(["node", str(script), str(mock / "index.html"), str(plan), str(out)], cwd=ROOT)
     if result.returncode:
         sys.exit(result.returncode)
+    record_screenshots(project, spec)
     snapshot(project, spec)
     print(f"Wrote {len(shots)} screenshots to {out}")
 

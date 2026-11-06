@@ -50,7 +50,13 @@ requirement tables and screenshots all come from the spec, so they cannot contra
    and, if Microsoft Word is installed, updates the table of contents and writes a PDF next to it. A copy
    of the spec used is saved as `spec-v<version>.yaml`.
 3. Read the warnings it prints (literal cross-references, unknown `{ref:...}`, requirements that mention the
-   mock-up, missing images). Do not issue a version with warnings.
+   mock-up, missing images, screenshots taken before the screens last changed or missing for a screen).
+   Do not issue a version with warnings. A screenshot warning means step 1 was skipped or the spec changed
+   since: take the screenshots again and generate again.
+4. If it says the Word step FAILED, there is no PDF: tell the user the reason it gives (usually the
+   document or its PDF is open), and generate again once that is put right. "Word not available" only
+   means Word is not installed; the Word file is then complete and the table of contents is updated by
+   hand.
 
 ## 3. Never overwrite an issued version
 

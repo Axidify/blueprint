@@ -16,8 +16,17 @@ See [docs/maintaining.md](docs/maintaining.md).
   `color: green`, `amber`, `red` or `grey`. The mock-up uses it wherever that status appears, and a spec
   with any other colour is reported as an error. Statuses without one are still coloured from their
   wording. See [docs/spec-format.md](docs/spec-format.md).
+- **A warning when the screenshots are older than the spec.** Generating the requirements document now
+  warns when a screen, dialog, role, status or the sample data changed after the screenshots were taken,
+  and when a screen has no picture, with the command that takes them again. Rewording a requirement, a
+  description or a rule does not trigger it. For a project you already have, take the screenshots once
+  more to switch the check on fully; until then only added and removed screens are noticed.
 - Automated tests for the mock-up: the build, the comment server and, on a machine with Node and Microsoft
   Edge, the mock-up itself clicked through in the browser.
+
+### Changed
+- The document generator now stops with the list of errors when the spec has any (an unknown screen,
+  role or dialog, for example), the same check the mock-up runs. It used to carry on or crash.
 
 ### Fixed
 - **A comment is no longer lost when the mock-up cannot save it.** If the window that started the mock-up
@@ -36,6 +45,17 @@ See [docs/maintaining.md](docs/maintaining.md).
 - **Dialogs close when confirmed.** A dialog whose confirm button only shows a message stayed open after
   the click, and the default OK button did nothing. Both now close the dialog.
 - A comment with characters the Windows console cannot show is saved like any other.
+- **An old PDF can no longer sit beside a new Word document.** When the Word step did not run, the PDF from
+  the previous run stayed in `output/` under the same name as the new document, with different content. The
+  old PDF is now removed before the new document is written. If the PDF or the document is open in another
+  program, the generator stops and asks you to close it.
+- **A failed Word step says why.** Every failure used to be reported as "Word not available", even with
+  Word installed. Now the reason is shown (for example the file is in use, or Word did not answer), and
+  "Word not available" is said only when Word is not installed.
+- **System names with a colon, a slash or an apostrophe.** A colon in the system name (such as
+  "Phase 2: Claims System") made Windows hide the generated document inside an empty file, a slash stopped
+  the run, and an apostrophe broke the Word step so no PDF was written. The file name now replaces the
+  characters Windows cannot store with a hyphen; the name inside the document is unchanged.
 
 ## [0.6.0] - 2026-11-06
 
