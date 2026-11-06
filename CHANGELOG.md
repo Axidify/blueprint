@@ -11,6 +11,27 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+### Added
+- **One button can move a record through a chain of approvals.** Where a single Approve button serves
+  several approvers, `set_status` now takes where each status moves to, for example
+  `{Submitted: verified, Verified: approved, Approved: deployed}`, so the mock-up can act out every step
+  of a multi-step approval with the one dialog the real system has.
+
+- **A task list can show each role its own work.** `waiting_for_me: true` in a list's filter keeps the
+  records whose approval progress is waiting at the signed-in person's step, and follows as a record moves
+  on, also where a chain skips steps. A button can go by that step too:
+  `set_status: {Verification: verified, Approval: approved}`. For records without a progress table,
+  `where_by_role` gives a role a filter of its own. Until now a list had one filter for everyone, so every
+  role saw the first approver's tasks and the later roles could not open theirs by clicking.
+
+### Fixed
+- **A row action limited to some roles is now hidden from the others in the mock-up.** `roles` on a row
+  action already decided who had it in the document's access matrix, but the mock-up showed it to
+  everyone who could open the list.
+- **A step marked Skipped is no longer taken for the one that is waiting.** When a button moved a record,
+  the approval progress filled in the first step without a date, even one marked Skipped or Not required.
+  It now fills in the first step that is really waiting.
+
 ## [0.10.0] - 2026-11-06
 
 ### Added

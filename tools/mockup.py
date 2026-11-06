@@ -47,7 +47,7 @@ FIELD_TYPES = {"text", "textarea", "select", "radio", "checkbox", "date", "datet
 KNOWN_KEYS = {
     "screen": {"id", "type", "title", "subtitle", "menu", "roles", "description", "caption", "screenshot_role", "screenshot_pages",
                "stats", "list", "buttons", "sections", "data", "record", "fields_from", "timeline", "html"},
-    "list": {"data", "where", "columns", "filters", "actions", "toolbar", "search", "sort", "empty"},
+    "list": {"data", "where", "where_by_role", "columns", "filters", "actions", "toolbar", "search", "sort", "empty"},
     "column": {"field", "label", "chip"},
     "section": {"title", "page", "page_title", "note", "fields"},
     "field": {"id", "label", "type", "required", "readonly", "default", "length", "options", "options_from", "placeholder", "help",
@@ -68,11 +68,24 @@ def find_status(spec, value):
 
 
 def status_moves(spec):
-    """Every button with `set_status`, which moves a record to another status in the mock-up:
-    [{where, label, to, sources, record}]. `sources` are the statuses the record can be in when the button
-    shows (from its `when`, or the `where` of its list), or None when nothing says; `record` is False when
-    the button has no record to move."""
+    """Every move a button with `set_status` makes in the mock-up: [{where, label, to, sources, record, data}].
+    `sources` are the statuses the record can be in when the button shows (from its `when`, or the `where`
+    of its list), or None when nothing says; `record` is False when the button has no record to move.
+    `set_status: {Submitted: verified, Verified: approved}` is one move for each place it names: a status,
+    or a step of the records' progress (`sources` is then None). `unknown_from` is set when it is neither."""
     data = spec.get("data") or {}
+
+    def add(where, label, target, found, record, name):
+        if isinstance(target, dict):  # {where the record is: status it moves to}
+            steps = {str(line.get("step")).strip().lower() for row in data.get(name) or [] if isinstance(row, dict)
+                     for line in row.get("timeline") or [] if isinstance(line, dict)}
+            for start, to in target.items():
+                source = find_status(spec, start)
+                step = source is None and str(start).strip().lower() in steps
+                moves.append({"where": where, "label": label, "to": to, "sources": None if step else [source] if source else [],
+                              "record": record, "data": name, "unknown_from": None if source or step else start})
+        else:
+            moves.append({"where": where, "label": label, "to": target, "sources": found, "record": record, "data": name, "unknown_from": None})
 
     def sources(*conditions):
         for cond in conditions:
@@ -91,25 +104,27 @@ def status_moves(spec):
             if b.get("dialog"):
                 openers.setdefault(b["dialog"], []).append((s, b))
             if b.get("set_status") is not None and not b.get("dialog"):
-                moves.append({"where": where, "label": b.get("label"), "to": b["set_status"], "sources": sources(b.get("when")),
-                              "record": holds_record(s), "data": s.get("data")})
+                add(where, b.get("label"), b["set_status"], sources(b.get("when")), holds_record(s), s.get("data"))
         lst = s.get("list") or {}
         for a in lst.get("actions") or []:
             if a.get("set_status") is not None:
-                moves.append({"where": where, "label": a.get("label"), "to": a["set_status"],
-                              "sources": sources(a.get("when"), lst.get("where")), "record": True, "data": lst.get("data")})
+                found = sources(a.get("when"))
+                if found is None:  # wherever the list shows it: its `where`, and each role's own filter
+                    shown = [sources(c) for c in [lst.get("where")] + list((lst.get("where_by_role") or {}).values()) if c]
+                    found = None if not shown or any(x is None for x in shown) else [st for x in shown for st in x]
+                add(where, a.get("label"), a["set_status"], found, True, lst.get("data"))
         for b in lst.get("toolbar") or []:
             if b.get("set_status") is not None:
-                moves.append({"where": where, "label": b.get("label"), "to": b["set_status"], "sources": None, "record": False, "data": None})
+                add(where, b.get("label"), b["set_status"], None, False, None)
     for d in spec.get("dialogs") or []:
         confirm = d.get("confirm") or {}
         if confirm.get("set_status") is None:
             continue
         opened = [(s, b) for s, b in openers.get(d.get("id"), []) if holds_record(s)]
         known = [sources(b.get("when")) for _, b in opened]
-        moves.append({"where": f"dialog {d.get('id')}", "label": confirm.get("label"), "to": confirm["set_status"],
-                      "sources": None if not known or any(k is None for k in known) else [st for k in known for st in k],
-                      "record": bool(opened), "data": opened[0][0].get("data") if opened else None})
+        add(f"dialog {d.get('id')}", confirm.get("label"), confirm["set_status"],
+            None if not known or any(k is None for k in known) else [st for k in known for st in k],
+            bool(opened), opened[0][0].get("data") if opened else None)
     return moves
 
 
@@ -181,6 +196,10 @@ def validate(spec):
         return {as_written(k) for row in rows_ if isinstance(row, dict) for k in row} or None
 
     def in_data(where, name, what, field):
+        if as_written(field) == "waiting_for_me":  # not a field: asks whether the record's waiting step is the signed-in person's
+            if not any(isinstance(row, dict) and row.get("timeline") for row in data.get(name) or []):
+                errors.append(f"{where}: waiting_for_me looks at each record's progress, and no record of the '{name}' data has a timeline")
+            return
         known = fields_of(name)
         if known is not None and as_written(field) not in known:
             close = difflib.get_close_matches(str(field), sorted(map(str, known)), 1, 0.6)
@@ -222,6 +241,16 @@ def validate(spec):
                 in_data(where, name, f"{key[:-1] if key == 'filters' else key} field", field)
         for field in lst.get("where") or {}:
             in_data(where, name, "'where'", field)
+        by_role = lst.get("where_by_role") or {}
+        if not isinstance(by_role, dict) or not all(isinstance(v, dict) for v in by_role.values()):
+            errors.append(f"{where}: where_by_role must give a filter for each role it names, for example {{approver: {{status: Verified}}}}")
+            by_role = {}
+        for role, cond in by_role.items():
+            if role not in roles:
+                close = difflib.get_close_matches(str(role), sorted(roles), 1, 0.6)
+                errors.append(f"{where}: where_by_role names '{role}', which is not a role" + (f" (did you mean '{close[0]}'?)" if close else ""))
+            for field in cond:
+                in_data(where, name, f"'where_by_role' for {role}:", field)
         for a in (lst.get("actions") or []) + (lst.get("toolbar") or []):
             misspelt(f"{where}, button {a.get('label', '?')}", "button", a)
             check_target(where, a)
@@ -297,14 +326,20 @@ def validate(spec):
     def named(st):
         return st.get("name", st.get("id"))
 
+    def not_a_status(w, value, start=False):
+        known = [str(st.get("id") or st.get("name")) for st in spec.get("statuses") or [] if isinstance(st, dict)]
+        close = difflib.get_close_matches(str(value), known + [str(st.get("name")) for st in spec.get("statuses") or [] if isinstance(st, dict)], 1, 0.6)
+        errors.append(f"{w}: set_status '{value}' is not a status" + (", nor a step in the progress of its records" if start else "")
+                      + (f" (did you mean '{close[0]}'?)" if close else f" (the statuses are {', '.join(known)})" if known else " (the spec has no statuses)"))
+
     for move in status_moves(spec):
         w = f"{move['where']}, button {move['label']}"
         to = find_status(spec, move["to"])
+        if move["unknown_from"] is not None:
+            not_a_status(w, move["unknown_from"], start=True)
         if to is None:
-            known = [str(st.get("id") or st.get("name")) for st in spec.get("statuses") or [] if isinstance(st, dict)]
-            close = difflib.get_close_matches(str(move["to"]), known, 1, 0.6)
-            errors.append(f"{w}: set_status '{move['to']}' is not a status"
-                          + (f" (did you mean '{close[0]}'?)" if close else f" (the statuses are {', '.join(known)})" if known else " (the spec has no statuses)"))
+            not_a_status(w, move["to"])
+        if to is None or move["unknown_from"] is not None:
             continue
         if not move["record"]:
             errors.append(f"{w}: set_status has no record to move here. It works on a detail screen, on a form with data, "
@@ -376,9 +411,9 @@ def build(project):
     (out / "index.html").write_text(INDEX.format(title=f"{p['name']} – Mock-up v{p.get('version', '')}"), encoding="utf-8")
     snapshot(project, spec)
     print(f"Built {out / 'index.html'} ({len(spec['screens'])} screens, theme {theme})")
-    moves = status_moves(spec)
+    moves = len({(m["where"], m["label"]) for m in status_moves(spec)})
     if moves:
-        print(f"{len(moves)} button{'s' if len(moves) != 1 else ''} move{'' if len(moves) != 1 else 's'} a record to another status when clicked "
+        print(f"{moves} button{'s' if moves != 1 else ''} move{'' if moves != 1 else 's'} a record to another status when clicked "
               "(until the page is reloaded).")
         missing = moves_not_shown(spec)
         if missing:
@@ -569,7 +604,7 @@ DRAWN_PROJECT = ("name", "short_name", "client", "theme", "primary_color")
 # Spec text only the requirements document prints. Changing it does not change a screen.
 DOCUMENT_ONLY = {"description", "caption", "meaning", "scope", "source", "validation", "length", "sort", "access",
                  "doc_table", "srs_table", "formula"}
-CONDITIONS = {"where", "when", "count"}  # their keys are data field names, never spec keys: kept whole
+CONDITIONS = {"where", "where_by_role", "when", "count"}  # their keys are data field names, never spec keys: kept whole
 # What a click does, not what a screen looks like: setting it leaves every picture as it was.
 BEHAVIOUR = {"set_status"}
 

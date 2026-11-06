@@ -44,6 +44,28 @@ def mockup_spec():
     del next(r for r in spec["roles"] if r["id"] == "employee")["user"]
     next(s for s in spec["screens"] if s["id"] == "approvals")["list"]["actions"].append(
         {"label": "Approve now", "set_status": "approved", "toast": "Application approved"})
+    # One button that serves two steps, and a record whose progress has a step that was skipped.
+    next(s for s in spec["screens"] if s["id"] == "application-details")["buttons"].append(
+        {"label": "Resume", "roles": ["hr"], "set_status": {"On Hold": "pending", "Active Review": "Approved"}})
+    # A list two roles open, each seeing rows of its own, with an action for one of them only.
+    spec["screens"].append({
+        "id": "all-applications", "type": "list", "title": "All Applications", "menu": "All Applications", "roles": ["manager", "hr"],
+        "list": {"data": "applications", "where": {"status": "Approved"}, "where_by_role": {"hr": {"status": ["Rejected", "Cancelled"]}},
+                 "columns": [{"field": "id", "label": "Ref No"}, {"field": "status", "label": "Status", "chip": True}],
+                 "actions": [{"label": "View", "to": "application-details"}, {"label": "Reopen", "toast": "Reopened", "roles": ["hr"]}]}})
+    # What waits for whoever is signed in, read from each record's progress; and a button that goes by the step.
+    spec["screens"].append({
+        "id": "my-tasks", "type": "list", "title": "My Tasks", "menu": "My Tasks", "roles": ["manager", "hr"],
+        "list": {"data": "applications", "where": {"waiting_for_me": True}, "empty": "Nothing is waiting for you",
+                 "columns": [{"field": "id", "label": "Ref No"}, {"field": "status", "label": "Status", "chip": True}],
+                 "actions": [{"label": "View", "to": "application-details"}]}})
+    next(s for s in spec["screens"] if s["id"] == "application-details")["buttons"].append(
+        {"label": "Sign off", "roles": ["manager"], "when": {"waiting_for_me": True},
+         "set_status": {"Line Manager Approval": "approved", "On Hold": "rejected"}})
+    next(r for r in spec["data"]["applications"] if r["id"] == "LV-T-4")["timeline"] = [
+        {"step": "Submitted", "by": "Nur Aisyah", "at": "2026-11-05 09:12", "status": "Done"},
+        {"step": "HR Check", "by": "", "at": "", "status": "Skipped"},
+        {"step": "Line Manager Approval", "by": "Ahmad Faiz", "at": "", "status": "Pending"}]
     return spec
 
 
@@ -197,8 +219,9 @@ def form(spec):
     lambda s: s["project"].update(primary_color="#aa0000"),
     lambda s: s["project"].update(theme="modern"),
     lambda s: next(x for x in s["screens"] if x.get("list") and x["list"].get("where"))["list"].update(where={"status": "Approved"}),
+    lambda s: listing(s, "all-applications")["where_by_role"].update(hr={"source": "Counter"}),
 ], ids=["new-field", "field-label", "screen-title", "sample-data", "data-key-order", "role-name", "status-colour",
-        "dialog-title", "colour", "theme", "list-filter"])
+        "dialog-title", "colour", "theme", "list-filter", "list-filter-of-a-role"])
 def test_what_the_mockup_draws_changes_the_fingerprint(change):
     spec = mockup_spec()
     before = mockup.fingerprint(spec)
@@ -298,11 +321,14 @@ def listing(spec, screen_id="approvals"):
     (lambda s: s["screenshots"][0].update(record="LV-0000"), "record 'LV-0000' is not in the 'applications' data"),
     (lambda s: s["screenshots"][0].update(role="boss"), "unknown role 'boss'"),
     (lambda s: s["screens"][1].update(screenshot_role="boss"), "screenshot_role 'boss' is not a role"),
+    (lambda s: listing(s).update(where_by_role={"manger": {"status": "Approved"}}), "screen approvals: where_by_role names 'manger', which is not a role (did you mean 'manager'?)"),
+    (lambda s: listing(s).update(where_by_role={"manager": {"statuz": "Approved"}}), "'where_by_role' for manager: 'statuz' is not a field of the 'applications' data (did you mean 'status'?)"),
+    (lambda s: listing(s).update(where_by_role={"manager": "Approved"}), "screen approvals: where_by_role must give a filter for each role it names"),
     (lambda s: s["roles"].append(dict(s["roles"][0])), "role id 'employee' is used more than once"),
     (lambda s: s["dialogs"].append(dict(s["dialogs"][0])), "dialog id 'approve-dialog' is used more than once"),
 ], ids=["column", "filter", "search", "where", "action-when", "stat-count", "options-field", "options-list", "field-type",
         "misspelt-list-key", "misspelt-screen-key", "misspelt-field-key", "screen-record", "screenshot-record", "screenshot-role",
-        "screenshot_role", "duplicate-role", "duplicate-dialog"])
+        "screenshot_role", "role-filter-role", "role-filter-field", "role-filter-shape", "duplicate-role", "duplicate-dialog"])
 def test_a_typo_in_the_spec_is_reported_instead_of_showing_blanks(change, said):
     """Each of these used to build: the mock-up showed an empty column, an empty drop-down, the first
     record in place of the one asked for, or simply ignored the setting."""
@@ -369,8 +395,17 @@ def confirm(spec, dialog_id):
      "'set_statuss' is not a button setting (did you mean 'set_status'?)"),
     (lambda s: confirm(s, "cancel-dialog").update(label=True),
      "dialog cancel-dialog: a button's label reads as true, not as text. YAML takes an unquoted Yes, No, On or Off for true or false"),
+    (lambda s: confirm(s, "approve-dialog").update(set_status={"Pending Aproval": "approved"}),
+     "dialog approve-dialog, button Confirm Approve: set_status 'Pending Aproval' is not a status, nor a step in the progress of its "
+     "records (did you mean 'Pending Approval'?)"),
+    (lambda s: listing(s).update(where={"waiting_for_me": True}),
+     "screen approvals: waiting_for_me looks at each record's progress, and no record of the 'applications' data has a timeline"),
+    (lambda s: confirm(s, "approve-dialog").update(set_status={"Pending Approval": "approved", "Approved": "pending"}),
+     "dialog approve-dialog, button Confirm Approve: moves a record from Approved to Pending Approval, but in the status rules "
+     "Approved may only move to Cancelled"),
 ], ids=["unknown-status", "against-the-rules", "from-a-final-status", "source-from-the-list", "no-record-on-a-dashboard", "no-record-on-a-toolbar",
-        "data-without-status", "misspelt", "label-read-as-true"])
+        "data-without-status", "misspelt", "label-read-as-true", "unknown-status-to-move-from", "waiting-without-progress",
+        "one-step-of-several-against-the-rules"])
 def test_a_status_move_that_cannot_work_or_breaks_the_status_rules_is_refused(change, said):
     spec = sample()
     assert mockup.validate(spec) == []
@@ -396,6 +431,40 @@ def test_the_moves_of_the_sample_are_made_by_its_three_dialogs():
     cancel = moves[("dialog cancel-dialog", "Yes, cancel it")]
     assert [s["id"] for s in cancel["sources"]] == ["pending", "approved"], "where the button that opens the dialog shows"
     assert cancel["record"] and cancel["data"] == "applications"
+
+
+def test_a_row_action_is_checked_against_every_status_its_list_can_show():
+    """Without a `when`, the action shows on every row: those of `where` and of each role's own filter."""
+    spec = sample()
+    listing(spec)["where_by_role"] = {"hr": {"status": "Cancelled"}}
+    listing(spec)["actions"].append({"label": "Approve now", "set_status": "approved"})
+    errors = mockup.validate(spec)
+    assert errors == ["screen approvals, button Approve now: moves a record from Cancelled to Approved, but in the status rules "
+                      "Cancelled is a final status (next: []). Change the button, or the status's 'next'"]
+
+
+def test_a_button_may_go_by_the_step_a_record_is_waiting_at():
+    """Where a chain skips steps, the status does not say whose turn it is: the step in the record's progress does."""
+    spec = sample()
+    spec["data"]["applications"][0]["timeline"] = [{"step": "Line Manager Approval", "by": "Ahmad Faiz", "at": "", "status": "Pending"}]
+    confirm(spec, "approve-dialog")["set_status"] = {"Line Manager Approval": "approved"}
+    listing(spec)["where"] = {"status": "Pending Approval", "waiting_for_me": True}
+    assert mockup.validate(spec) == []
+    move = next(m for m in mockup.status_moves(spec) if m["where"] == "dialog approve-dialog")
+    assert move["sources"] is None and move["unknown_from"] is None, "a step is not a status: the status rules are not checked for it"
+
+
+def test_one_button_may_say_where_each_status_moves_to(tmp_path, capsys):
+    """One Approve for a chain of approvers: {status the record is in: status it moves to}."""
+    spec = sample()
+    confirm(spec, "approve-dialog")["set_status"] = {"Pending Approval": "approved", "Rejected": "pending"}
+    assert mockup.validate(spec) == []
+    steps = [(m["sources"][0]["id"], m["to"]) for m in mockup.status_moves(spec) if m["where"] == "dialog approve-dialog"]
+    assert steps == [("pending", "approved"), ("rejected", "pending")]
+    assert mockup.moves_not_shown(spec) == ["Draft to Pending Approval"], "Rejected to Pending Approval is now made by a button"
+    support.write_spec(tmp_path / "leave-request", spec)
+    mockup.build(tmp_path / "leave-request")
+    assert "3 buttons move a record" in capsys.readouterr().out, "a button that serves two steps is still one button"
 
 
 def test_the_moves_the_rules_allow_but_no_button_makes_are_listed():
@@ -637,6 +706,46 @@ def test_an_action_on_a_row_moves_that_row_and_stays_on_the_page(browser):
     after = browser["moveRowAction"]
     assert len(after["rows"]) == 1 and after["rows"][0].startswith("LV-2026-011 "), "the first row was approved and left the list"
     assert after["pager"] == "Showing 1 of 1 records" and after["toasts"] == ["Application approved"]
+
+
+def test_a_button_that_serves_several_steps_moves_each_status_to_its_own_next(browser):
+    assert browser["moveByStatus"]["On Hold"]["status"] == "Pending Approval"
+    assert browser["moveByStatus"]["Active Review"]["status"] == "Approved"
+    assert browser["moveByStatus"]["Approved"]["status"] == "Approved", "a status the button says nothing about stays as it is"
+
+
+def test_a_skipped_step_is_not_taken_for_the_one_that_is_waiting(browser):
+    done, skipped, handled = browser["moveByStatus"]["On Hold"]["timeline"]
+    assert skipped[:4] == ["HR Check", "-", "-", "Skipped"]
+    assert handled[:2] == ["Line Manager Approval", "HR Admin"] and handled[3] == "Pending Approval" and len(handled[2]) == 16
+
+
+def test_a_list_shows_each_role_the_rows_meant_for_it(browser):
+    """A task list is the records waiting for whoever is signed in: one filter for everyone showed the same rows to all."""
+    manager, hr = browser["rowsByRole"]["manager"], browser["rowsByRole"]["hr"]
+    assert manager["rows"] and all(row.endswith(" Approved View") for row in manager["rows"]), "a role not named gets `where`"
+    assert hr["rows"] and all(" Rejected " in f" {row} " or " Cancelled " in f" {row} " for row in hr["rows"])
+    assert manager["pager"] == f"Showing {len(manager['rows'])} of {len(manager['rows'])} records"
+
+
+def test_a_list_can_show_what_is_waiting_for_whoever_is_signed_in(browser):
+    """LV-T-4's progress waits at the line manager's step, and Ahmad Faiz is who the manager role signs in as."""
+    assert [row.split(" ")[0] for row in browser["waiting"]["manager"]["rows"]] == ["LV-T-4"]
+    assert browser["waiting"]["hr"]["rows"] == [] and browser["waiting"]["hr"]["empty"] == "Nothing is waiting for you"
+
+
+def test_a_button_goes_by_the_waiting_step_before_the_status(browser):
+    """The record is On Hold and waits at Line Manager Approval: the button names both, and the step decides."""
+    signed = browser["waiting"]["signedOff"]
+    assert signed["status"] == "Approved"
+    assert signed["timeline"][2][:2] == ["Line Manager Approval", "Ahmad Faiz"] and signed["timeline"][2][3] == "Approved"
+    assert "Sign off" not in signed["buttons"], "nothing is waiting for the manager any more"
+    assert browser["waiting"]["afterSignOff"]["rows"] == []
+
+
+def test_a_row_action_can_be_for_some_roles_only(browser):
+    assert all(row.endswith(" View Reopen") for row in browser["rowsByRole"]["hr"]["rows"])
+    assert not any("Reopen" in row for row in browser["rowsByRole"]["manager"]["rows"])
 
 
 def test_a_filter_is_applied_by_search_and_removed_by_clear_filters(browser):

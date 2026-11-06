@@ -103,10 +103,16 @@ screenshot) and `caption`.
 | `custom` | `html` (raw HTML, for anything the other types cannot show) |
 
 **`list`:** `data` (a key of `data`), `where` (filter, e.g. `{status: "Pending Approval"}` or a list of
-allowed values `{status: [Submitted, Approved]}`), `columns: [{field, label, chip}]` (`chip: true` shows
+allowed values `{status: [Submitted, Approved]}`), `where_by_role` (a filter of its own for a role, e.g.
+`{approver: {status: Verified}, deployer: {status: Approved}}`, so a task list shows each role the records
+waiting for it; a role it does not name gets `where`, and the screenshot shows the role it is taken as).
+Where records carry their own `timeline`, `waiting_for_me: true` in a `where` or `when` keeps the records
+whose waiting step is handled by whoever is signed in (see [Status moves](#status-moves)),
+`columns: [{field, label, chip}]` (`chip: true` shows
 the value as a coloured status), `filters: [field, ...]`,
-`actions: [{label, to | toast, when, set_status}]` (per row; `to` opens a screen with that row's record; `when:
-{status: Draft}` shows the action only on matching rows; `set_status` moves that row's record, see
+`actions: [{label, to | toast, when, roles, set_status}]` (per row; `to` opens a screen with that row's record; `when:
+{status: Draft}` shows the action only on matching rows; `roles` shows it only to those roles, in the
+mock-up and in the document's access matrix; `set_status` moves that row's record, see
 [Status moves](#status-moves)),
 `toolbar: [{label, to | toast, style}]`, `search: [field]` (text search boxes, partial match). In the
 mock-up both work on the sample rows: **Search** applies them and **Clear Filters** resets them. `sort` (text for the requirements document), `empty` (empty-state text). Actions and toolbar buttons appear in the requirements document access matrix unless `access: false`.
@@ -158,11 +164,22 @@ Everything drawn from the record follows: its status on every screen, the lists 
 the counts on dashboards (`count`), and the buttons and row actions that depend on its status (`when`).
 Give those buttons a `when`, or Approve stays on an application that is already approved.
 
+- **One button for several steps.** Where one Approve button serves a chain of approvers, say where each
+  status moves to: `set_status: {Submitted: verified, Verified: approved, Approved: deployed}`. A record in
+  a status the button does not name stays as it is. Where the chain can skip steps, the status does not
+  say whose turn it is: name the steps of the records' `timeline` instead,
+  `set_status: {Verification: verified, Approval: approved, Deployment: deployed}`. The step the record is
+  waiting at decides; a step name is looked for before a status.
+- **Whose turn it is.** `waiting_for_me: true` in a list's `where` or a button's or action's `when` is true
+  for a record whose waiting step (the first line of its own `timeline` with no `at`, not marked Skipped)
+  names the signed-in role's `user` in `by`. A task list with `where: {waiting_for_me: true}` then shows
+  each role its own work, and follows as a record moves on. It needs records with their own `timeline`
+  and roles with a `user`.
 - **Which record.** On a detail screen, or a form opened on a record, it is that record, also from a dialog
   opened there. On a row action of a list it is that row. When the button opens a dialog, put `set_status`
   on the dialog's `confirm`: the record moves when the dialog is confirmed, not when it opens.
 - **Progress.** When the record (or the detail screen that shows it) has a `timeline`, the first step still
-  waiting (no `at`) is filled in with the new status, the signed-in role's `user` (or its name), the time,
+  waiting (no `at`, and not marked Skipped or Not required) is filled in with the new status, the signed-in role's `user` (or its name), the time,
   and what was typed into the dialog as the comment. With no step waiting, a line is added. After a final
   status (`next: []`) the steps still waiting are dropped.
 - **Only in the browser, only until a reload.** Nothing is saved and nobody else in the room sees it.
@@ -220,7 +237,8 @@ the timeline and extra sections, including the cells of their tables.
 
 `mockup.py build` (and so `screenshots`, `serve` and the document generator) stops with a list of errors
 when the spec points at something that does not exist: a screen, dialog, role or data list; a list column,
-filter, search field or `where` / `when` / `count` condition naming a field the sample data does not have;
+filter, search field or `where` / `where_by_role` / `when` / `count` condition naming a field the sample data
+does not have; a `where_by_role` naming a role that does not exist;
 an `options_from` that is not `<data list>.<field>`; a field type that is not one of the list above; a
 `record` that is not in the data; a role or dialog id used twice; a button label that YAML read as true
 or false; a `set_status` that cannot work or contradicts the status rules (see

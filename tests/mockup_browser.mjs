@@ -106,6 +106,23 @@ await page.click('[data-el="menu:New Application"]');
 await page.waitForSelector('[data-el="field:reason"] textarea');
 out.typedAfterLeaving = await page.inputValue('[data-el="field:reason"] textarea');
 
+// ---- a list that shows each role its own rows, and a row action for some roles only
+out.rowsByRole = {};
+for (const role of ["manager", "hr"]) {
+  await open(`#/all-applications?role=${role}`);
+  out.rowsByRole[role] = await listState();
+}
+
+// ---- what is waiting for whoever is signed in, read from each record's progress
+out.waiting = {};
+for (const role of ["manager", "hr"]) {
+  await open(`#/my-tasks?role=${role}`);
+  out.waiting[role] = await page.evaluate(() => ({   // a list with no rows at all has only its "empty" line
+    rows: [...document.querySelectorAll("#content tbody tr[data-row]")].map((tr) => tr.innerText.replace(/\s+/g, " ").trim()),
+    empty: (document.querySelector("#content tbody tr:not([data-row]):not([hidden]) td.empty") || {}).textContent,
+  }));
+}
+
 // ---- status moves: a button with set_status moves the record, and everything drawn from it follows
 const detailState = () => page.evaluate(() => ({
   screen: document.getElementById("app").dataset.screen,
@@ -162,6 +179,26 @@ await open("#/approvals?role=manager");                           // an action o
 await page.click('#content tbody tr[data-row] [data-el="action:Approve now"]');
 await page.waitForTimeout(150);
 out.moveRowAction = { ...(await listState()), toasts: (await state()).toasts };
+
+// A button that goes by the step the record is waiting at, and the task list that follows.
+await open("#/my-tasks?role=manager");
+await page.click('#content tbody tr[data-row] [data-el="action:View"]');
+await page.waitForSelector('[data-el="button:Sign off"]');
+await page.click('[data-el="button:Sign off"]');
+await page.waitForTimeout(150);
+out.waiting.signedOff = await detailState();
+await page.click('[data-el="menu:My Tasks"]');
+await page.waitForSelector('[data-el="title:My Tasks"]');
+out.waiting.afterSignOff = { rows: await page.evaluate(() => [...document.querySelectorAll("#content tbody tr[data-row]")].map((tr) => tr.innerText)) };
+
+// One button for several steps: where the record goes depends on the status it is in.
+out.moveByStatus = {};
+for (const [from, id] of [["On Hold", "LV-T-4"], ["Active Review", "LV-T-5"], ["Approved", "LV-2026-013"]]) {
+  await open(`#/application-details?role=hr&record=${id}`);
+  await page.click('[data-el="button:Resume"]');
+  await page.waitForTimeout(150);
+  out.moveByStatus[from] = await detailState();
+}
 
 // ---- feedback: a comment the server does not take is kept, shown as not saved, and sent later
 const feedbackState = () => page.evaluate(() => ({

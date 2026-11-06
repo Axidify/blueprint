@@ -32,9 +32,14 @@ so every decision put into the spec shows up in both. Format: `docs/spec-format.
    button that moves an existing record on (approve, reject, cancel, return, resubmit, complete)
    `set_status` and a `when` for the statuses it shows in, so the client can act the process out in the
    session: approve as one role, switch role, see what the next person sees. On a button that opens a
-   dialog, `set_status` goes on the dialog's `confirm`. Submit on a new, empty form has no record to move
+   dialog, `set_status` goes on the dialog's `confirm`; where one dialog serves a chain of approvers, give it
+   `{status it is in: status it moves to}` for every step. Submit on a new, empty form has no record to move
    and keeps its message. The build refuses a move the status rules do not allow, and lists the
-   allowed moves no button makes: decide for each whether the client should be able to see it. Every list
+   allowed moves no button makes: decide for each whether the client should be able to see it. Where each
+   role has a task list, make it show every role the records waiting for it: `where: {waiting_for_me:
+   true}` when the sample records carry their approval progress (`timeline`) and the roles a `user`,
+   otherwise `where_by_role` by status. Check that each role can open the record it must act on by
+   clicking, not only by its address. Every list
    gets explicit columns and filters (GP-05). Every figure on a dashboard says what it counts
    (GP-03): use `count` where it can be counted from the screen's list (the document then describes it),
    and give a typed-in `value` a `formula` in words. Leave the formula out when the client has not defined
