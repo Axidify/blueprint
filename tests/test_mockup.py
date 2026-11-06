@@ -2667,3 +2667,14 @@ def test_submit_after_a_draft_with_no_next_goes_to_the_status_after_it():
     second = spec["statuses"][1]
     assert mockup.first_status(spec, "applications", "Submit") == second["name"]
     assert mockup.first_status(spec, "applications", "Save as Draft") == spec["statuses"][0]["name"]
+
+
+def test_a_desk_search_box_reads_as_a_field_not_disabled():
+    """FB-015 on a client mock-up: a grey-filled search box looked disabled. It is white with its outline and a
+    search icon, like every field (docs/design-language.md, Fields)."""
+    import re
+
+    css = (mockup.ENGINE / "themes" / "desk.css").read_text(encoding="utf-8")
+    rule = re.search(r'\.filter\[data-el\^="search:"\] \.f-input \{([^}]*)\}', css).group(1)
+    assert "background: #fff" in rule and "var(--field)" not in rule and "border-color" not in rule
+    assert "%3Ccircle" in rule, "a search icon"

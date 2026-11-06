@@ -11,6 +11,10 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+### Fixed
+- **Search boxes in the `desk` mock-up no longer look disabled.** They were filled grey; they are now white with
+  an outline like every other field, with a small search icon at the left.
+
 ## [1.2.0] - 2026-11-07
 
 ### Changed

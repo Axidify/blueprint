@@ -59,7 +59,7 @@ this page. A project that already has a mock-up keeps its theme until someone as
 | Secondary text | `#6E6E73` | Details, captions, column headers |
 | Separator | `#E5E5EA` | Hairlines between rows |
 | Strong line | `#D2D2D7` | Field and quiet-button outlines |
-| Field fill | `#E9E9EE` | Search fields, segmented controls, tags |
+| Field fill | `#E9E9EE` | Segmented controls, tags |
 | Track | `#EDEDF0` | Progress and bar tracks |
 
 ### Status
@@ -232,8 +232,9 @@ for reduced motion.
 ### Fields
 
 36px tall, 9px corners, a strong-line outline, the label above (13px, weight 500), never a placeholder as the
-label. Help text below in secondary grey; an error is a red outline and a sentence saying what to do. Search
-fields use the field fill with no outline.
+label. Help text below in secondary grey; an error is a red outline and a sentence saying what to do. A search
+field is a field like any other, white with its outline, and a search icon at its left: a grey fill reads as
+disabled.
 
 ### Tables and lists
 
