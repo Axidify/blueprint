@@ -11,6 +11,8 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-07
+
 ### Changed
 - **The workbooks follow the design language:** the questions and fixes register, the UAT workbook and the CR
   log now look like the estimate workbook. A quiet grey header row in place of white on navy, hairlines
@@ -782,7 +784,8 @@ First release.
 - One-step setup (`setup.cmd`) with a machine check, `present.cmd` for sessions, shared Claude Code
   permissions and a start-up status greeting.
 
-[Unreleased]: https://github.com/Axidify/blueprint/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/Axidify/blueprint/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/Axidify/blueprint/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/Axidify/blueprint/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Axidify/blueprint/compare/v0.10.0...v1.0.0
 [0.10.0]: https://github.com/Axidify/blueprint/compare/v0.9.0...v0.10.0
