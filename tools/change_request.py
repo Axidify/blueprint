@@ -11,15 +11,16 @@ Usage:
     python -I tools/change_request.py render projects/<slug>
     python -I tools/change_request.py note   projects/<slug> CR-001
 
-scope   finds the version the client signed (the latest in output/issued.json, read from its spec snapshot
-        output/spec-v<version>.yaml; --version picks another issued version) and lists what in it reads most
+scope   finds the version the client signed (the latest in issued.json, read from its spec snapshot
+        spec-v<version>.yaml, both in the project's _blueprint/output/, or output/ in the old folder layout;
+        --version picks another issued version) and lists what in it reads most
         like the request: requirements, screens, dialogs, status rules, scope lines, integrations,
         notifications, non-functional requirements, and from the register the decisions made (items with an
         answer) and the items left open or not to be fixed. Each with its id and section. With nothing
         issued it compares with the current spec and says so. A file holds one request per line (.txt), or a
         JSON list of texts or of {"request": ...}. The list is a lead, never a verdict: it counts shared
         words, so read each cited text before deciding.
-add     adds one CR or a list to changes/crs.json: gives each the next CR id (an id in the file is ignored),
+add     adds one CR or a list to the CR log, crs.json: gives each the next CR id (an id in the file is ignored),
         fills raised with today and status with raised where missing, and checks the whole log. One mistake
         and nothing is written.
 update  changes fields of CRs: status, sold_md and sold_by (only what the project lead gives), price, weeks,
@@ -29,13 +30,15 @@ ask     for an Ambiguous CR: adds its client question to the register (the rules
 check   checks the CR log and sizes every CR that has building-block lines (the estimate's rules: a line
         with no rate is counted, not priced), and shows what the knowledge base's calibration notes say about
         change requests.
-render  checks the log and writes "changes/CR log (internal).xlsx" for the team.
-note    writes the client's note for a New CR: "changes/CR-001 <title> - change request note.docx". It never
+render  checks the log and writes "CR log (internal).xlsx" for the team, into "Internal – estimates and change
+        requests" (changes/ in a project not yet moved to the new folder layout).
+note    writes the client's note for a New CR: "CR-001 <title> - change request note.docx", into "7 Change
+        requests" (changes/ in the old layout). It never
         holds sizing, rates, building blocks or confidence; the price shows only once the project lead has
         entered the sold figure, otherwise "Quotation to follow". For an In scope CR it prints a short
         internal note instead, and for an Ambiguous one it points to ask.
 
-The CR log is internal. changes/crs.json:
+The CR log is internal: crs.json, in the project's _blueprint/changes/ (changes/ in the old layout):
 {
   "project": "Courier Booking System",
   "platform": "Joget DX",                    for sizing; the spec's platform when left out
@@ -44,7 +47,7 @@ The CR log is internal. changes/crs.json:
       "id": "CR-001",                        given by add
       "raised": "2026-12-03",                the date the client asked
       "asked_by": "HR manager, during UAT",
-      "source": "docs/2026-12-03 UAT defects.xlsx, row 14",          optional: where the request came from
+      "source": "2026-12-03 UAT defects.xlsx, row 14",               optional: where the request came from
       "title": "Export all applications to Excel",                    client-facing, short
       "request": "HR wants to export every application to Excel.",    client-facing: what was asked
       "stage": "uat",                        development | uat (default development)
@@ -88,6 +91,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 import estimate  # noqa: E402  (sizing: the same rules and rates as an estimate)
+import layout  # noqa: E402  (where everything is in a project folder)
 import project as project_tool  # noqa: E402  (what was issued)
 import register  # noqa: E402  (the similarity measure, and adding a client question)
 import workspace  # noqa: E402
@@ -104,8 +108,8 @@ UPDATABLE = ("status", "sold_md", "sold_by", "price", "weeks", "verdict", "gap_p
 CLIENT_TEXT = ("title", "why", "changes", "question")  # written by us for the client: no internal wording in them
 INTERNAL_WORDS = re.compile(r"\b(BB-\d+|OW-\d+|GP-\d+|mandays?|man-days?|MD|confidence level|day rate|building blocks?)\b", re.I)
 INTERNAL_MARK = "Internal: not for the client"
-LOG = Path("changes") / "crs.json"
-EXCEL = "CR log (internal).xlsx"
+LOG = Path("changes") / "crs.json"  # as people read it; where it is: layout.cr_log()
+EXCEL = layout.CR_LOG
 FLOOR = 0.15  # below this a match is noise
 
 
@@ -123,10 +127,11 @@ def read_yaml(path):
 def signed_basis(project, version=None):
     """The version to check a request against: {version, issued, spec, source, warnings, notes}.
 
-    The latest version in output/issued.json, read from its spec snapshot. Without an issued version, or
+    The latest version in issued.json, read from its spec snapshot. Without an issued version, or
     without its snapshot, the current spec, with a warning that says why."""
     p = Path(project)
-    current_path = p / "spec" / "app.yaml"
+    current_path = layout.spec_file(p)
+    current_rel = layout.shown(p, current_path)
     current = read_yaml(current_path) if current_path.exists() else None
     current_version = str(((current or {}).get("project") or {}).get("version") or "")
     issues = project_tool.load_issues(p)
@@ -140,14 +145,14 @@ def signed_basis(project, version=None):
         record = issues[-1] if issues else None
     if record:
         v = str(record["version"])
-        snapshot = p / "output" / f"spec-v{v}.yaml"
+        snapshot = layout.snapshot(p, v)
         if snapshot.exists():
-            spec, source = read_yaml(snapshot), f"output/spec-v{v}.yaml"
+            spec, source = read_yaml(snapshot), layout.shown(p, snapshot)
         else:
-            spec, source = current, "spec/app.yaml"
-            warnings.append(f"The spec snapshot of the issued v{v} (output/spec-v{v}.yaml) is missing: comparing with the "
+            spec, source = current, current_rel
+            warnings.append(f"The spec snapshot of the issued v{v} ({layout.shown(p, snapshot)}) is missing: comparing with the "
                             f"current spec v{current_version}, which may have changed since v{v} went to the client. "
-                            "Check every cited text against the issued document in output/.")
+                            f"Check every cited text against the issued document in {layout.shown(p, layout.output_dir(p))}/.")
         if current_version and current_version != v:
             notes.append(f"The current spec is v{current_version}: what changed after v{v} was issued is not part of what the "
                          "client signed.")
@@ -155,12 +160,12 @@ def signed_basis(project, version=None):
             notes.append(f"Issued so far: {', '.join('v' + str(i['version']) for i in issues)}. Using the latest; "
                          "--version picks another.")
     else:
-        v, spec, source = current_version, current, "spec/app.yaml"
-        warnings.append(f"Nothing has been issued to the client yet (no output/issued.json): comparing with the current spec "
+        v, spec, source = current_version, current, current_rel
+        warnings.append(f"Nothing has been issued to the client yet (no {layout.shown(p, layout.issued_file(p))}): comparing with the current spec "
                         f"v{current_version or '?'}, which the client has not signed. Treat every verdict as provisional, and "
                         f"record the version when it goes to the client (python -I tools/project.py issue {p.name}).")
     if spec is None:
-        sys.exit(f"{p.as_posix()} has no spec (spec/app.yaml) and nothing issued: there is nothing signed to compare with.")
+        sys.exit(f"{p.as_posix()} has no spec ({current_rel}) and nothing issued: there is nothing signed to compare with.")
     return {"version": v, "issued": record, "spec": spec, "source": source, "warnings": warnings, "notes": notes}
 
 
@@ -287,7 +292,7 @@ def score(probe, entry):
 def lookup(project, request, top=8, version=None, basis=None):
     """(basis, [(score, entry)]) for one request, best first."""
     basis = basis or signed_basis(project, version)
-    pool = entries(basis["spec"], register.load(project).get("items", []) if (Path(project) / "register.json").exists() else [],
+    pool = entries(basis["spec"], register.load(project).get("items", []) if layout.register_json(project).exists() else [],
                    (basis["issued"] or {}).get("date"))
     probe = register.words(request)
     found = [(score(probe, e["words"]), e) for e in pool]
@@ -312,13 +317,13 @@ def read_requests(path):
 
 # ---------------------------------------------------------------- the CR log
 def log_path(project):
-    return Path(project) / LOG
+    return layout.cr_log(project)
 
 
 def load_log(project):
     path = log_path(project)
     if not path.exists():
-        spec_file = Path(project) / "spec" / "app.yaml"
+        spec_file = layout.spec_file(project)
         P = (read_yaml(spec_file).get("project") or {}) if spec_file.exists() else {}
         return {"project": P.get("name") or Path(project).name, "platform": P.get("platform", ""), "crs": []}
     try:
@@ -352,7 +357,7 @@ def next_id(log):
 def platform_of(project, log):
     if log.get("platform"):
         return log["platform"]
-    spec_file = Path(project) / "spec" / "app.yaml"
+    spec_file = layout.spec_file(project)
     return ((read_yaml(spec_file).get("project") or {}).get("platform") or "") if spec_file.exists() else ""
 
 
@@ -381,7 +386,7 @@ def size(cr, project, platform, kdir):
             est[key] = cr[key]
     # compute() lowers the confidence for open high-severity register items of the project; those belong to the
     # project's estimate, not to one change. Point it at the changes folder, which has no register.
-    res, errors = estimate.compute(est, Path(project) / "changes", kdir)
+    res, errors = estimate.compute(est, layout.changes_source(project), kdir)
     errors = [e.replace("missing assumptions", "assumptions are needed with lines").replace("missing platform",
               "no platform: set it at the top of crs.json or in the spec") for e in errors]
     return (None if errors else res), errors
@@ -417,7 +422,7 @@ def check_log(log, project, kdir=None):
     crs = log.get("crs")
     if not isinstance(crs, list):
         return ["crs must be a list"], [], {}
-    reg_ids = {it.get("id") for it in (register.load(project).get("items", []) if (Path(project) / "register.json").exists() else [])}
+    reg_ids = {it.get("id") for it in (register.load(project).get("items", []) if layout.register_json(project).exists() else [])}
     patterns = gap_pattern_ids(kdir)
     issues = project_tool.load_issues(Path(project))
     latest = str(issues[-1]["version"]) if issues else None
@@ -684,7 +689,8 @@ def write_note(project, log, cr):
     w.table(["", "Name", "Signature", "Date"], [[[("Approved by", "sec")], "", "", ""], [[("For", "sec")], "", "", ""]],
             [3.0, (tw - 3.0) * 0.4, (tw - 3.0) * 0.35, (tw - 3.0) * 0.25])
 
-    out = log_path(project).parent / f"{cr['id']} {project_tool.safe_name(cr['title'])} - change request note.docx"
+    out = layout.cr_notes_dir(project) / f"{cr['id']} {project_tool.safe_name(cr['title'])} - change request note.docx"
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.parent.mkdir(parents=True, exist_ok=True)
     try:
         doc.save(str(out))
@@ -764,7 +770,7 @@ def cmd_add(a):
         added.append(cr)
     warnings, sizing = checked(a.project, log)
     save_log(a.project, log)
-    print(f"Added to {LOG.as_posix()}: " + ", ".join(f"{cr['id']} ({cr['verdict']}) {cr['title']}" for cr in added))
+    print(f"Added to {layout.shown(a.project, layout.cr_log(a.project))}: " + ", ".join(f"{cr['id']} ({cr['verdict']}) {cr['title']}" for cr in added))
     for cr in added:
         if cr["id"] in sizing:
             print(f"  {cr['id']} sized: {sized_text(sizing[cr['id']])} (internal)")
@@ -830,7 +836,7 @@ def cmd_ask(a):
         sys.exit(f"{a.id} is already in the register as {', '.join(cr['register'])}.")
     if not cr.get("question"):
         sys.exit(f"{a.id} has no question for the client: add one first.")
-    if not (Path(a.project) / "register.json").exists():
+    if not layout.register_json(a.project).exists():
         sys.exit(f"No register.json in {a.project}.")
     reg = register.load(a.project)
     cited = "; ".join(str(c.get("ref")) for c in cr.get("cited") or [] if isinstance(c, dict))
@@ -870,7 +876,7 @@ def cmd_ask(a):
 def cmd_check(a, render=False):
     log = load_log(a.project)
     if not log_path(a.project).exists():
-        sys.exit(f"No CR log yet ({LOG.as_posix()}): add the first CR with add.")
+        sys.exit(f"No CR log yet ({layout.shown(a.project, layout.cr_log(a.project))}): add the first CR with add.")
     warnings, sizing = checked(a.project, log)
     crs = [cr for cr in log.get("crs", []) if isinstance(cr, dict)]
     counts = Counter(cr.get("verdict") for cr in crs)
@@ -890,7 +896,9 @@ def cmd_check(a, render=False):
     for line in warnings:
         print(f"Note: {line}")
     if render:
-        out = render_xlsx(log, sizing, log_path(a.project).parent / EXCEL)
+        out = layout.cr_log_xlsx(a.project)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out = render_xlsx(log, sizing, out)
         print(f"Wrote {out}")
         print("Internal: not for the client.")
         refresh(a.project)

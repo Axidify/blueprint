@@ -234,7 +234,14 @@ def test_restore_refuses_what_it_cannot_do(projects, run):
 # ====================================================================== check
 def test_check_passes_a_standard_project(projects, run):
     new_project(projects, generated=())
-    assert run("check").strip() == "leave-request: OK"
+    out = run("check")
+    assert out.splitlines()[0] == "leave-request: OK"
+    assert "in the old folder layout" in out and "python -I tools/project.py migrate leave-request --dry-run" in out,         "an old-layout project is fine, with a hint to migrate"
+
+
+def test_check_passes_a_project_in_the_new_layout(projects, run, new_project_tool):
+    new_project_tool("courier-booking", "Courier Booking System", "Sample Client")
+    assert run("check").strip() == "courier-booking: OK"
 
 
 def test_check_reports_then_fixes_a_bare_project(projects, run):
@@ -252,7 +259,7 @@ def test_check_reports_then_fixes_a_bare_project(projects, run):
     assert all((p / d).is_dir() for d in project_tool.LAYOUT)
     assert json.loads((p / "register.json").read_text(encoding="utf-8")) == {
         "project": "Leave Request System", "client": "Sample Client Sdn. Bhd.", "items": []}
-    assert run("check", "bare").strip() == "bare: OK"
+    assert run("check", "bare").splitlines()[0] == "bare: OK"
 
 
 def test_check_notes_issued_and_unissued_versions(projects, run):
@@ -331,7 +338,10 @@ def test_new_project_prints_a_short_path_and_the_next_step(projects, new_project
     assert out.startswith("Created projects/courier-booking\n")
     assert str(projects) not in out and "Warning" not in out
     assert "Next: " in out and "'process my inbox'" in out
-    assert json.loads((projects / "courier-booking" / "register.json").read_text(encoding="utf-8"))["project"] == "Courier Booking System"
+    p = projects / "courier-booking"
+    assert json.loads((p / "_blueprint" / "register.json").read_text(encoding="utf-8"))["project"] == "Courier Booking System"
+    assert (p / "1 Client documents").is_dir() and (p / "_blueprint" / "README.txt").is_file(), "a new project starts in the new layout"
+    assert not (p / "docs").exists() and not (p / "register.json").exists()
 
 
 def test_new_project_refuses_the_name_of_an_archived_project(temp_workspace, projects, new_project_tool):
@@ -346,4 +356,4 @@ def test_new_project_warns_about_earlier_work_on_the_same_system(temp_workspace,
     out = new_project_tool("leave-request-phase-2", "Leave Request System", "Sample Client")
     assert "Warning: earlier work on a system like 'Leave Request System':" in out
     assert "projects/_archive/leave-old" in out and "knowledge/actuals/leave-old.md" in out
-    assert (projects / "leave-request-phase-2" / "register.json").exists(), "a warning, not a refusal"
+    assert (projects / "leave-request-phase-2" / "_blueprint" / "register.json").exists(), "a warning, not a refusal"

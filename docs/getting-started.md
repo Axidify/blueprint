@@ -61,7 +61,10 @@ your projects or client documents.
 
 Each project folder has a **`Project overview.html`**: every document in the order of the process, who it
 is for (the client, or internal) and the next step. Once a project has a mock-up, **Open the mock-up** sits
-beside it. If you set up Blueprint before this page existed, run `setup.cmd` (`setup.sh` on a Mac) once more
+beside it. The documents themselves are in numbered folders beside the page (`1 Client documents`,
+`2 Reviews` … `7 Change requests`, and the internal estimates); `_blueprint` holds Blueprint's working
+files, which you can leave alone. Projects made with an older Blueprint can be tidied the same way: say
+"migrate the folders". If you set up Blueprint before this page existed, run `setup.cmd` (`setup.sh` on a Mac) once more
 so the shortcut can find Blueprint.
 
 ## Your first project

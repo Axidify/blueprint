@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 
 import generate_requirements  # noqa: E402
+import layout  # noqa: E402  (where everything is in a project folder, in either layout)
 import mockup  # noqa: E402
 
 EXAMPLE = ROOT / "examples" / "leave-request"
@@ -34,34 +35,49 @@ FIELD_HEADER = ["Field", "Type", "Required", "Rule or source"]
 # ---------------------------------------------------------------------- projects
 def load_spec(source):
     """The spec of a project folder as a dict, for a test to change before making a project from it."""
-    return yaml.safe_load((Path(source) / "spec" / "app.yaml").read_text(encoding="utf-8"))
+    return yaml.safe_load(layout.spec_file(source).read_text(encoding="utf-8"))
 
 
 def write_spec(project, spec):
-    (project / "spec").mkdir(parents=True, exist_ok=True)
-    (project / "spec" / "app.yaml").write_text(yaml.safe_dump(spec, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    layout.spec_dir(project).mkdir(parents=True, exist_ok=True)
+    layout.spec_file(project).write_text(yaml.safe_dump(spec, sort_keys=False, allow_unicode=True), encoding="utf-8")
 
 
-def make_project(folder, source=EXAMPLE, spec=None):
+def make_project(folder, source=EXAMPLE, spec=None, new=False):
     """A project folder ready for the generator: the spec, the register if the source has one, and one
-    placeholder screenshot for every shot the mock-up tool would take. `spec` replaces the source's spec."""
+    placeholder screenshot for every shot the mock-up tool would take. `spec` replaces the source's spec.
+    `new` makes it in the new folder layout (_blueprint/ and the numbered folders), else in the old one."""
     folder = Path(folder)
-    (folder / "spec").mkdir(parents=True)
+    folder.mkdir(parents=True, exist_ok=True)
+    if new:
+        layout.create_new(folder)
+    layout.spec_dir(folder).mkdir(parents=True, exist_ok=True)
     if spec is None:
-        shutil.copy(Path(source) / "spec" / "app.yaml", folder / "spec" / "app.yaml")
+        shutil.copy(layout.spec_file(source), layout.spec_file(folder))
     else:
         write_spec(folder, spec)
-    if (Path(source) / "register.json").exists():
-        shutil.copy(Path(source) / "register.json", folder / "register.json")
+    if layout.register_json(source).exists():
+        shutil.copy(layout.register_json(source), layout.register_json(folder))
     fake_screenshots(folder)
+    return folder
+
+
+def migrated_copy(folder, source=EXAMPLE):
+    """A copy of a project (the made-up sample by default) moved to the new folder layout by the migration. What
+    is built from the sample (git-ignored: its mock-up, comments, output and Excel files) is left out."""
+    folder = Path(folder)
+    shutil.copytree(source, folder, ignore=shutil.ignore_patterns("mockup", "feedback", "output", "*.xlsx"))
+    result = layout.migrate(folder, rebuild_page=False)
+    assert not result["refusals"], result["refusals"]
     return folder
 
 
 def fake_screenshots(project):
     shots = mockup.shot_list(mockup.load_spec(project))  # load_spec also validates the spec
-    shot_dir = project / "mockup" / "screenshots"
+    shot_dir = layout.screenshots_dir(project)
     shot_dir.mkdir(parents=True, exist_ok=True)
-    (project / "mockup" / "shots.json").write_text(json.dumps(shots, indent=2), encoding="utf-8")
+    layout.shots_plan(project).parent.mkdir(parents=True, exist_ok=True)
+    layout.shots_plan(project).write_text(json.dumps(shots, indent=2), encoding="utf-8")
     for shot in shots:
         Image.new("RGB", (320, 200), "#dfe3ea").save(shot_dir / f"{shot['name']}.png")
     mockup.record_screenshots(project, mockup.load_spec(project))  # as the real screenshot step does
@@ -84,7 +100,7 @@ def generate(project):
     with contextlib.redirect_stdout(log):
         path = generate_requirements.build(project)
     return Built(Path(project), path, Document(str(path)), mockup.load_spec(project),
-                 json.loads((Path(project) / "mockup" / "shots.json").read_text(encoding="utf-8")), log.getvalue())
+                 json.loads(layout.shots_plan(project).read_text(encoding="utf-8")), log.getvalue())
 
 
 def changed(spec, **keys):

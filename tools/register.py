@@ -9,6 +9,10 @@ Usage:
     python -I tools/register.py validate projects/<slug>
     python -I tools/register.py next-id  projects/<slug>
 
+register.json is in the project's _blueprint folder and register.xlsx is "Questions and fixes register.xlsx" at
+the top of the project (in a project not yet moved to the new folder layout: register.json and register.xlsx
+at the top). Below, both are called by their short names.
+
 add takes one item or a list of items (JSON, UTF-8) from a file or standard input. It gives each the next
 free id (an id in the input is ignored: ids are never chosen by hand), fills raised with today and status
 with open where they are missing, and checks every item with the same rules as validate. One bad item
@@ -35,7 +39,7 @@ from register.json regardless and drops what was typed in Excel.
 their answers in Client response or a Status changed), after the project's own register.xlsx and by the
 same rules: what the client changed since that copy was written goes into register.json, and an item that
 was also changed here since then stops it, naming both values. The returned file is only read; keep it
-(file it into docs/ with project.py file). A copy without the hidden note of what it held (made by an older
+(file it into the client documents with project.py file). A copy without the hidden note of what it held (made by an older
 Blueprint, or pasted into a new workbook) gives only the answers to items that have none yet.
 
 register.json:
@@ -72,6 +76,9 @@ import tempfile
 from collections import Counter
 from datetime import date
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import layout  # noqa: E402  (where everything is in a project folder)
 
 TYPES = {"question", "gap", "contradiction", "assumption", "decision", "fix"}
 AUDIENCES = {"client", "internal"}
@@ -137,7 +144,7 @@ def excel_edits(project, reg, path=None):
     from openpyxl import load_workbook
 
     returned = path is not None
-    path = Path(path) if returned else Path(project) / "register.xlsx"
+    path = Path(path) if returned else layout.register_xlsx(project)
     if not path.exists():
         if returned:
             sys.exit(f"No file at {path}. Nothing was written.")
@@ -208,7 +215,7 @@ def take_excel_edits(project, reg, edits):
 
 
 def load(project):
-    path = Path(project) / "register.json"
+    path = layout.register_json(project)
     if not path.exists():
         sys.exit(f"No register at {path}")
     return json.loads(path.read_text(encoding="utf-8"))
@@ -216,7 +223,7 @@ def load(project):
 
 def save(project, reg):
     """Write register.json whole or not at all: into a temporary file next to it, then put in its place."""
-    path = Path(project) / "register.json"
+    path = layout.register_json(project)
     fd, tmp = tempfile.mkstemp(prefix=".register-", suffix=".tmp", dir=path.parent)
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
@@ -458,19 +465,20 @@ def render(project, reg, overwrite=False, returned=None):
 
     if not overwrite:
         edits, conflicts = excel_edits(project, reg)
+        own = layout.register_xlsx(project).name
         if conflicts:
-            print("register.xlsx and register.json disagree. Nothing was written:")
+            print(f"{own} and register.json disagree. Nothing was written:")
             print("\n".join(f"  - {c}" for c in conflicts))
             print("Put the value you want into register.json, then run this again with --overwrite.")
             sys.exit(1)
         if edits:
-            print("Taken from register.xlsx into register.json:")
+            print(f"Taken from {own} into register.json:")
             print("\n".join(f"  - {line}" for line in take_excel_edits(project, reg, edits)))
     if returned:
         name = Path(returned).name
         edits, conflicts = excel_edits(project, reg, returned)
         if conflicts:
-            print(f"{name} and register.json disagree. register.xlsx was not written:")
+            print(f"{name} and register.json disagree. {layout.register_xlsx(project).name} was not written:")
             print("\n".join(f"  - {c.replace('Excel has', 'the returned file has')}" for c in conflicts))
             print("Settle each with the BA: record the right value with register.py update (or leave register.json "
                   "as it is), then run this again; a value register.json already holds is not taken again.")
@@ -553,7 +561,7 @@ def render(project, reg, overwrite=False, returned=None):
         kept.append([it["id"], it["status"], it.get("answer") or ""])
     kept.sheet_state = "veryHidden"
 
-    out = Path(project) / "register.xlsx"
+    out = layout.register_xlsx(project)
     try:
         wb.save(out)
     except PermissionError:

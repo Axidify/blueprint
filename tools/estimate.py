@@ -10,10 +10,11 @@ Usage:
 blocks     the building blocks and rates for a platform in knowledge/building-blocks.md, the shares for
            other work set there, and how many delivered projects in knowledge/projects-log.md they rest on
 inventory  what the project has to count from: roles, screens, forms, lists, dialogs, integrations,
-           notifications, open register items, documents in docs/
+           notifications, open register items, the client's documents
 render     checks an estimate file, works out the ranges, the confidence level and the comparison with the
-           scope of work, and writes the Excel file next to it. Without a file name it takes the newest
-           file in projects/<slug>/estimates/
+           scope of work, and writes the Excel file: into "Internal – estimates and change requests" (next
+           to the .json in a project not yet in the new folder layout). Without a file name it takes the
+           newest file in the project's estimates folder (_blueprint/estimates/, or estimates/)
 weeks      turns the estimate's mandays into working weeks for a team size, per scope-of-work line or
            group, for drafting the project timeline (weeks only: mandays never go to the client)
 rates-from the rates a lead developer filled in on the Rates needed sheet of an estimate's Excel file, as
@@ -22,7 +23,8 @@ rates-from the rates a lead developer filled in on the Rates needed sheet of an 
 Figures are never invented: a rate or share comes from the knowledge base or from the lead developer for
 this estimate. A line without one is listed with its count and left out of the totals ("not priced").
 
-An estimate is internal: it lives in projects/<slug>/estimates/ and never goes to the client.
+An estimate is internal: its source lives in the project's _blueprint/estimates/ (estimates/ in the old folder
+layout), its Excel file in "Internal – estimates and change requests", and neither goes to the client.
 
 estimates/<date> estimate from <basis>.json:
 {
@@ -200,7 +202,9 @@ def logged_projects(platform, kdir):
 
 
 def read_register(project):
-    path = Path(project) / "register.json"
+    import layout
+
+    path = layout.register_json(project)
     if not path.exists():
         return []
     return json.loads(path.read_text(encoding="utf-8")).get("items", [])
@@ -1086,13 +1090,16 @@ def cmd_blocks(a):
 def cmd_inventory(a):
     import yaml
 
+    import layout
+
     p = Path(a.project)
     print(f"Inventory of {p.as_posix()}")
-    docs = sorted(x.name for x in (p / "docs").glob("*") if x.is_file()) if (p / "docs").exists() else []
-    print(f"\nDocuments in docs/: {len(docs)}")
+    docs_dir = layout.docs_dir(p)
+    docs = sorted(x.name for x in docs_dir.glob("*") if x.is_file()) if docs_dir.exists() else []
+    print(f"\nDocuments in {layout.shown(p, docs_dir)}/: {len(docs)}")
     for d in docs:
         print(f"  {d}")
-    spec_file = p / "spec" / "app.yaml"
+    spec_file = layout.spec_file(p)
     if spec_file.exists():
         spec = yaml.safe_load(spec_file.read_text(encoding="utf-8")) or {}
         proj = spec.get("project") or {}
@@ -1159,7 +1166,7 @@ def cmd_inventory(a):
         print(f"Requirements: {len(reqs)} groups, {len(items)} items, {tbc} waiting on a decision")
         print(f"NFRs: {len(spec.get('nfr') or [])}; timeline in the spec: {'yes' if spec.get('timeline') else 'no'}")
     else:
-        print("\nNo spec yet: count from the brief or scope of work in docs/.")
+        print(f"\nNo spec yet: count from the brief or scope of work in {layout.shown(p, docs_dir)}/.")
     reg = read_register(p)
     if reg:
         still = [it for it in reg if it.get("status") not in CLOSED]
@@ -1170,7 +1177,7 @@ def cmd_inventory(a):
             print(f"  {it.get('id')} [{it.get('severity')}{impact}, {it.get('category', '')}] {str(it.get('finding', ''))[:140]}")
     else:
         print("\nRegister: no items")
-    earlier = sorted((p / "estimates").glob("*.json")) if (p / "estimates").exists() else []
+    earlier = sorted(layout.estimates_source(p).glob("*.json")) if layout.estimates_source(p).exists() else []
     if earlier:
         print(f"\nEarlier estimates: {', '.join(x.name for x in earlier)}")
 
@@ -1190,15 +1197,18 @@ def newest_first_key(path):
 
 def load_estimate(a):
     """The estimate file named on the command line, or the newest in the project's estimates folder."""
+    import layout
+
     p = Path(a.project)
+    folder = layout.estimates_source(p)
     if a.file:
         path = Path(a.file)
         if not path.exists():
-            path = p / "estimates" / a.file
+            path = folder / a.file
     else:
-        found = sorted((p / "estimates").glob("*.json"), key=newest_first_key) if (p / "estimates").exists() else []
+        found = sorted(folder.glob("*.json"), key=newest_first_key) if folder.exists() else []
         if not found:
-            sys.exit(f"No estimate in {p / 'estimates'}")
+            sys.exit(f"No estimate in {folder}")
         path = found[-1]
     if not path.exists():
         sys.exit(f"No estimate file {path}")
@@ -1212,8 +1222,13 @@ def load_estimate(a):
 
 
 def cmd_render(a):
+    import layout
+
     path, est, res = load_estimate(a)
-    out = path.with_suffix(".xlsx")
+    # Beside its .json source in a project in the old layout; in the new one, the Excel file goes into
+    # "Internal – estimates and change requests" and the source stays in _blueprint/estimates/.
+    out = layout.estimate_xlsx(a.project, path) if path.parent.resolve() == layout.estimates_source(a.project).resolve() else path.with_suffix(".xlsx")
+    out.parent.mkdir(parents=True, exist_ok=True)
     try:
         render_xlsx(est, res, out)
     except PermissionError:

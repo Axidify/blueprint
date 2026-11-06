@@ -1,7 +1,8 @@
-# Project spec format (`spec/app.yaml`)
+# Project spec format (`_blueprint/spec/app.yaml`)
 
 One YAML file per project drives both the clickable mock-up (`tools/mockup.py`) and the generated requirements document
 (`tools/generate_requirements.py`). Change the spec, rebuild both, and they stay consistent.
+It is `_blueprint/spec/app.yaml` in the project folder (`spec/app.yaml` in a project still in the old folder layout).
 `examples/leave-request/spec/app.yaml` is a complete working example.
 
 ## Top level

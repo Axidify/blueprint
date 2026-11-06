@@ -6,7 +6,8 @@ Usage:
     python -I tools/uat.py render  projects/<slug> ["<scripts.json>"]
     python -I tools/uat.py results projects/<slug> ["<filled-in workbook.xlsx>"]
 
-draft    writes projects/<slug>/uat/<date> uat scripts v<version>.json from the spec, the same way every time:
+draft    writes <date> uat scripts v<version>.json into the project's _blueprint/uat/ (uat/ in a project not yet
+         moved to the new folder layout) from the spec, the same way every time:
          the main process from start to end (each role in turn), every other status move, what each role
          may NOT do in each status, the field checks of every form and dialog, what each role may not open,
          the dashboard figures, the notifications and integrations, and one case for every requirement no
@@ -15,17 +16,18 @@ draft    writes projects/<slug>/uat/<date> uat scripts v<version>.json from the 
          It refuses to replace a draft of the same name (refined by hand, perhaps) unless --force.
 check    every requirement covered by a case or excluded with a reason, case ids unique, every case with
          steps and an expected result for each, roles and screens that exist, nothing internal
-render   checks the scripts, then writes next to them:
+render   checks the scripts, then writes into the project's "6 UAT" folder (next to them in the old layout):
            "<name>.xlsx"  the workbook for the testers: one row per step, with Actual result, Pass/Fail,
                           Tester, Date and Defect ref to fill in, and a summary of coverage and results
            "<name>.docx"  the test scripts for the client, in the company's document format
-         Without a file name it takes the newest scripts in projects/<slug>/uat/
+         Without a file name it takes the newest scripts in the project's UAT folder
 results  reads a workbook the testers filled in and lists the failed and blocked steps
 
 uat/<date> uat scripts v<version>.json:
 {
   "project": "Leave Request System", "client": "Sample Client Sdn. Bhd.", "spec_version": "0.1",
   "spec": "output/spec-v0.1.yaml",                         the spec it was written from, in the project folder
+                                                           (written the old layout's way; read in either)
   "based_on": "the requirements document v0.1, issued on 6 November 2026",
   "date": "2026-11-06",
   "cases": [
@@ -103,7 +105,9 @@ def load_yaml(path):
 
 
 def read_register(project):
-    path = Path(project) / "register.json"
+    import layout
+
+    path = layout.register_json(project)
     if not path.exists():
         return []
     try:
@@ -114,17 +118,19 @@ def read_register(project):
 
 def choose_spec(project, current=False):
     """(spec, path relative to the project, what it is in words): the version issued last, unless --current."""
+    import layout
     import project as project_tool
 
     project = Path(project)
     if not current:
         for record in reversed(project_tool.load_issues(project)):
-            snap = project / "output" / f"spec-v{record.get('version')}.yaml"
+            snap = layout.snapshot(project, record.get("version"))
             if snap.exists():
                 spec = load_yaml(snap)
-                return spec, snap.relative_to(project).as_posix(), (
+                # Recorded the old layout's way, which tools/layout.py reads in either layout.
+                return spec, f"output/spec-v{record.get('version')}.yaml", (
                     f"the requirements document v{record['version']}, issued on {readable(record.get('date', ''))}")
-    path = project / "spec" / "app.yaml"
+    path = layout.spec_file(project)
     if not path.exists():
         sys.exit(f"No spec at {path}: build the mock-up first (build-mockup), then write the UAT scripts.")
     spec = load_yaml(path)
@@ -833,7 +839,9 @@ def draft(spec, spec_path, based_on, date):
 
 # ---------------------------------------------------------------- checks
 def scripts_file(project, name=None):
-    folder = Path(project) / "uat"
+    import layout
+
+    folder = layout.uat_source(project)
     if name:
         path = Path(name) if Path(name).exists() else folder / name
         if not path.exists():
@@ -875,7 +883,9 @@ def check(scripts, project):
             errors.append(f"missing {key}")
     if scripts.get("cases") and not isinstance(scripts["cases"], list):
         return errors + ["cases must be a list"], warnings
-    spec_path = Path(project) / str(scripts.get("spec") or "spec/app.yaml")
+    import layout
+
+    spec_path = layout.resolve(project, str(scripts.get("spec") or "spec/app.yaml"))
     if not spec_path.exists():
         return errors + [f"the spec it was written from, {scripts.get('spec')}, is not in the project"], warnings
     spec = load_yaml(spec_path)
@@ -958,7 +968,9 @@ def load(project, name):
         print(f"{path.name} needs fixing:")
         print("\n".join(f"  - {e}" for e in errors))
         sys.exit(1)
-    return path, scripts, load_yaml(Path(project) / scripts["spec"])
+    import layout
+
+    return path, scripts, load_yaml(layout.resolve(project, scripts["spec"]))
 
 
 def summary(scripts, spec):
@@ -1204,10 +1216,13 @@ def read_results(path):
 
 
 def cmd_results(project, name):
+    import layout
+
+    folder = layout.uat_output(project)
     if name:
-        path = Path(name) if Path(name).exists() else Path(project) / "uat" / name
+        path = Path(name) if Path(name).exists() else folder / name
     else:
-        found = sorted((Path(project) / "uat").glob("*.xlsx")) if (Path(project) / "uat").exists() else []
+        found = sorted(folder.glob("*.xlsx")) if folder.exists() else []
         path = found[-1] if found else None
     if not path or not path.exists():
         sys.exit("No filled-in UAT workbook found: name the file.")
@@ -1258,13 +1273,15 @@ def main():
             sys.exit(f"--date {date} is not a date: write it as YYYY-MM-DD")
         spec, rel, based_on = choose_spec(project, "--current" in flags)
         scripts = draft(spec, rel, based_on, date)
-        folder = Path(project) / "uat"
-        folder.mkdir(exist_ok=True)
+        import layout
+
+        folder = layout.uat_source(project)
+        folder.mkdir(parents=True, exist_ok=True)
         out = folder / f"{date} uat scripts v{scripts['spec_version']}.json"
         if out.exists() and "--force" not in flags:
             sys.exit(f"{out.name} exists already (it may have been refined since): pass --force to replace it, or refine that one.")
         out.write_text(json.dumps(scripts, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-        current = (load_yaml(Path(project) / "spec" / "app.yaml").get("project") or {}).get("version") if rel != "spec/app.yaml" else None
+        current = (load_yaml(layout.spec_file(project)).get("project") or {}).get("version") if rel != "spec/app.yaml" else None
         sm = summary(scripts, spec)
         todo = sum(1 for c in scripts["cases"] if c.get("todo"))
         print(f"UAT draft for {scripts['project']}, written from {based_on} ({rel})")
@@ -1284,8 +1301,12 @@ def main():
     if command == "check":
         print(f"OK: {path.name}: {line}")
         return
-    xlsx = render_xlsx(scripts, spec, path.with_suffix(".xlsx"))
-    docx = render_docx(scripts, spec, path.with_suffix(".docx"))
+    import layout
+
+    out = layout.uat_output(project) if path.parent.resolve() == layout.uat_source(project).resolve() else path.parent
+    out.mkdir(parents=True, exist_ok=True)
+    xlsx = render_xlsx(scripts, spec, out / path.with_suffix(".xlsx").name)
+    docx = render_docx(scripts, spec, out / path.with_suffix(".docx").name)
     print(f"UAT scripts for {scripts['project']}: {line}")
     print(f"  Workbook for the testers:   {xlsx}")
     print(f"  Test scripts for the client: {docx}")

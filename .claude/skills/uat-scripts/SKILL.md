@@ -9,7 +9,7 @@ Scopes of work often sell "prepare test scenarios for UAT". Testing against what
 argument about each result short: the expected result is the agreement. The spec already holds what the
 tests need, so the draft is made from it; your job is to make it sharp, plain and complete.
 
-It produces, in `projects/<slug>/uat/`:
+It produces, in the project's `6 UAT` folder (the JSON in `_blueprint/uat/`):
 - `<date> uat scripts v<version>.json`: the scripts, Blueprint's own (the source of the other two);
 - `<same name>.xlsx`: the **workbook for the client's testers**, one row per step, with Actual result,
   Pass/Fail, Tester, Date and Defect ref to fill in, and a summary of coverage and results;
@@ -18,7 +18,7 @@ It produces, in `projects/<slug>/uat/`:
 ## 1. Draft
 
 1. `python -I tools/uat.py draft projects/<slug>`. It works from the version issued to the client last
-   (`output/spec-v<version>.yaml`), because UAT tests what was signed, and says which. With nothing
+   (`_blueprint/output/spec-v<version>.yaml`), because UAT tests what was signed, and says which. With nothing
    issued it uses the current spec: tell the user the scripts follow a version not yet signed. If the user
    wants the current spec although a version was issued, add `--current` and say what changed since.
 2. Read what it printed and the JSON. The draft has, in this order: the main process (each role in turn),
@@ -79,7 +79,7 @@ than editing the Word or Excel file.
 ## Hand over
 
 Tell the user, in plain words:
-- **What was made and where**: the workbook and the test scripts in the project's `uat` folder. Both are
+- **What was made and where**: the workbook and the test scripts in the project's `6 UAT` folder. Both are
   for the client's testers; the JSON is Blueprint's and stays with you.
 - **Coverage**: how many scenarios and steps, how many requirements are covered (for example "all 10"),
   and each one not tested in UAT with its reason.

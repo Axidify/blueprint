@@ -13,8 +13,8 @@ a CR?", or drop in a CR list or UAT defect list; see the `change-request` skill 
 
 ## What it is checked against
 
-The version recorded as issued with `python -I tools/project.py issue <slug>` (`output/issued.json`), read
-from the spec snapshot the generator keeps beside the document (`output/spec-v<version>.yaml`). Changes made
+The version recorded as issued with `python -I tools/project.py issue <slug>` (`_blueprint/output/issued.json`), read
+from the spec snapshot the generator keeps of each version (`_blueprint/output/spec-v<version>.yaml`). Changes made
 to the spec after that version went out are not what the client signed, and are left out.
 
 When nothing has been issued, Blueprint compares with the current spec and says so: there is no signed
@@ -40,7 +40,9 @@ and a price as the client should read it only when the project lead gives them.
 
 ## The files
 
-Everything is in the project's `changes/` folder.
+The client's notes are in the project's `7 Change requests` folder, the CR log's Excel file in `Internal – estimates and
+change requests`, and `crs.json` in `_blueprint/changes/` (all three in `changes/` in a project still in the old folder
+layout).
 
 | File | For | Contents |
 |---|---|---|
@@ -57,7 +59,7 @@ building blocks, confidence, gap patterns or the team's reasoning.
 approved or built CR needs the mandays sold. An Ambiguous request stays `raised` until the client answers its
 register question; its verdict then becomes In scope or New.
 
-## The CR log (`changes/crs.json`)
+## The CR log (`_blueprint/changes/crs.json`)
 
 ```json
 {

@@ -25,7 +25,11 @@ delivery. It also tells the lead developer when the spec changed since the last 
 next step, the open client questions and internal fixes, and every document in the order of the stages
 above, each saying who it is for (from the client, for the client, internal). Blueprint keeps it up to
 date as its tools write into the project. A project with a mock-up also has **Open the mock-up** beside
-it, which starts the mock-up so the comments typed in it are saved.
+it, which starts the mock-up so the comments typed in it are saved. Beside them, numbered folders hold the
+documents in the same order (`1 Client documents`, `2 Reviews`, `3 Workshops`, `4 Mock-up screenshots`,
+`5 Requirements document`, `6 UAT`, `7 Change requests`), estimates and the CR log are in `Internal – estimates
+and change requests`, and Blueprint's working files are in `_blueprint`. A project started before this layout
+can be moved to it: say "migrate the folders" (see [Workspace](workspace.md#moving-a-project-to-the-new-folder-layout)).
 
 A document for a system you built before (an archived project, or one delivered and closed) is matched to
 that work, so its change requests and actual effort inform the new phase.
@@ -39,7 +43,7 @@ or don't answer about, stays in the inbox with a note of why, and the start-up s
 
 ## How the pieces connect
 
-- **One spec per project** (`projects/<name>/spec/app.yaml`) drives both the mock-up and the requirements document, so the
+- **One spec per project** (in the project's `_blueprint/spec/app.yaml`) drives both the mock-up and the requirements document, so the
   screenshots, field tables, statuses and access matrix cannot contradict each other. Change things in
   the spec, never in the generated Word file. See [Spec format](spec-format.md).
 - **One register per project** collects every question, gap, assumption and decision from every stage, with

@@ -7,7 +7,7 @@ statuses and rules, and every requirement is tested or excluded with a reason. A
 
 ## What you get
 
-In `projects/<name>/uat/`:
+In the project's `6 UAT` folder (the `.json` in `_blueprint/uat/`):
 
 | File | For | What it is |
 |---|---|---|
@@ -19,7 +19,7 @@ Neither client file holds mandays, rates, cost, internal register items or platf
 
 ## Which version is tested
 
-The scripts follow the version issued to the client last (`output/spec-v<version>.yaml`), because UAT
+The scripts follow the version issued to the client last (`_blueprint/output/spec-v<version>.yaml`), because UAT
 tests what was signed. With nothing issued yet they follow the current spec, and say so. The document
 names the version on its first page.
 

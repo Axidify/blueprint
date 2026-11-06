@@ -15,14 +15,17 @@ if "%PROJECT%"=="" (
   if errorlevel 1 pause
   exit /b
 )
+rem A project's spec is in _blueprint\spec\ (the folder layout of new projects) or spec\ (a project not yet moved).
 set "FOLDER=projects\%PROJECT%"
 if exist "%PROJECT%\spec\app.yaml" set "FOLDER=%PROJECT%"
-if not exist "%FOLDER%\spec\app.yaml" (
-  echo No mock-up spec found for "%PROJECT%". Projects with a mock-up:
-  for /d %%P in (projects\*) do if exist "%%P\spec\app.yaml" echo   %%~nxP
-  pause
-  exit /b 1
-)
+if exist "%PROJECT%\_blueprint\spec\app.yaml" set "FOLDER=%PROJECT%"
+if exist "%FOLDER%\spec\app.yaml" goto found
+if exist "%FOLDER%\_blueprint\spec\app.yaml" goto found
+echo No mock-up spec found for "%PROJECT%". Projects with a mock-up:
+for /d %%P in (projects\*) do if exist "%%P\spec\app.yaml" (echo   %%~nxP) else if exist "%%P\_blueprint\spec\app.yaml" echo   %%~nxP
+pause
+exit /b 1
+:found
 echo.
 echo Opening the mock-up. Press Feedback on the bar in the bottom-right corner to collect comments.
 echo Keep this window open during the session; close it when you are done.

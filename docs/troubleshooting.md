@@ -20,10 +20,10 @@ python -I tools/doctor.py
 | "projects is a real folder with files in it" | Move the files into the workspace's `projects/` folder, delete the empty folder, run `setup.cmd` |
 | The requirements document shows a different font from the design | Run `setup.cmd` to install Geist and Geist Mono, restart Word, and generate again |
 | The requirements document has an old table of contents | Word was not available. Open the document, right-click the table of contents and choose Update Field |
-| An answer I typed into `register.xlsx` is gone | Fixed in this version: Blueprint now reads the Excel file before writing it again. For an answer lost earlier, type it in again and tell Blueprint the client answered |
+| An answer I typed into the register's Excel file is gone | Fixed in this version: Blueprint now reads the Excel file before writing it again. For an answer lost earlier, type it in again and tell Blueprint the client answered |
 | Blueprint says `register.xlsx` and `register.json` disagree | The same item was changed in Excel and by Blueprint. It shows both values: tell Blueprint which one is right |
 | Blueprint says it cannot write `register.xlsx` | The file is open in Excel. Save and close it, then ask again |
-| Extraction says the folder already holds files that are not an earlier extraction | It was pointed at a folder with other files in it, and touched nothing. Ask Blueprint to review the document again; it uses a folder of its own under `reviews/` |
+| Extraction says the folder already holds files that are not an earlier extraction | It was pointed at a folder with other files in it, and touched nothing. Ask Blueprint to review the document again; it uses a folder of its own under `_blueprint/reviews/` |
 | A line of an estimate is "not priced" and says the rate cannot be read | The rate cell in `knowledge/building-blocks.md` does not start with a number or a range. Write it as `3` or `2–4`, with a point for decimals; a note may follow the figure |
 | The start-up summary shows "! register.json could not be read" under a project | That project's file is damaged, often a half-synced copy from OneDrive or SharePoint. The other projects are unaffected. Ask Blueprint to check the file, or restore the last good version from the shared folder's version history |
 | The generator prints warnings | Fix them in the spec, not in the Word file (literal "section 3.2" references, requirements that mention the mock-up, missing images), then generate again |
@@ -39,8 +39,10 @@ python -I tools/doctor.py
 | The generator says a version is issued and locked | That version went to the client. Bump `project.version` in the spec (and add a history entry), then generate again |
 | The build says a version was issued and its saved mock-up is kept | That version went to the client, so its saved copy is not replaced. What you built is the working mock-up. Bump `project.version` in the spec (ask Blueprint to) to keep it as a new version |
 | The build lists spec errors such as "column 'x' is not a field of the data" | A name in the spec does not match the sample data, or a setting is misspelt. The message suggests the likely name; ask Blueprint to fix the spec |
-| I need to show the client an earlier mock-up | `present.cmd <project> --version 0.2` (every mock-up version is kept in `mockup/versions/`) |
-| `present.cmd` says no mock-up spec found | The project has no `spec/app.yaml` yet. Ask Blueprint to "build a mock-up" first |
+| I need to show the client an earlier mock-up | `present.cmd <project> --version 0.2` (every mock-up version is kept in `_blueprint/mockup/versions/`) |
+| `present.cmd` says no mock-up spec found | The project has no spec (`_blueprint/spec/app.yaml`) yet. Ask Blueprint to "build a mock-up" first |
+| Migrating a project's folders says nothing was moved | It says why: the project's mock-up is open (close its window), a live session is still open (end it), one of its Word, Excel or PDF files is open on someone's computer (close it; a `~$` file beside it shows which), or a folder of the new layout is already there (move or rename it). Then say "migrate the folders" again |
+| I cannot find a project's spec, register or mock-up folder | In the project folder layout they are in `_blueprint/`. A project still in the old layout keeps them at the top; both work. Open `Project overview.html` to find any document |
 | Feedback comments are not saved | The mock-up was opened as a file instead of through `present.cmd`. Comments are kept in the browser: press **Export feedback** and drop the file in `inbox/` |
 | A red message says a comment was NOT saved, or the Feedback button says "1 not saved" | The window that started the mock-up was closed, or the network dropped. The comment is kept in that browser. Start `present.cmd` for the project again, then press **Feedback** → **Try again**. If that is not possible, press **Export unsaved** and drop the file in `inbox/` |
 | `present.cmd` says the port is already in use | Another mock-up is still open. Close its window and start again, or run both at once with a different port for the second: `present.cmd <project> --port 8766` |

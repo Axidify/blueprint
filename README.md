@@ -49,9 +49,10 @@ automatically. Submitting a form or approving a request plays out on screen, and
 | Folder | What is in it |
 |---|---|
 | `inbox/` | Drop files here: briefs, requirements drafts, notes, feedback exports. Then say "process my inbox". |
-| `projects/<name>/` | One folder per client project: documents, register, mock-up, generated requirements document. |
-| `projects/<name>/register.xlsx` | The questions and gaps to take back to the client. |
-| `projects/<name>/output/` | Generated requirements document (Word and PDF). |
+| `projects/<name>/` | One folder per client project. Open its `Project overview.html` first. |
+| `projects/<name>/Questions and fixes register.xlsx` | The questions and gaps to take back to the client. |
+| `projects/<name>/1 Client documents/` … `7 Change requests/` | What people open, numbered in the order of the process: the client's documents, reviews, workshops, mock-up screenshots, the requirements document (Word and PDF), UAT, change requests. Estimates and the CR log are in `Internal – estimates and change requests/`, never sent. |
+| `projects/<name>/_blueprint/` | Blueprint's working files (spec, register, mock-up, comments). Leave them to Blueprint. |
 | `knowledge/` | What the team has learnt: gap patterns, estimating building blocks, requirements standard. |
 
 `inbox/`, `projects/` and `knowledge/` live in your **workspace**, together with your company profile
