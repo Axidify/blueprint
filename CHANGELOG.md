@@ -11,6 +11,8 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-11-07
+
 ### Fixed
 - **A box drawn for something new stays in its place** when the Feedback or What changed panel opens or
   closes, or the window changes size: it keeps its place across the area it was drawn in, and its distance
@@ -820,7 +822,8 @@ First release.
 - One-step setup (`setup.cmd`) with a machine check, `present.cmd` for sessions, shared Claude Code
   permissions and a start-up status greeting.
 
-[Unreleased]: https://github.com/Axidify/blueprint/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/Axidify/blueprint/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/Axidify/blueprint/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/Axidify/blueprint/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/Axidify/blueprint/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/Axidify/blueprint/compare/v1.1.0...v1.2.0
