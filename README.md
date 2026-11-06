@@ -8,6 +8,10 @@ the requirements document with screenshots, and learns from every project's chan
 
 You use it by talking to Claude Code. There are no commands to learn.
 
+https://github.com/user-attachments/assets/94a044d1-73c5-4213-94d9-ca1990de57b6
+
+*One-minute overview. The client in the video is fictional; results vary with the model and effort setting.*
+
 ## Get started (5 minutes)
 
 1. **Install** [Claude Code](https://claude.com/claude-code), [Python 3.12](https://www.python.org/downloads/)
