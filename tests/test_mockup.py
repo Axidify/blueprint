@@ -2765,3 +2765,24 @@ def test_marking_a_comment_writes_the_comments_workbook(tmp_path):
     outcome = ws.cell(row=2, column=header.index("Outcome") + 1)
     assert outcome.number_format == sheets.DOT_FORMAT
     assert "Internal" in ws.oddHeader.center.text
+
+
+# ---------------------------------------------------------------------- comments drawn as a box
+def test_a_box_comment_reads_as_several_things_or_something_new():
+    labels = {"from": "From Date", "to": "To Date"}
+    several = {"element": "field:from", "elements": ["field:from", "field:to"], "box": {"x": 1, "y": 2, "w": 3, "h": 4}}
+    new = {"element": "section:Leave Details", "box": {"x": 1, "y": 2, "w": 3, "h": 4}}
+    empty = {"element": "region:page background", "box": {"x": 1, "y": 2, "w": 3, "h": 4}}
+    assert mockup.readable_where(several, labels) == "2 things: Field: From Date; Field: To Date"
+    assert mockup.readable_where(new, labels) == "New, in Section: Leave Details"
+    assert mockup.readable_where(empty, labels) == "New, on the screen"
+    assert mockup.readable_where({"element": "field:to"}, labels) == "Field: To Date"
+
+
+def test_the_room_gets_a_comments_box_and_its_things_back():
+    """So every laptop draws the box where it was drawn, after a reload too."""
+    saved = [{"id": "FB-001", "screen": "s", "element": "field:a", "elements": ["field:a", "field:b"], "box": {"x": 1, "y": 2, "w": 3, "h": 4},
+              "text": "t", "owner": "secret", "note": "internal"}]
+    room = mockup.for_the_room(saved)[0]
+    assert room["box"] == {"x": 1, "y": 2, "w": 3, "h": 4} and room["elements"] == ["field:a", "field:b"]
+    assert "note" not in room and "owner" not in room

@@ -261,6 +261,11 @@ input.fb-field { height: 36px; }
 body.clean .fb-tools, body.clean .fb-pin, body.clean .fb-hide, body.clean .cw-tag { display: none !important; }
 
 /* Motion shows what changed and nothing more. None in a screenshot, and none for people who ask for less. */
+/* Something new, drawn on the screen in feedback mode: a dashed box where it should go, with its number. */
+.fb-box { position: absolute; z-index: 64; border: 2px dashed var(--fb-mark); background: rgba(42, 111, 214, .08); border-radius: 8px; cursor: pointer; box-sizing: border-box; }
+.fb-box.drawing { pointer-events: none; background: rgba(42, 111, 214, .12); }
+.fb-box.unsent { border-color: var(--fb-red-solid); background: rgba(255, 69, 58, .08); }
+body.fb-active #app { -webkit-user-select: none; user-select: none; }  /* dragging draws a box, it does not select text */
 @keyframes fb-rise { from { opacity: 0; transform: translateY(8px); } }
 @keyframes fb-pop { from { opacity: 0; transform: translateY(8px) scale(.98); } }
 @keyframes fb-fade { from { opacity: 0; } }

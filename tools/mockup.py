@@ -1124,7 +1124,7 @@ def feedback_lock(fb_file):
 
 # What a mock-up is told about a comment. Everyone with the room's link can read this, so the internal part
 # stays out: the note, the register item, and whether it was called a possible change request.
-ROOM_FIELDS = ("id", "screen", "role", "element", "text", "author", "x", "y", "time", "received", "version", "build", "edited")
+ROOM_FIELDS = ("id", "screen", "role", "element", "elements", "box", "text", "author", "x", "y", "time", "received", "version", "build", "edited")
 ROOM_WORDS = {"received": "Received", "working": "Working on it", "applied": "Applied", "noted": "Noted for follow-up"}
 
 
@@ -2620,6 +2620,17 @@ ELEMENT_WORDS = {"field": "Field", "button": "Button", "column": "Column", "sect
                  "action": "Action", "header": "Top bar", "title": "Title", "dialog": "Dialog", "row": "Row", "tab": "Tab"}
 
 
+def readable_where(comment, labels):
+    """What a comment is about, in words: one thing, several a box was drawn around, or something new."""
+    several = comment.get("elements") if isinstance(comment.get("elements"), list) else []
+    if len(several) > 1:
+        return f"{len(several)} things: " + "; ".join(readable_element(e, labels) for e in several)
+    if comment.get("box"):
+        element = comment.get("element")
+        return "New, " + (f"in {readable_element(element, labels)}" if element and element != "region:page background" else "on the screen")
+    return readable_element(comment.get("element"), labels)
+
+
 def readable_element(element, labels):
     """'field:uom' -> 'Field: Unit'; 'cell:Status|JOB-1' -> 'Cell: Status, JOB-1'; '' -> 'The screen'."""
     kind, _, name = str(element or "").partition(":")
@@ -2673,7 +2684,7 @@ def write_comments_workbook(project):
         screen = screens.get(c.get("screen")) or {}
         who = " · ".join(x for x in (c.get("author"), roles.get(c.get("role")) or c.get("role")) if x)
         values = [c["id"], f"v{c['version']}" if c.get("version") else "", screen.get("title") or c.get("screen") or "",
-                  readable_element(c.get("element"), labels), c.get("text", ""), who, str(c.get("received") or c.get("time") or "")[:10],
+                  readable_where(c, labels), c.get("text", ""), who, str(c.get("received") or c.get("time") or "")[:10],
                   OUTCOMES.get(c.get("status"), (str(c.get("status")), "grey"))[0], c.get("note", ""), c.get("register_id", ""),
                   f"v{c['done_in']}" if c.get("done_in") else ""]
         for col, value in enumerate(values, 1):
@@ -2747,7 +2758,9 @@ def show_feedback(project):
     for screen, lst in by_screen.items():
         print(f"\n## {screen}")
         for it in lst:
-            print(f"- {it.get('id', '')} [{it.get('element') or 'screen'}] ({it.get('author') or 'anon'}, {it.get('role')}, v{it.get('version')}): {it.get('text')}"
+            several = it.get("elements") if isinstance(it.get("elements"), list) and len(it.get("elements")) > 1 else None
+            place = f"{len(several)} things: {', '.join(several)}" if several else f"new, in {it.get('element') or 'screen'}" if it.get("box") else it.get("element") or "screen"
+            print(f"- {it.get('id', '')} [{place}] ({it.get('author') or 'anon'}, {it.get('role')}, v{it.get('version')}): {it.get('text')}"
                   + (" (edited)" if it.get("edited") else "") + (f"  -> {it['status']}" if it.get("status") else ""))
 
 

@@ -10,7 +10,10 @@ description: Turn client feedback from a mock-up session (comments saved in the 
 - In-mock-up comments: `python -I tools/mockup.py feedback projects/<slug>` (from
   `_blueprint/feedback/feedback.json`). It shows each comment's latest text, marked "(edited)" when it
   was changed in the mock-up, and leaves out comments deleted there (kept in the file with `withdrawn`;
-  the earlier texts are in `history`). Work from the latest text and skip withdrawn comments. If the mock-up
+  the earlier texts are in `history`). Work from the latest text and skip withdrawn comments. A comment drawn as a box is about
+  several things at once (`[2 things: field:from, field:to]`: change them together) or asks for something new
+  where there was nothing (`[new, in <element>]`: it goes in or beside that element, at the place drawn; its
+  `box` holds the position on the page). Something new is a Change if it is within scope, else a Scope item. If the mock-up
   was opened without the server, or the server stopped during the session and comments were exported with
   **Export unsaved**, the BA will have a `feedback-<date>.json`; merge it into `feedback.json`, skipping
   comments that are already there and those marked `withdrawn`.

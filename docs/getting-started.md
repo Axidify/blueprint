@@ -86,7 +86,9 @@ never appears in the document's pictures: it shows which mock-up version is open
 role you are signed in as, and **Feedback** (or F2) starts commenting. The arrows at its left fold it away
 to one small button when it is in the way, and while the Feedback panel is open the screen makes room for
 it. Click anything on the screen and type the
-client's comment. Comments are saved to the project automatically. Afterwards, say
+client's comment. Or drag a box: around several things for one comment about all of them ("make these one
+date range"), or where there is nothing yet for something new ("an Export button here"); the box stays drawn
+on the screen with its number. Comments are saved to the project automatically. Afterwards, say
 **"apply the feedback"**.
 
 Buttons such as Approve or Reject move the sample record to its next status when the mock-up was built
