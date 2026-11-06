@@ -318,8 +318,10 @@ def drawn(spec):
 
     p = spec.get("project") or {}
     part = {"project": {k: p.get(k) for k in DRAWN_PROJECT}, "data": spec.get("data")}
-    for key in ("roles", "statuses", "screens", "dialogs", "process_flow"):
+    for key in ("roles", "screens", "dialogs", "process_flow"):
         part[key] = strip(spec.get(key))
+    # Of a status the mock-up draws its name and colour; its meaning and its rules are for the document.
+    part["statuses"] = [{k: s.get(k) for k in ("id", "name", "color")} if isinstance(s, dict) else s for s in spec.get("statuses") or []]
     return part
 
 

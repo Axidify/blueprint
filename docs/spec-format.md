@@ -11,7 +11,8 @@ One YAML file per project drives both the clickable mock-up (`tools/mockup.py`) 
 | `project` | `name`, `short_name` (shown in the logo box), `client`, `client_short`, `version`, `platform`, `theme` (`joget`, `modern` or `vivid`), `primary_color`, `prepared_by`, `reviewed_by`, `approved_by`, `date`, `status` (shown on the cover and in the page header, e.g. "Draft for client review", "Signed off"), `history: [{version, date, author, changes}]` (document version history table) |
 | `overview` | List of paragraphs for the start of document section 1.0 |
 | `roles` | `id`, `name`, `description`, `scope` (data scope, e.g. "Own branch only"), `user` (sample person shown in the mock-up header) |
-| `statuses` | `id`, `name`, `meaning`, and optionally `color` (`green`, `amber`, `red` or `grey`): the colour of that status wherever the mock-up shows it (see [Status colours](#status-colours)). Becomes the requirements document status table |
+| `scope` | `{in_scope: [...], out_of_scope: [...], assumptions: [...]}`, each a list of sentences. Becomes the chapter "Scope and assumptions"; left out when the spec has none. Write what the client might otherwise expect to get under `out_of_scope` |
+| `statuses` | `id`, `name`, `meaning`, the status rules (below), and optionally `color` (`green`, `amber`, `red` or `grey`): the colour of that status wherever the mock-up shows it (see [Status colours](#status-colours)). Becomes the requirements document status table |
 | `data` | Sample records, by list name. The first key of each record is its identifier |
 | `screens` | The screens (below) |
 | `dialogs` | Pop-ups opened by buttons (below) |
@@ -27,6 +28,26 @@ One YAML file per project drives both the clickable mock-up (`tools/mockup.py`) 
 | `extra_sections` | Free-form document sections after the NFRs: `{title, appendix, content: [{heading} \| {text} \| {bullets} \| {table: {header, rows}} \| {image, caption}]}`. `appendix: true` puts it after sign-off as Appendix A, B… Text may use `{client}` and `{system}`. In a table, an unquoted `No` or `Yes` is printed as that word (a first column headed `No` is the narrow numbering column); quote `"On"`, `"Off"`, `"True"` and `"False"` to keep those exact words |
 
 Optional files next to `app.yaml`: `client-logo.png` (document cover) and `process-flow.png` (document section 1.3).
+
+## Status rules
+
+Who may change a record while it is in a status, and where it can go next. They are printed as a table
+under the statuses in the document; the mock-up does not use them.
+
+```yaml
+statuses:
+  - id: pending
+    name: Pending Approval
+    meaning: Submitted and waiting for the line manager.
+    edit: none                  # role ids, or all, or none
+    cancel: [employee]
+    delete: none
+    next: [approved, rejected, cancelled]    # status ids; [] for a final status
+```
+
+Leave a key out when the client has not decided it: the document shows "To be confirmed" there and the
+generator warns, so it is not forgotten (add a register question for it). A spec with no rules at all
+still generates, with a note.
 
 ## Timeline
 
@@ -141,7 +162,7 @@ sections are added. Use a reference the generator resolves, and it warns about a
 |---|---|
 | `{ref:screen:<screen id>}` | the screen's section, e.g. "section 4.3" |
 | `{ref:role:<role id>}` | the role's section in Requirements by role |
-| `{ref:section:roles\|access\|flow\|integrations\|notifications\|glossary\|users\|by-role\|requirements\|screens\|nfr\|timeline\|decisions}` | that section's number (`open-issues` still works for `decisions`) |
+| `{ref:section:roles\|access\|flow\|integrations\|notifications\|glossary\|users\|scope\|by-role\|requirements\|screens\|nfr\|timeline\|decisions}` | that section's number (`open-issues` still works for `decisions`) |
 | `{ref:extra:<extra section title>}` | "section n.0" or "Appendix X" |
 | `{ref:req:<FR id>}` | the requirement group id |
 
@@ -158,5 +179,6 @@ screens, roles and dialogs, duplicate ids, status colours) and the parts only th
 requirement group needs an `id` (used once), a `title` and at least one item with text; a notification its
 `event` and `recipient`; a non-functional requirement its `area` and `requirement`; a glossary entry its
 `term` and `meaning`; every screen a `title`, every field and list column a `label`. Extra sections need
-titles that differ from each other, and table rows as long as their header. Timeline weeks count from 1,
+titles that differ from each other, and table rows as long as their header. Status rules must name roles
+and statuses that exist, and `scope` may hold only `in_scope`, `out_of_scope` and `assumptions`, each a list. Timeline weeks count from 1,
 and an activity's `end` is not before its `start`. Mistakes are listed together and nothing is written.

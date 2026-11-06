@@ -100,6 +100,8 @@ writes a PDF.
   version) does not count as a change.
 - **The PDF always matches the Word file.** A PDF from an earlier run is removed before the new document
   is written. If the PDF or the document is open in another program, the run stops and says so.
+- **Notes** are printed for things worth knowing that do not hold a version back, such as a spec with no
+  status rules. Warnings do hold it back.
 - **When the Word step fails it says why.** "Word not available" means Word is not installed; anything
   else is reported as a failure with the reason. Word is closed whatever happens, so it is never left
   running hidden with the document locked.

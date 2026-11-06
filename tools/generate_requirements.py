@@ -58,7 +58,12 @@ def deep_merge(base, over):
 
 
 FRONT = ("cover", "at_a_glance", "about", "contents")
-CHAPTERS = ("users_access", "by_role", "requirements", "screens", "nfr", "timeline", "extras", "decisions", "signoff")
+CHAPTERS = ("users_access", "scope", "by_role", "requirements", "screens", "nfr", "timeline", "extras", "decisions", "signoff")
+STATUS_RULES = (("edit", "May edit"), ("cancel", "May cancel"), ("delete", "May delete"))  # plus `next`
+SCOPE_PARTS = (("in_scope", "In scope"), ("out_of_scope", "Out of scope"), ("assumptions", "Assumptions"))
+SCOPE_INTRO = ("What this version of {system} covers, what it leaves out, and what has been assumed. "
+               "Work outside this scope is agreed separately as a change request.")
+DECISIONS_MADE_INTRO = "Questions raised during the requirement study and the answers given. These answers are part of what is signed."
 OPTIONAL_COLORS = ("heading",)  # may be left empty
 
 
@@ -173,8 +178,37 @@ def document_errors(spec):
         errors.append("project: missing 'name'")
     for i, r in each("roles"):
         need(f"role {i}", r, "id", "name")
+    role_ids = {r.get("id") for r in spec.get("roles") or [] if isinstance(r, dict)}
+    status_ids = {s.get("id") for s in spec.get("statuses") or [] if isinstance(s, dict)}
     for i, s in each("statuses"):
-        need(f"status {i}", s, "name")
+        if not need(f"status {i}", s, "name"):
+            continue
+        for key, _ in STATUS_RULES:
+            value = s.get(key)
+            if value is None or value in ("all", "none"):
+                continue
+            if not isinstance(value, list):
+                errors.append(f"status {s['name']}: '{key}' must be a list of role ids, or all, or none")
+            else:
+                for r in value:
+                    if r not in role_ids:
+                        errors.append(f"status {s['name']}: '{key}' names an unknown role '{r}'")
+        nxt = s.get("next")
+        if nxt is not None and not isinstance(nxt, list):
+            errors.append(f"status {s['name']}: 'next' must be a list of status ids (empty for a final status)")
+        for other in nxt if isinstance(nxt, list) else []:
+            if other not in status_ids:
+                errors.append(f"status {s['name']}: 'next' names an unknown status '{other}'")
+    scope = spec.get("scope")
+    if scope is not None:
+        if not isinstance(scope, dict):
+            errors.append("scope: must have in_scope, out_of_scope and assumptions")
+        else:
+            for key in scope:
+                if key not in dict(SCOPE_PARTS):
+                    errors.append(f"scope: '{key}' is not one of in_scope, out_of_scope, assumptions")
+                elif not isinstance(scope[key], list) or any(not isinstance(x, str) or not x.strip() for x in scope[key]):
+                    errors.append(f"scope: '{key}' must be a list of sentences")
     for i, s in each("screens"):
         if not need(f"screen {s.get('id', i) if isinstance(s, dict) else i}", s, "id", "title"):
             continue
@@ -924,9 +958,11 @@ def plan_sections(spec, fmt, reg_items):
             continue
         if key == "timeline" and not spec.get("timeline"):
             continue
+        if key == "scope" and not spec.get("scope"):
+            continue
         n += 1
         chapters.append((key, chap(n), fmt["titles"][key]))
-        refs[f"section:{ {'users_access': 'users', 'by_role': 'by-role', 'requirements': 'requirements', 'screens': 'screens', 'nfr': 'nfr', 'timeline': 'timeline', 'decisions': 'open-issues'}[key] }"] = f"section {chap(n)}"
+        refs[f"section:{ {'users_access': 'users', 'scope': 'scope', 'by_role': 'by-role', 'requirements': 'requirements', 'screens': 'screens', 'nfr': 'nfr', 'timeline': 'timeline', 'decisions': 'open-issues'}[key] }"] = f"section {chap(n)}"
         if key == "decisions":
             refs["section:decisions"] = f"section {chap(n)}"
         if key == "users_access":
@@ -1010,9 +1046,11 @@ def build(project):
     reg_file = project / "register.json"
     items = json.loads(reg_file.read_text(encoding="utf-8"))["items"] if reg_file.exists() else []
     open_items = [it for it in items if it["audience"] == "client" and it["status"] not in ("resolved", "wont-fix")]
+    made_items = [it for it in items if it["audience"] == "client" and it["status"] == "resolved" and str(it.get("answer") or "").strip()]
     chapters, refs = plan_sections(spec, fmt, items)
     labels = fmt["labels"]
     warnings = ["screenshots: " + problem for problem in mockup.screenshot_problems(project, spec)]
+    notes = []  # worth knowing, but no reason to hold a version back
     roles = spec["roles"]
     role_ids = [r["id"] for r in roles]
     screens = spec["screens"]
@@ -1256,6 +1294,39 @@ def build(project):
                     w.figure(flow, (spec.get("process_flow") or {}).get("title") or "Process flow")
                 w.table(["Status", "Meaning"], [[[(s["name"], "medium")], fill(s.get("meaning", ""), f"status {s['name']}")] for s in spec["statuses"]],
                         [3.6, tw - 3.6])
+                rule_keys = [k for k, _ in STATUS_RULES] + ["next"]
+                if any(k in s for s in spec["statuses"] for k in rule_keys):
+                    # Who may change a record in each status, and where it can go next: the rules that are
+                    # argued about after go-live when nobody wrote them down.
+                    status_name = {s.get("id"): s["name"] for s in spec["statuses"]}
+                    undecided = [("warning", "dot"), ("To be confirmed", "")]
+
+                    def who(value):
+                        if value is None:
+                            return undecided
+                        ids = role_ids if value == "all" else ([] if value == "none" else value)
+                        if not ids:
+                            return "Nobody"
+                        return "All roles" if set(ids) >= set(role_ids) else ", ".join(r["name"] for r in roles if r["id"] in ids)
+
+                    def moves_to(value):
+                        if value is None:
+                            return undecided
+                        return ", ".join(status_name[x] for x in value) or "None: a final status"
+
+                    w.para([("Status rules", "medium")], size=w.s["h3"], before=8, after=3, keep=True)
+                    w.lead("Who may change a record while it is in each status, and which statuses it can move to.")
+                    rule_w = (tw - 3.0) / 4
+                    w.table(["Status"] + [label_ for _, label_ in STATUS_RULES] + ["Moves to"],
+                            [[[(s["name"], "medium")]] + [who(s.get(k)) for k, _ in STATUS_RULES] + [moves_to(s.get("next"))] for s in spec["statuses"]],
+                            [3.0] + [rule_w] * 4)
+                    open_rules = [s["name"] for s in spec["statuses"] if any(s.get(k) is None for k in rule_keys)]
+                    if open_rules:
+                        warnings.append(f"statuses: rules still to be confirmed for {', '.join(open_rules)} "
+                                        "(set edit, cancel, delete and next on each status)")
+                else:
+                    notes.append("no status rules in the spec (who may edit, cancel or delete in each status, and where it "
+                                 "moves next): see docs/spec-format.md")
             if spec.get("integrations"):
                 sub("External systems")
                 w.table(["System", "Purpose", "Direction", "Notes"],
@@ -1272,6 +1343,15 @@ def build(project):
                 sub("Terms")
                 w.table(["Term", "Meaning"], [[[(g["term"], "mono")], fill(g["meaning"], f"glossary {g['term']}")] for g in spec["glossary"]],
                         [3.0, tw - 3.0])
+
+        # ---------------------------------------------------------------- scope and assumptions
+        elif key == "scope":
+            w.heading(f"{number} {title}", 1)
+            w.lead(fill(bp.get("scope_intro") or SCOPE_INTRO))
+            for part, label_ in SCOPE_PARTS:
+                if spec["scope"].get(part):
+                    w.para([(label_, "medium")], size=w.s["h3"], before=6, after=3, keep=True)
+                    w.bullets([fill(x, f"scope, {label_.lower()}") for x in spec["scope"][part]])
 
         # ---------------------------------------------------------------- requirements by role
         elif key == "by_role":
@@ -1475,6 +1555,14 @@ def build(project):
                         [1.6, tw - 1.6 - impact_w - owner_w - due_w, impact_w, owner_w, due_w])
             else:
                 w.para([("ok", "dot"), ("There are no open decisions in this version.", "")])
+            if made_items:
+                # The client's answers go on record in the document they sign, not only in the register.
+                w.para([(labels["decisions_made"], "medium")], size=w.s["h3"], before=10, after=3, keep=True)
+                w.lead(fill(bp.get("decisions_made_intro") or DECISIONS_MADE_INTRO))
+                half = (tw - 1.6 - 2.6) / 2
+                w.table(["ID", "Question", "Decision", "Agreed in"],
+                        [[[(it["id"], "mono")], it.get("question") or it.get("finding", ""), it["answer"], str(it.get("resolved_in") or "–")]
+                         for it in made_items], [1.6, half, half, 2.6])
 
         # ---------------------------------------------------------------- sign-off
         elif key == "signoff":
@@ -1514,7 +1602,10 @@ def build(project):
                  "(or is read-only). Close it and generate again.")
     shutil.copy(project / "spec" / "app.yaml", out_dir / f"spec-v{version}.yaml")
     print(f"Wrote {out}")
-    print(f"  {w.figures} figures, {len(groups)} requirement groups, {len(open_items)} decisions needed, {len(signoff)} signatories")
+    print(f"  {w.figures} figures, {len(groups)} requirement groups, {len(open_items)} decisions needed, "
+          f"{len(made_items)} decisions made, {len(signoff)} signatories")
+    for note in notes:
+        print(f"  Note: {note}")
     warnings = list(dict.fromkeys(warnings))
     if warnings:
         print(f"  {len(warnings)} WARNING(S) - fix these before issuing:")

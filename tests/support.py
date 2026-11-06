@@ -175,8 +175,11 @@ def tables_with_header(blocks, wanted):
     return [t for t in tables(blocks) if not is_figure(t) and header(t) == wanted]
 
 
-def table_starting(blocks, first_header_cell):
+def table_starting(blocks, first_header_cell, nth=None):
+    """The table whose header starts with that cell. `nth` picks one when there are several (0 is the first)."""
     found = [t for t in tables(blocks) if not is_figure(t) and header(t)[0] == first_header_cell]
+    if nth is not None:
+        return found[nth]
     assert len(found) == 1, f"expected one table starting with '{first_header_cell}', found {len(found)}"
     return found[0]
 

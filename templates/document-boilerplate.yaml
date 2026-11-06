@@ -16,6 +16,10 @@ concept:
 
 mockup_intro: "The screens below are taken from the conceptual mock-up with sample data. Labels, layouts and colours are subject to refinement during development."
 
+scope_intro: "What this version of {system} covers, what it leaves out, and what has been assumed. Work outside this scope is agreed separately as a change request."
+
+decisions_made_intro: "Questions raised during the requirement study and the answers given. These answers are part of what is signed."
+
 open_issues_intro: "The following items remain open at the time of this version. They shall be resolved before sign-off or carried forward as agreed by both parties; resolutions may affect the scope, timeline and effort."
 
 signoff:

@@ -21,7 +21,9 @@ Internal fixes never appear on the client sheet.
 
 `open` → `asked` → `answered` → `resolved` (or `wont-fix`). When the client answers, put the answer in
 **Client response** and tell Blueprint ("the client answered R-012 and R-019"). Resolved client items
-drop out of the Open Issues section at the next generation.
+drop out of the Open Issues section at the next generation. Those with an answer move to **Decisions
+made** in the same chapter, with the answer and `resolved_in`, so the document the client signs records
+what was agreed. Write the answer as you want the client to read it.
 
 ## Severity
 

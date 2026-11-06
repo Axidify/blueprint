@@ -28,27 +28,61 @@ roles:
     description: Maintains leave types and views all applications for reporting.
     scope: All applications
 
+# What this version covers, what it leaves out and what is assumed: its own chapter in the document.
+scope:
+  in_scope:
+    - Leave applications by employees, with approval or rejection by the line manager.
+    - Cancelling an application before the leave starts.
+    - Maintenance of leave types by HR Admin.
+  out_of_scope:
+    - Payroll, and carrying leave balances forward to the next year.
+    - Integration with the attendance system.
+  assumptions:
+    - Every employee has one line manager, taken from the staff directory.
+    - Leave balances are loaded once by HR Admin before go-live.
+
+# Who may change an application in each status, and where it can move next (document only).
 statuses:
   - id: draft
     name: Draft
     meaning: Saved by the employee but not submitted. Only the employee can see, edit or delete it.
     color: grey
+    edit: [employee]
+    cancel: none
+    delete: [employee]
+    next: [pending]
   - id: pending
     name: Pending Approval
     meaning: Submitted and waiting for the line manager.
     color: amber
+    edit: none
+    cancel: [employee]
+    delete: none
+    next: [approved, rejected, cancelled]
   - id: approved
     name: Approved
     meaning: Approved by the line manager.
     color: green
+    edit: none
+    cancel: [employee]
+    delete: none
+    next: [cancelled]
   - id: rejected
     name: Rejected
     meaning: Rejected by the line manager with a reason; the employee may edit and resubmit.
     color: red
+    edit: [employee]
+    cancel: none
+    delete: none
+    next: [pending]
   - id: cancelled
     name: Cancelled
     meaning: Cancelled by the employee before the leave started.
     color: red
+    edit: none
+    cancel: none
+    delete: none
+    next: []
 
 data:
   applications:

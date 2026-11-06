@@ -37,7 +37,7 @@ def expected_chapter_titles(spec, fmt=FORMAT):
     for key in fmt["chapters"]:
         if key == "extras":
             out += [e["title"] for e in spec.get("extra_sections") or [] if not e.get("appendix")]
-        elif key != "timeline" or spec.get("timeline"):
+        elif key not in ("timeline", "scope") or spec.get(key):
             out.append(fmt["titles"][key])
     return out
 
@@ -120,8 +120,8 @@ def test_chapters_follow_the_document_format(built):
 
 def test_example_has_exactly_the_default_chapters(example):
     assert support.headings(example.doc, 1) == [
-        "1 Users and access", "2 Requirements by role", "3 Functional requirements", "4 Screens",
-        "5 Non-functional requirements", "6 Decisions needed before sign-off", "Client acknowledgement and sign-off"]
+        "1 Users and access", "2 Scope and assumptions", "3 Requirements by role", "4 Functional requirements", "5 Screens",
+        "6 Non-functional requirements", "7 Decisions needed before sign-off", "Client acknowledgement and sign-off"]
 
 
 def test_extra_sections_and_appendix(wide):
@@ -273,7 +273,8 @@ def test_requirements_by_role(wide):
 def test_requirement_items_are_numbered_under_their_group(example):
     parts = support.split_at_headings(chapter(example.doc, TITLES["requirements"]), 2)[1:]
     groups = example.spec["requirements"]
-    assert [h for h, _ in parts] == [f"3.{i} {g['title']}" for i, g in enumerate(groups, 1)]
+    number = next(h for h in support.headings(example.doc, 1) if h.endswith(TITLES["requirements"])).split(" ")[0]
+    assert [h for h, _ in parts] == [f"{number}.{i} {g['title']}" for i, g in enumerate(groups, 1)]
     for group, (_, blocks) in zip(groups, parts):
         table = tables(blocks)[0]
         assert header(table) == ["ID", "Requirement"]
@@ -292,8 +293,9 @@ def test_requirements_show_priority_screens_and_open_decisions(wide):
 
 # ====================================================================== screens
 def test_one_section_per_screen_in_spec_order(built):
+    number = next(h for h in support.headings(built.doc, 1) if h.endswith(" " + TITLES["screens"])).split(" ")[0]
     assert [heading for _, heading, _ in screen_sections(built)] == [
-        f"4.{i} {s['title']}" for i, s in enumerate(built.spec["screens"], 1)]
+        f"{number}.{i} {s['title']}" for i, s in enumerate(built.spec["screens"], 1)]
 
 
 def test_every_screen_has_its_figures(built):
@@ -402,7 +404,7 @@ def test_no_register_means_no_open_decisions(example):
 
 
 def test_decisions_list_only_open_client_items(wide):
-    table = rows(support.table_starting(chapter(wide.doc, TITLES["decisions"]), "ID"))
+    table = rows(support.table_starting(chapter(wide.doc, TITLES["decisions"]), "ID", nth=0))
     assert table[0] == ["ID", "Question", "Impact", "Owner", "Due"]
     assert [r[0] for r in table[1:]] == ["R-001", "R-002"]
     assert table[1][1:] == ["May two people book the same equipment for overlapping dates?  FR-BKG-001.2",
@@ -415,7 +417,7 @@ def test_decisions_columns_are_wide_enough_for_what_they_hold(wide):
     """The owner and due columns had fixed widths narrower than a date: "Operations" printed as "Operation"
     and "s", and "2026-11-20" as "2026-11-" and "20". The widths below are the text in Geist 9 pt plus the
     cell padding (0.39 cm), measured from the font."""
-    table = support.table_starting(chapter(wide.doc, TITLES["decisions"]), "ID")
+    table = support.table_starting(chapter(wide.doc, TITLES["decisions"]), "ID", nth=0)
     width = dict(zip(header(table), (column.width / 360000 for column in table.columns)))  # cm
     assert width["Due"] >= 1.71 + 0.39, "2026-11-20 on one line"
     assert width["Owner"] >= 1.63 + 0.39, "Operations on one line"
@@ -429,7 +431,7 @@ def test_decisions_columns_are_wide_enough_for_what_they_hold(wide):
 def test_ids_and_references_never_break_at_a_hyphen(wide):
     """Word breaks a line at an ordinary hyphen, so "FR-BKG-001.2" could end a line as "FR-". IDs and
     references are written with Word's non-breaking hyphen; ordinary words keep theirs."""
-    table = support.table_starting(chapter(wide.doc, TITLES["decisions"]), "ID")
+    table = support.table_starting(chapter(wide.doc, TITLES["decisions"]), "ID", nth=0)
     cells = table.rows[1].cells
     hyphens = lambda cell: (cell._tc.xml.count("<w:noBreakHyphen/>"), sum("-" in (t.text or "") for t in cell._tc.iter(support.qn("w:t"))))
     assert cells[0].text == "R-001" and hyphens(cells[0]) == (1, 0)
@@ -448,15 +450,28 @@ def test_decisions_columns_stay_within_limits_for_long_owners(tmp_path):
         item["owner"], item["due"] = "Procurement and Administration Department", "Before the second workshop"
     (project / "register.json").write_text(json.dumps(register), encoding="utf-8")
     result = support.generate(project)
-    table = support.table_starting(chapter(result.doc, TITLES["decisions"]), "ID")
+    table = support.table_starting(chapter(result.doc, TITLES["decisions"]), "ID", nth=0)
     width = dict(zip(header(table), (column.width / 360000 for column in table.columns)))
     assert width["Owner"] <= 3.6 and width["Due"] <= 3.2 and width["Question"] >= 5
 
 
-def test_internal_and_resolved_items_never_reach_the_document(wide):
+def test_internal_items_never_reach_the_document(wide):
     text = all_text(wide.doc)
     assert "R-004" not in text and "INTERNAL-ONLY-MARKER" not in text, "internal fixes are not for the client"
-    assert "R-003" not in text and "How long must closed bookings be kept?" not in text
+
+
+def test_answered_questions_are_recorded_as_decisions_made(wide):
+    """The client's answers used to stay in the register, which the client never sees: once resolved, a
+    question vanished from the document. They are now on record in the document that is signed."""
+    blocks = chapter(wide.doc, TITLES["decisions"])
+    made = rows(support.table_starting(blocks, "ID", nth=1))
+    assert made == [["ID", "Question", "Decision", "Agreed in"],
+                    ["R-003", "How long must closed bookings be kept?", "Seven years.", "v1.2"]]
+    assert label_before(blocks, support.table_starting(blocks, "ID", nth=1)).startswith("Questions raised during the requirement study")
+    assert "Decisions made" in support.paragraphs(blocks)
+    still_open = rows(support.table_starting(blocks, "ID", nth=0))
+    assert [r[0] for r in still_open[1:]] == ["R-001", "R-002"], "a resolved question is not also listed as open"
+    assert "2 decisions needed, 1 decisions made" in wide.log
 
 
 # ====================================================================== sign-off
@@ -508,8 +523,8 @@ def test_no_timeline_in_the_spec_means_no_timeline_chapter(example):
 def test_timeline_in_the_spec_adds_the_chapter_after_the_nfrs(tmp_path):
     result = support.generate(project_from_example(tmp_path / "with-timeline", timeline=SHORT_TIMELINE))
     assert support.headings(result.doc, 1) == [
-        "1 Users and access", "2 Requirements by role", "3 Functional requirements", "4 Screens",
-        "5 Non-functional requirements", "6 Project timeline", "7 Decisions needed before sign-off",
+        "1 Users and access", "2 Scope and assumptions", "3 Requirements by role", "4 Functional requirements", "5 Screens",
+        "6 Non-functional requirements", "7 Project timeline", "8 Decisions needed before sign-off",
         "Client acknowledgement and sign-off"]
     blocks = chapter(result.doc, TITLES["timeline"])
     chart = support.table_starting(blocks, "Week")
@@ -1060,7 +1075,7 @@ def test_the_summary_counts_every_screen_of_the_screens_chapter(wide):
 def test_tables_can_have_a_filled_header_a_grid_and_coloured_headings(temp_workspace, tmp_path):
     company_format(temp_workspace, 'colors:\n  heading: "1F3864"\ntables:\n  header_fill: "1F3864"\n  borders: grid\n')
     result = support.generate(support.make_project(tmp_path / "house-style", support.WIDE))
-    table = support.table_starting(chapter(result.doc, TITLES["decisions"]), "ID")
+    table = support.table_starting(chapter(result.doc, TITLES["decisions"]), "ID", nth=0)
     head, body = table.rows[0].cells[0], table.rows[1].cells[0]
     assert 'w:fill="1F3864"' in head._tc.xml, "the header row is filled"
     assert str(head.paragraphs[0].runs[-1].font.color.rgb) == "FFFFFF", "white text on the fill, unless header_text says otherwise"
@@ -1078,12 +1093,12 @@ def test_tables_can_have_a_filled_header_a_grid_and_coloured_headings(temp_works
 def test_the_header_text_colour_can_be_set(temp_workspace, tmp_path):
     company_format(temp_workspace, 'tables:\n  header_fill: "E9EEF7"\n  header_text: "1F3864"\n')
     result = support.generate(support.make_project(tmp_path / "pale-header", support.WIDE))
-    head = support.table_starting(chapter(result.doc, TITLES["decisions"]), "ID").rows[0].cells[0]
+    head = support.table_starting(chapter(result.doc, TITLES["decisions"]), "ID", nth=0).rows[0].cells[0]
     assert 'w:fill="E9EEF7"' in head._tc.xml and str(head.paragraphs[0].runs[-1].font.color.rgb) == "1F3864"
 
 
 def test_the_default_look_is_unchanged(wide):
-    table = support.table_starting(chapter(wide.doc, TITLES["decisions"]), "ID")
+    table = support.table_starting(chapter(wide.doc, TITLES["decisions"]), "ID", nth=0)
     head, body = table.rows[0].cells[0], table.rows[1].cells[0]
     assert 'w:fill=' not in head._tc.xml and str(head.paragraphs[0].runs[-1].font.color.rgb) == FORMAT["colors"]["secondary"]
     assert [b.tag.split("}")[1] for b in body._tc.tcPr.find(support.qn("w:tcBorders"))] == ["bottom"], "hairlines only"
@@ -1106,3 +1121,148 @@ def test_summary_cards_are_as_wide_as_the_text(wide):
     text_width = (section.page_width - section.left_margin - section.right_margin) / 360000
     widths = [column.width / 360000 for column in cards.columns]
     assert abs(sum(widths) + 0.32 * (len(widths) - 1) - text_width) < 0.05, "the cards and the gaps between them fill the line"
+
+
+# ====================================================================== status rules
+def status_tables(doc):
+    blocks = chapter(doc, TITLES["users_access"])
+    return blocks, [t for t in tables(blocks) if not support.is_figure(t) and header(t)[0] == "Status"]
+
+
+def test_status_rules_say_who_may_change_a_record_and_where_it_moves(example):
+    """The requirements standard asks who may edit, cancel or delete in each status. The document had a
+    place for a status's meaning only."""
+    blocks, (meanings, rules) = status_tables(example.doc)
+    assert header(meanings) == ["Status", "Meaning"]
+    assert rows(rules) == [
+        ["Status", "May edit", "May cancel", "May delete", "Moves to"],
+        ["Draft", "Employee", "Nobody", "Employee", "Pending Approval"],
+        ["Pending Approval", "Nobody", "Employee", "Nobody", "Approved, Rejected, Cancelled"],
+        ["Approved", "Nobody", "Employee", "Nobody", "Cancelled"],
+        ["Rejected", "Employee", "Nobody", "Nobody", "Pending Approval"],
+        ["Cancelled", "Nobody", "Nobody", "Nobody", "None: a final status"]]
+    assert "Status rules" in support.paragraphs(blocks)
+    assert "WARNING" not in example.log and "Note:" not in example.log
+
+
+def test_all_roles_and_several_roles_are_named(tmp_path):
+    spec = support.load_spec(support.EXAMPLE)
+    spec["statuses"][0].update(edit="all", cancel=["manager", "employee"], delete=["hr"])
+    result = support.generate(support.make_project(tmp_path / "rules", spec=spec))
+    assert rows(status_tables(result.doc)[1][1])[1] == ["Draft", "All roles", "Employee, Line Manager", "HR Admin", "Pending Approval"]
+
+
+def test_a_rule_not_yet_given_is_shown_and_warned_about(tmp_path):
+    spec = support.load_spec(support.EXAMPLE)
+    for key in ("cancel", "next"):
+        del spec["statuses"][1][key]
+    result = support.generate(support.make_project(tmp_path / "open-rules", spec=spec))
+    assert rows(status_tables(result.doc)[1][1])[2] == ["Pending Approval", "Nobody", "● To be confirmed", "Nobody", "● To be confirmed"]
+    assert "1 WARNING(S)" in result.log
+    assert "statuses: rules still to be confirmed for Pending Approval" in result.log
+
+
+def test_a_spec_without_status_rules_gets_a_note_not_a_warning(wide):
+    """Projects written before status rules existed still generate cleanly; the note says what is missing."""
+    assert len(status_tables(wide.doc)[1]) == 1, "no rules table"
+    assert "Note: no status rules in the spec" in wide.log and "WARNING" not in wide.log
+
+
+@pytest.mark.parametrize("change, said", [
+    (lambda s: s["statuses"][0].update(edit=["nobody"]), "status Draft: 'edit' names an unknown role 'nobody'"),
+    (lambda s: s["statuses"][0].update(delete="employee"), "status Draft: 'delete' must be a list of role ids, or all, or none"),
+    (lambda s: s["statuses"][0].update(next=["submitted"]), "status Draft: 'next' names an unknown status 'submitted'"),
+    (lambda s: s["statuses"][0].update(next="pending"), "status Draft: 'next' must be a list of status ids"),
+], ids=["unknown-role", "role-not-in-a-list", "unknown-status", "next-not-a-list"])
+def test_a_mistake_in_a_status_rule_is_named(tmp_path, change, said):
+    project = support.make_project(tmp_path / "leave-request")
+    spec = support.load_spec(project)
+    change(spec)
+    support.write_spec(project, spec)
+    with pytest.raises(SystemExit) as stop:
+        generate_requirements.build(project)
+    assert said in str(stop.value)
+
+
+def test_status_rules_do_not_age_the_screenshots(tmp_path):
+    """They are printed in the document only: changing one must not ask for new screenshots."""
+    project = support.make_project(tmp_path / "leave-request")
+    spec = support.load_spec(project)
+    spec["statuses"][0].update(edit="all", next=[])
+    spec["scope"]["assumptions"].append("One more assumption.")
+    support.write_spec(project, spec)
+    assert "WARNING" not in support.generate(project).log
+
+
+# ====================================================================== scope and assumptions
+def test_the_scope_chapter_lists_what_is_in_out_and_assumed(example):
+    numbered, _, _ = chapter_headings(example.doc)
+    assert numbered[:3] == ["1 Users and access", "2 Scope and assumptions", "3 Requirements by role"]
+    blocks = chapter(example.doc, TITLES["scope"])
+    text = support.paragraphs(blocks)
+    assert text[0].startswith("What this version of Leave Request System covers")
+    spec = example.spec["scope"]
+    assert text[1:] == (["In scope"] + spec["in_scope"] + ["Out of scope"] + spec["out_of_scope"] + ["Assumptions"] + spec["assumptions"])
+
+
+def test_no_scope_in_the_spec_means_no_scope_chapter(wide):
+    numbered, _, _ = chapter_headings(wide.doc)
+    assert TITLES["scope"] not in " ".join(numbered) and numbered[1] == "2 Requirements by role"
+
+
+def test_the_scope_chapter_can_be_referred_to_and_holds_references(tmp_path):
+    spec = support.load_spec(support.EXAMPLE)
+    spec["overview"] = ["What is delivered is listed in {ref:section:scope}."]
+    spec["scope"]["out_of_scope"] = ["Reports beyond the list in {ref:screen:approvals} for {client}."]
+    result = support.generate(support.make_project(tmp_path / "scope-refs", spec=spec))
+    text = all_text(result.doc)
+    assert "What is delivered is listed in section 2." in text
+    assert "Reports beyond the list in section 5.5 for Sample Client Sdn. Bhd." in text
+    assert "WARNING" not in result.log
+
+
+@pytest.mark.parametrize("scope, said", [
+    (["everything"], "scope: must have in_scope, out_of_scope and assumptions"),
+    ({"included": ["Leave"]}, "scope: 'included' is not one of in_scope, out_of_scope, assumptions"),
+    ({"in_scope": "Leave applications"}, "scope: 'in_scope' must be a list of sentences"),
+], ids=["a-list", "unknown-part", "not-a-list"])
+def test_a_mistake_in_the_scope_is_named(tmp_path, scope, said):
+    project = support.make_project(tmp_path / "leave-request")
+    spec = support.load_spec(project)
+    spec["scope"] = scope
+    support.write_spec(project, spec)
+    with pytest.raises(SystemExit) as stop:
+        generate_requirements.build(project)
+    assert said in str(stop.value)
+
+
+def test_a_company_that_lists_its_own_chapters_adds_scope_to_get_it(temp_workspace, tmp_path):
+    company_format(temp_workspace, "chapters: [users_access, requirements, screens, decisions, signoff]\n")
+    result = support.generate(support.make_project(tmp_path / "own-chapters"))
+    assert TITLES["scope"] not in " ".join(support.headings(result.doc, 1))
+
+
+# ====================================================================== decisions made
+def test_only_answered_client_questions_are_listed_as_made(tmp_path):
+    project = support.make_project(tmp_path / "made", support.WIDE)
+    register = json.loads((project / "register.json").read_text(encoding="utf-8"))
+    template = next(it for it in register["items"] if it["id"] == "R-003")
+    register["items"] += [
+        {**template, "id": "R-010", "answer": "", "question": "RESOLVED-WITHOUT-AN-ANSWER"},
+        {**template, "id": "R-011", "status": "wont-fix", "question": "DROPPED-QUESTION"},
+        {**template, "id": "R-012", "audience": "internal", "question": "INTERNAL-RESOLVED"},
+        {**template, "id": "R-013", "answer": "Yes, by e-mail.", "resolved_in": "", "question": "A second answered question?"}]
+    (project / "register.json").write_text(json.dumps(register), encoding="utf-8")
+    result = support.generate(project)
+    made = rows(support.table_starting(chapter(result.doc, TITLES["decisions"]), "ID", nth=1))
+    assert [r[0] for r in made[1:]] == ["R-003", "R-013"]
+    assert made[2] == ["R-013", "A second answered question?", "Yes, by e-mail.", "–"]
+    text = all_text(result.doc)
+    for hidden in ("RESOLVED-WITHOUT-AN-ANSWER", "DROPPED-QUESTION", "INTERNAL-RESOLVED"):
+        assert hidden not in text
+
+
+def test_no_answered_questions_means_no_decisions_made_table(example):
+    blocks = chapter(example.doc, TITLES["decisions"])
+    assert "Decisions made" not in support.paragraphs(blocks) and "0 decisions made" in example.log
+

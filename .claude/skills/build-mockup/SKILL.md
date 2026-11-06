@@ -24,7 +24,10 @@ so every decision put into the spec shows up in both. Format: `docs/spec-format.
 1. Roles first, each with a data scope. Ask yourself the GP-01 question: who only needs to *see* the data?
 2. Statuses for every record that moves through a workflow, including the unhappy ones (rejected,
    cancelled, returned) — see GP-02 and GP-09 in `knowledge/gap-patterns.md`. Give each status a `color`
-   (`green`, `amber`, `red` or `grey`) so the mock-up does not have to guess it from the wording.
+   (`green`, `amber`, `red` or `grey`) so the mock-up does not have to guess it from the wording, and its
+   rules where they are known: `edit`, `cancel`, `delete` (role ids, `all` or `none`) and `next` (the
+   statuses it can move to). Leave a rule out when it is not decided and add a register question for it:
+   never guess who may cancel or delete (GP-02).
 3. Screens: one per menu item, plus detail, review and dialog screens for each workflow step. Every list
    gets explicit columns and filters (GP-05). Every KPI on a dashboard gets a `description` stating its
    formula or saying it is still to be defined (GP-03).

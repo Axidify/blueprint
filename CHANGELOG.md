@@ -11,6 +11,20 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+### Added
+- **Status rules in the document.** Each status in the spec can now say who may edit, cancel or delete a
+  record while it is in that status, and which statuses it can move to (`edit`, `cancel`, `delete`,
+  `next`). The document prints them as a "Status rules" table under the statuses. A rule you have not
+  given yet is shown as "To be confirmed" and warned about; a spec with no rules at all still generates,
+  with a note. These are the rules most often argued about after go-live when nobody wrote them down.
+- **A scope chapter.** A new `scope` part of the spec (`in_scope`, `out_of_scope`, `assumptions`) becomes
+  the chapter "Scope and assumptions", after "Users and access". It appears only when the spec has a
+  scope. If your company file lists its own `chapters`, add `scope` to it to get the chapter.
+- **Decisions made.** Client questions that are resolved and have an answer in the register are now listed
+  in the document under "Decisions made", with the answer and where it was agreed. Until now a question
+  vanished from the document once it was answered, so the client's answers were on record only in the
+  register. Internal items and unanswered ones still never reach the document.
+
 ## [0.7.0] - 2026-11-06
 
 ### Added

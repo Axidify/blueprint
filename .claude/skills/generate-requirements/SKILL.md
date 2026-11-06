@@ -32,7 +32,13 @@ requirement tables and screenshots all come from the spec, so they cannot contra
   - Only weeks reach the spec. Never copy mandays, rates or cost from the estimate into it.
   - Show the draft to the user before generating.
 - Open questions are in `register.json` as client items; they become the **Open Issues** section.
-  Resolved items drop out automatically.
+  Resolved items drop out automatically, and those with an `answer` are listed under **Decisions made**:
+  check each answer reads as the client gave it, and that `resolved_in` says where it was agreed.
+- The spec has a `scope` (`in_scope`, `out_of_scope`, `assumptions`). Take it from the scope of work and
+  the workshops; put under `out_of_scope` what the client might otherwise assume is included. If it is
+  missing, draft it and show it to the user before generating: do not invent exclusions.
+- Every status has its rules (`edit`, `cancel`, `delete`, `next`), or a register question where one is
+  not decided. The generator warns about rules still to be confirmed.
 - Version, dates, `status` and `history` in `project` are right for this issue.
 - `signoff` lists everyone who must sign (client signatories first). Ask the user if it is missing.
 - Requirement groups list the `screens` they apply to, so requirements and screens link to each other.
