@@ -11,6 +11,8 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-07
+
 ### Added
 - **Make the mock-up look like the client's own systems.** Say "use their logo", "dark menu", "squarer
   corners" or "make it look like their intranet": the new `mockup-design` skill sets the look, or learns it
@@ -772,7 +774,8 @@ First release.
 - One-step setup (`setup.cmd`) with a machine check, `present.cmd` for sessions, shared Claude Code
   permissions and a start-up status greeting.
 
-[Unreleased]: https://github.com/Axidify/blueprint/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/Axidify/blueprint/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/Axidify/blueprint/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Axidify/blueprint/compare/v0.10.0...v1.0.0
 [0.10.0]: https://github.com/Axidify/blueprint/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/Axidify/blueprint/compare/v0.8.1...v0.9.0
