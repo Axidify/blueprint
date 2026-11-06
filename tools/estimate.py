@@ -222,6 +222,7 @@ def compute(est, project, kdir):
         where = line.get("id") or f"line #{i + 1}"
         if not line.get("id") or not line.get("item"):
             errors.append(f"{where}: needs id and item")
+            continue
         if line.get("id") in seen:
             errors.append(f"{where}: duplicate id")
         seen.add(line.get("id"))
@@ -294,9 +295,13 @@ def compute(est, project, kdir):
 
     build_low = sum(l["low"] for l in lines if l["kind"] == "block")
     build_high = sum(l["high"] for l in lines if l["kind"] == "block")
+    build_priced = any(l["priced"] for l in lines if l["kind"] == "block")
     for l in lines:
         if l["pct"]:
             pct = l["pct"]
+            if not build_priced:
+                l.update(priced=False, rate_from=f"{rng(pct[0], pct[1], '%')} of building blocks, none priced yet: not priced")
+                continue
             l.update(low=build_low * pct[0] / 100, high=build_high * pct[1] / 100,
                      rate_from=f"{rng(pct[0], pct[1], '%')} of building blocks"
                                + (", knowledge base" if l["kind"] == "other" else ""))
@@ -407,7 +412,7 @@ def compute(est, project, kdir):
         cap("medium", why)
     if open_high:
         cap("medium", f"{len(open_high)} high-severity register item{'s are' if len(open_high) != 1 else ' is'} still open.")
-    if est.get("confidence"):
+    if est.get("confidence") in LEVELS:
         cap(est["confidence"], est.get("confidence_reason") or f"The estimator set the confidence to {est['confidence']}.")
     if not reasons:
         reasons.append("The rates are calibrated, the count comes from the spec and no high-severity question is open.")
@@ -486,7 +491,7 @@ def render_xlsx(est, res, out):
                      ", ".join(l["id"] for l in res["unpriced"]) + ": left out of the totals"))
     if any(r["sized"] for r in res["risks"]):
         rows += [("Open questions, if answered the costly way", res["risk"][0], res["risk"][1]),
-                 ("Total with open questions", low + res["risk"][0], high + res["risk"][1], "", "total")]
+                 ("Total with open questions", low, high + res["risk"][1], "", "total")]
     if co.get("day_rate"):
         cur = (co.get("currency") or "").strip()
         top = high + res["risk"][1]

@@ -39,7 +39,9 @@ See [docs/maintaining.md](docs/maintaining.md).
   break another. They check the generated Word document (chapter order, cross-references, the access
   matrix, a figure and field table for every screen, the timeline, sign-off forms, locked issued versions,
   and that everything works on a machine without Microsoft Word), the register and its Excel file, project
-  housekeeping (issue, file, archive, restore) and the commit check. Nothing changes for people using
+  housekeeping (issue, file, archive, restore), estimates (rates read from the knowledge base, ranges, the
+  comparison with the scope of work, the confidence rules, and that nothing of an estimate reaches a client
+  document) and the commit check. Nothing changes for people using
   Blueprint. If you change Blueprint itself: `python -m pip install -r requirements-dev.txt` once, then
   `python -m pytest`; GitHub runs them on every push. See [docs/maintaining.md](docs/maintaining.md#tests).
 
