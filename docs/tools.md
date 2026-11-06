@@ -90,7 +90,10 @@ company profile, branding and [Document format](document-format.md). Prints warn
 spec. With Word installed it also updates the table of contents and page numbers, embeds the fonts and
 writes a PDF.
 
-- **The spec is checked first**, with the same check the mock-up runs; errors stop the run.
+- **The spec and the format are checked first.** The spec with the check the mock-up runs, plus the
+  parts only the document prints (requirement groups and their items, notifications, non-functional
+  requirements, glossary, extra sections, the timeline); the document format for settings that do not
+  exist and values that cannot be used. Mistakes stop the run with the list of what to fix.
 - **Screenshots are checked against the spec.** It warns when the screens changed after the screenshots
   were taken (`mockup.py screenshots` notes what they show in `mockup/screenshots/taken-from.json`) and
   when a screen has no picture. Text only the document prints (requirements, descriptions, rules, the
@@ -98,7 +101,8 @@ writes a PDF.
 - **The PDF always matches the Word file.** A PDF from an earlier run is removed before the new document
   is written. If the PDF or the document is open in another program, the run stops and says so.
 - **When the Word step fails it says why.** "Word not available" means Word is not installed; anything
-  else is reported as a failure with the reason.
+  else is reported as a failure with the reason. Word is closed whatever happens, so it is never left
+  running hidden with the document locked.
 - **The file name** is `<system> – <document title> v<version>`, with the characters Windows cannot store
   (`\ / : * ? " < > |`) replaced by a hyphen. The name inside the document is as the spec has it.
 
@@ -145,7 +149,9 @@ python -I tools/document_format.py learn "<sample.docx>"
 python -I tools/document_format.py preview
 ```
 Shows the document format in effect, reports the fonts, sizes, colours, page set-up and chapters of a sample
-document, or generates the sample project and renders its pages for review. See [Document format](document-format.md).
+document, or generates the sample project and renders its pages for review. `show` also lists any
+mistakes in the company's format file and exits with an error when there are some. See
+[Document format](document-format.md).
 
 ### workspace.py
 

@@ -21,8 +21,19 @@ See [docs/maintaining.md](docs/maintaining.md).
   and when a screen has no picture, with the command that takes them again. Rewording a requirement, a
   description or a rule does not trigger it. For a project you already have, take the screenshots once
   more to switch the check on fully; until then only added and removed screens are noticed.
+- **House styles with filled table headers.** The document format has three new settings for companies
+  whose documents do not use Blueprint's hairline tables: `tables.header_fill` (a colour for the header
+  row, with white header text unless `tables.header_text` says otherwise), `tables.borders: grid` (a box
+  round every cell) and `colors.heading` (the colour of chapter and section headings). Ask "make our table
+  headers navy" or see [docs/document-format.md](docs/document-format.md). The default look is unchanged.
+- **The format and the spec are checked before a document is generated.** A mistake in
+  `branding/document-format.yaml` (a misspelt setting such as `colours`, an unknown chapter, a size that
+  is not a number) or in the parts of the spec only the document prints (a requirement group with no
+  items, a notification with no recipient, two extra sections with one title, a timeline week before 1)
+  now stops the run with a list of what to fix, in plain words. These used to end in a Python error or
+  were silently ignored. `python -I tools/document_format.py show` lists format mistakes too.
 - Automated tests for the mock-up: the build, the comment server and, on a machine with Node and Microsoft
-  Edge, the mock-up itself clicked through in the browser.
+  Edge, the mock-up itself clicked through in the browser. Automated tests for the format tool.
 
 ### Changed
 - **Screenshots you can read in the document.** Screens are now captured 1000 pixels wide instead of 1440,
@@ -31,6 +42,10 @@ See [docs/maintaining.md](docs/maintaining.md).
   which. Each screenshot is cropped to its content, so a short list or the process flow is no longer half
   empty. Screens are laid out a little tighter in the document than in the live mock-up, which still fills
   the window. **Take the screenshots again and regenerate** to get this in a document you already have.
+- **The cover shows your document title as you wrote it.** It used to be forced into sentence case, so
+  "System Requirement Specifications" printed as "System requirement specifications".
+- **The summary page agrees with the rest of the document.** It counts every screen of the Screens chapter
+  (the login screen was left out), and lists the signatories client first, as the sign-off chapter does.
 - The document generator now stops with the list of errors when the spec has any (an unknown screen,
   role or dialog, for example), the same check the mock-up runs. It used to carry on or crash.
 
@@ -63,6 +78,24 @@ See [docs/maintaining.md](docs/maintaining.md).
   letter. The Impact, Owner and Due columns are now sized to what they hold, and the question takes the
   rest of the width. Requirement IDs and references such as "FR-BKG-001.2" are no longer split across two
   lines at a hyphen, anywhere in the document.
+- **Word is no longer left running in the background.** When the Word step failed half-way, a hidden Word
+  stayed open with the document locked, and the next run could not write it. Word is now always closed,
+  shows no hidden questions, and no longer adds generated documents to your recent files. If Word does
+  not answer for four minutes, the message says how to end it in Task Manager.
+- **References work in every text.** `{ref:...}`, `{client}`, `{system}` and the other names were resolved
+  in some places only; in a role's description, a status meaning, a non-functional requirement, a glossary
+  meaning, an integration, a notification event, a requirement group title and the cells of an extra
+  section's table they printed as typed. A hand-typed "section 3.2" is now warned about there too.
+- **The cover's status dot is green only for a settled status.** "Not approved", "Unsigned draft" and
+  "Awaiting final review" were shown green; they are amber now. "Signed off", "Approved" and "Final" stay
+  green.
+- **Colours in the format file can be written the usual ways:** with or without `#`, in capitals or not.
+- **The format tool runs on Python 3.10 and 3.11.** `document_format.py` needed 3.12, though setup accepts
+  3.10; none of its commands started on the older versions.
+- **The contents fits on fewer pages.** Its lines used the body text's spacing, so a contents of 36 lines
+  ran three lines onto an empty page.
+- **The summary cards line up with the text.** They were narrower than the tables and text around them.
+- A company format file still under its old name, `branding/srs-format.yaml`, is read again.
 - **System names with a colon, a slash or an apostrophe.** A colon in the system name (such as
   "Phase 2: Claims System") made Windows hide the generated document inside an empty file, a slash stopped
   the run, and an apostrophe broke the Word step so no PDF was written. The file name now replaces the

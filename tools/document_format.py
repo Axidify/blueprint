@@ -25,9 +25,15 @@ def show():
     import generate_requirements
 
     fmt = generate_requirements.load_format()
-    own = workspace.workspace_dir() / "branding" / "document-format.yaml"
-    print(f"# Defaults: templates/document-format.yaml\n# Overrides: {own if own.exists() else 'none (workspace/branding/document-format.yaml)'}\n")
+    own = generate_requirements.own_format_file()
+    errors = generate_requirements.format_errors(fmt)
+    print(f"# Defaults: templates/document-format.yaml\n# Overrides: {own or 'none (workspace/branding/document-format.yaml)'}\n")
     print(yaml.safe_dump(fmt, sort_keys=False, allow_unicode=True))
+    if errors:
+        print("MISTAKES in the format - documents cannot be generated until these are fixed:")
+        for e in errors:
+            print("  - " + e)
+        sys.exit(1)
 
 
 def learn(sample):
@@ -53,15 +59,19 @@ def learn(sample):
     headings = re.findall(r'<w:pStyle w:val="Heading1"/>.*?</w:pPr>(.*?)</w:p>', doc, re.S)
     h1_texts = ["".join(re.findall(r"<w:t[^>]*>([^<]*)</w:t>", h)).strip() for h in headings]
 
+    fonts = top(r'w:ascii="([^"]+)"', doc)
+    text_sizes = [(int(s) / 2, n) for s, n in top(r'<w:sz w:val="(\d+)"', doc)]
+    fills = top(r'w:fill="([0-9A-Fa-f]{6})"', doc, 6)
+    text_colours = top(r'<w:color w:val="([0-9A-Fa-f]{6})"', doc, 6)
     sys.stdout.reconfigure(encoding="utf-8")
     print(f"Sample: {sample}\n")
     print(f"Theme fonts:      headings {major.group(1) if major else '?'}, body {minor.group(1) if minor else '?'}")
     print(f"Normal style:     {normal_font.group(1) if normal_font else '(theme font)'} {int(normal_size.group(1)) / 2 if normal_size else '?'} pt")
     print(f"Heading 1:        {int(h1_size.group(1)) / 2 if h1_size else '?'} pt, colour {h1_color.group(1) if h1_color else 'default'}")
-    print(f"Fonts in text:    {top(r'w:ascii=\"([^\"]+)\"', doc)}")
-    print(f"Text sizes (pt):  {[(int(s) / 2, n) for s, n in top(r'<w:sz w:val=\"(\d+)\"', doc)]}")
-    print(f"Table fills:      {top(r'w:fill=\"([0-9A-Fa-f]{6})\"', doc, 6)}")
-    print(f"Text colours:     {top(r'<w:color w:val=\"([0-9A-Fa-f]{6})\"', doc, 6)}")
+    print(f"Fonts in text:    {fonts}")
+    print(f"Text sizes (pt):  {text_sizes}")
+    print(f"Table fills:      {fills}")
+    print(f"Text colours:     {text_colours}")
     if pg:
         print(f"Page:             {int(pg.group(1)) / 567:.1f} x {int(pg.group(2)) / 567:.1f} cm"
               + (f", margins top {int(mar.group(1)) / 567:.1f} right {int(mar.group(2)) / 567:.1f} bottom {int(mar.group(3)) / 567:.1f} left {int(mar.group(4)) / 567:.1f} cm" if mar else ""))

@@ -17,6 +17,7 @@ Everything (access matrix, roles, statuses, screens, field tables) comes from th
 mock-up, so the document cannot contradict the screens. Format reference: docs/document-format.md.
 """
 import copy
+import difflib
 import json
 import re
 import shutil
@@ -56,12 +57,190 @@ def deep_merge(base, over):
     return out
 
 
+FRONT = ("cover", "at_a_glance", "about", "contents")
+CHAPTERS = ("users_access", "by_role", "requirements", "screens", "nfr", "timeline", "extras", "decisions", "signoff")
+OPTIONAL_COLORS = ("heading",)  # may be left empty
+
+
+def default_format():
+    return yaml.safe_load((ROOT / "templates" / "document-format.yaml").read_text(encoding="utf-8"))
+
+
+def own_format_file():
+    """The company's format file in the workspace (under its current or its pre-0.4.0 name), or None."""
+    own = workspace.asset("document-format.yaml")
+    return own if own and own.parent != ROOT / "templates" else None
+
+
 def load_format():
-    fmt = yaml.safe_load((ROOT / "templates" / "document-format.yaml").read_text(encoding="utf-8"))
-    own = workspace.workspace_dir() / "branding" / "document-format.yaml"
-    if own.exists():
+    fmt = default_format()
+    own = own_format_file()
+    if own:
         fmt = deep_merge(fmt, yaml.safe_load(own.read_text(encoding="utf-8")) or {})
     return fmt
+
+
+def format_errors(fmt):
+    """Mistakes in a document format, as sentences for whoever edited it; empty when it is in order.
+    Colours are tidied in place on the way: a leading '#' is dropped and letters are upper-cased."""
+    base, errors = default_format(), []
+
+    def unknown(where, keys, known):
+        for k in keys:
+            if k not in known:
+                close = difflib.get_close_matches(str(k), [str(x) for x in known], 1, 0.6)
+                errors.append(f"{where}'{k}' is not a setting" + (f" (did you mean '{close[0]}'?)" if close else ""))
+
+    unknown("", fmt, base)
+    for section, defaults in base.items():
+        if isinstance(defaults, dict):
+            if not isinstance(fmt.get(section), dict):
+                errors.append(f"'{section}' must be a group of settings, like the one in templates/document-format.yaml")
+                fmt[section] = defaults
+            else:
+                unknown(f"{section}: ", fmt[section], defaults)
+
+    def colour(section, key, optional=False):
+        value = fmt[section].get(key)
+        if value in (None, "") and optional:
+            fmt[section][key] = ""
+            return
+        text = str(value).strip().lstrip("#").upper()
+        if isinstance(value, bool) or len(text) != 6 or any(ch not in "0123456789ABCDEF" for ch in text):
+            hint = " Put it in quotes: digits alone are read as a number." if isinstance(value, int) else ""
+            errors.append(f"{section}.{key}: '{value}' is not a colour. Use six hex digits, for example \"1F5FBF\".{hint}")
+        else:
+            fmt[section][key] = text
+
+    for key in base["colors"]:
+        colour("colors", key, key in OPTIONAL_COLORS)
+    for key in ("header_fill", "header_text"):
+        colour("tables", key, optional=True)
+    if fmt["tables"].get("borders") not in ("hairline", "grid"):
+        errors.append(f"tables.borders: '{fmt['tables'].get('borders')}' must be hairline or grid")
+    for key in base["sizes"]:
+        value = fmt["sizes"].get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+            errors.append(f"sizes.{key}: '{value}' must be a point size, for example 10")
+    for key in base["fonts"]:
+        if not isinstance(fmt["fonts"].get(key), str) or not fmt["fonts"][key].strip():
+            errors.append(f"fonts.{key}: must be the name of a font")
+    if fmt.get("numbering") not in ("plain", "decimal"):
+        errors.append(f"numbering: '{fmt.get('numbering')}' must be plain or decimal")
+    if fmt.get("header_footer") not in ("generated", "template"):
+        errors.append(f"header_footer: '{fmt.get('header_footer')}' must be generated or template")
+    if not isinstance(fmt["layout"].get("screens_new_page"), bool):
+        errors.append("layout.screens_new_page: must be true or false")
+    for key, allowed in (("front", FRONT), ("chapters", CHAPTERS)):
+        if not isinstance(fmt.get(key), list):
+            errors.append(f"{key}: must be a list, for example [{', '.join(allowed[:3])}]")
+            continue
+        for part in fmt[key]:
+            if part not in allowed:
+                close = difflib.get_close_matches(str(part), allowed, 1, 0.6)
+                errors.append(f"{key}: '{part}' is not one of {', '.join(allowed)}" + (f" (did you mean '{close[0]}'?)" if close else ""))
+    for key in list(CHAPTERS) + ["at_a_glance", "about"]:
+        if key != "extras" and not str(fmt["titles"].get(key) or "").strip():
+            errors.append(f"titles.{key}: needs a title")
+    for key in base["labels"]:
+        if not str(fmt["labels"].get(key) or "").strip():
+            errors.append(f"labels.{key}: needs a wording")
+    return errors
+
+
+def document_errors(spec):
+    """Mistakes in the parts of a spec that only the document prints, as sentences; empty when in order.
+    The mock-up's own check (mockup.validate) covers what the screens need."""
+    errors = []
+
+    def need(where, item, *keys):
+        if not isinstance(item, dict):
+            errors.append(f"{where}: must have {', '.join(keys)}")
+            return False
+        for k in keys:
+            if item.get(k) in (None, "", []):
+                errors.append(f"{where}: missing '{k}'")
+        return True
+
+    def each(key):
+        value = spec.get(key) or []
+        if not isinstance(value, list):
+            errors.append(f"{key}: must be a list")
+            return []
+        return list(enumerate(value, 1))
+
+    if not (spec.get("project") or {}).get("name"):
+        errors.append("project: missing 'name'")
+    for i, r in each("roles"):
+        need(f"role {i}", r, "id", "name")
+    for i, s in each("statuses"):
+        need(f"status {i}", s, "name")
+    for i, s in each("screens"):
+        if not need(f"screen {s.get('id', i) if isinstance(s, dict) else i}", s, "id", "title"):
+            continue
+        for sec in s.get("sections") or []:
+            for f in sec.get("fields") or []:
+                need(f"screen {s['id']}, field {f.get('id', '?') if isinstance(f, dict) else '?'}", f, "id", "label")
+        for c in (s.get("list") or {}).get("columns") or []:
+            need(f"screen {s['id']}, a list column", c, "field", "label")
+    for i, d in each("dialogs"):
+        if need(f"dialog {i}", d, "id", "title"):
+            for f in d.get("fields") or []:
+                need(f"dialog {d['id']}, field {f.get('id', '?') if isinstance(f, dict) else '?'}", f, "id", "label")
+    seen = set()
+    for i, g in each("requirements"):
+        where = f"requirement group {g.get('id', i) if isinstance(g, dict) else i}"
+        if not need(where, g, "id", "title"):
+            continue
+        if g.get("id") in seen:
+            errors.append(f"{where}: the id is used twice")
+        seen.add(g.get("id"))
+        items = g.get("items")
+        if not isinstance(items, list) or not items:
+            errors.append(f"{where}: needs 'items', the list of its requirements")
+            continue
+        for j, item in enumerate(items, 1):
+            text = item.get("text") if isinstance(item, dict) else item
+            if not isinstance(text, str) or not text.strip():
+                errors.append(f"{where}, item {j}: needs its text")
+    for i, n in each("notifications"):
+        need(f"notification {i}", n, "event", "recipient")
+    for i, x in each("nfr"):
+        need(f"non-functional requirement {i}", x, "area", "requirement")
+    for i, x in each("glossary"):
+        need(f"glossary entry {i}", x, "term", "meaning")
+    for i, x in each("integrations"):
+        need(f"integration {i}", x, "system")
+    for i, x in each("signoff"):
+        if not isinstance(x, dict):
+            errors.append(f"signatory {i}: must have name, organisation and signing_for")
+    titles = set()
+    for i, e in each("extra_sections"):
+        if not need(f"extra section {i}", e, "title"):
+            continue
+        if e["title"] in titles:
+            errors.append(f"extra section '{e['title']}': two sections have this title; give each its own")
+        titles.add(e["title"])
+        for block in e.get("content") or []:
+            table = block.get("table") if isinstance(block, dict) else None
+            if table is not None and need(f"extra section '{e['title']}', a table", table, "header", "rows"):
+                if any(not isinstance(row, list) or len(row) != len(table["header"]) for row in table["rows"]):
+                    errors.append(f"extra section '{e['title']}': every table row needs {len(table['header'])} cells, like its header")
+    timeline = spec.get("timeline")
+    if timeline is not None and not isinstance(timeline, dict):
+        errors.append("timeline: must have stages")
+    stages = (timeline.get("stages") or []) if isinstance(timeline, dict) else []
+    for st in stages:
+        for it in (st.get("items") or []) if isinstance(st, dict) else []:
+            where = f"timeline item '{it.get('name') or it.get('milestone') or '?'}'" if isinstance(it, dict) else "timeline item"
+            if not need(where, it, "name"):
+                continue
+            weeks = [it.get("week", it.get("start"))] if "milestone" in it else [it.get("start"), it.get("end", it.get("start"))]
+            if any(isinstance(w, bool) or not isinstance(w, int) or w < 1 for w in weeks):
+                errors.append(f"{where}: " + ("'week'" if "milestone" in it else "'start' and 'end'") + " must be week numbers from 1")
+            elif len(weeks) == 2 and weeks[1] < weeks[0]:
+                errors.append(f"{where}: 'end' is before 'start'")
+    return errors
 
 
 # ====================================================================== low-level Word helpers
@@ -88,6 +267,16 @@ def shade(el_pr, fill):
     shd.set(qn("w:color"), "auto")
     shd.set(qn("w:fill"), fill)
     el_pr.append(shd)
+
+
+def box(cell, color, size=4):
+    """A line on all four sides of a cell, replacing any lines it had."""
+    tc_pr = cell._tc.get_or_add_tcPr()
+    old = tc_pr.find(qn("w:tcBorders"))
+    if old is not None:
+        tc_pr.remove(old)
+    for side in ("top", "left", "bottom", "right"):
+        cell_border(cell, side, color, size)
 
 
 def cell_border(cell, side, color, size=4):
@@ -228,7 +417,7 @@ class Writer:
             h.font.size = Pt(size)
             h.font.bold = False
             h.font.italic = False
-            h.font.color.rgb = rgb(self.c["text"])
+            h.font.color.rgb = rgb(self.c.get("heading") or self.c["text"])
             set_fonts(h.element, self.fn["heading"])
             pf = h.paragraph_format
             pf.space_before, pf.space_after, pf.keep_with_next = Pt(before), Pt(after), True
@@ -240,10 +429,16 @@ class Writer:
         cap.font.bold = False
         cap.font.color.rgb = rgb(self.c["secondary"])
         set_fonts(cap.element, self.fn["body"])
-        for name in ("TOC 1", "TOC 2", "TOC 3", "TOC Heading"):
-            if name in [s.name for s in st]:
-                set_fonts(st[name].element, self.fn["body"] if name != "TOC Heading" else self.fn["heading"])
-                st[name].font.color.rgb = rgb(self.c["text"])
+        present = {s.name: s for s in st}
+        for name, before in (("toc 1", 5), ("toc 2", 0), ("toc 3", 0), ("TOC Heading", None)):
+            toc = present.get(name) or present.get(name.upper())
+            if toc is None:
+                continue
+            set_fonts(toc.element, self.fn["body"] if before is not None else self.fn["heading"])
+            toc.font.color.rgb = rgb(self.c["text"])
+            if before is not None:  # a line of the contents: close together, chapters set apart a little
+                toc.paragraph_format.space_before, toc.paragraph_format.space_after = Pt(before), Pt(1)
+                toc.paragraph_format.line_spacing = 1.0
 
     # ---- text
     def runs(self, paragraph, segments, size=None):
@@ -294,6 +489,12 @@ class Writer:
             h.paragraph_format.page_break_before = False
         return h
 
+    def page_title(self, text, after=8):
+        """The title of a front-matter page: looks like a chapter heading, but stays out of the contents."""
+        p = self.para([(text, "medium")], size=self.s["h1"], after=after)
+        p.runs[0].font.color.rgb = rgb(self.c.get("heading") or self.c["text"])
+        return p
+
     def lead(self, text):
         return self.para([(text, "sec")], after=10, keep=True)
 
@@ -326,6 +527,9 @@ class Writer:
         from docx.enum.table import WD_ROW_HEIGHT_RULE
 
         size = size or self.s["table"]
+        look = self.f.get("tables") or {}
+        fill, grid = look.get("header_fill"), look.get("borders") == "grid"
+        header_text = look.get("header_text") or ("FFFFFF" if fill else self.c["secondary"])
         self.glue_previous()
         t = self.doc.add_table(rows=1, cols=len(header))
         t.alignment = WD_TABLE_ALIGNMENT.LEFT
@@ -342,8 +546,10 @@ class Writer:
             elif center_from is not None and i >= center_from:
                 cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
             r.font.size = Pt(self.s["table_header"])
-            r.font.color.rgb = rgb(self.c["secondary"])
+            r.font.color.rgb = rgb(header_text)
             cell_border(cell, "bottom", self.c["line"], 6)
+            if fill:
+                shade(cell._tc.get_or_add_tcPr(), fill)
         repeat_header(t.rows[0])
         if rotate_from is not None:
             from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
@@ -374,6 +580,13 @@ class Writer:
                 if center_from is not None and i >= center_from:
                     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 cell_border(cells[i], "bottom", self.c["separator"])
+        if grid:  # a box round every cell, in place of the lines between rows
+            for row in t.rows:
+                done = set()
+                for cell in row.cells:  # a merged cell appears once per column it spans
+                    if id(cell._tc) not in done:
+                        done.add(id(cell._tc))
+                        box(cell, self.c["line"])
         fixed_widths(t, widths)
         # The header row and the first two rows move together, so a table never starts with a lone header
         # at the foot of a page. Short tables (up to 6 rows) are kept whole.
@@ -476,12 +689,13 @@ class Writer:
                 r.font.color.rgb = rgb(self.c[color])
             p.paragraph_format.space_after = Pt(0)
             self.runs(cell.add_paragraph(), [(label, "sec")], self.s["caption"])
-        # Word adds the gaps (cell spacing) around every card and indents the table by one gap: shrink the
-        # cards and pull the table back so the row lines up with the text margins.
-        w = (self.text_width - 0.32 * (len(items) + 1)) / len(items)
+        # Word puts a gap (the cell spacing, 0.32 cm in all) between the cards and half of one outside the
+        # first and last: size the cards so the row is exactly as wide as the text, and pull the table back
+        # by the outer gap so its first card starts at the margin.
+        w = (self.text_width - 0.32 * (len(items) - 1)) / len(items)
         fixed_widths(t, [w] * len(items))
         ind = OxmlElement("w:tblInd")
-        ind.set(qn("w:w"), "-90")
+        ind.set(qn("w:w"), "-180")
         ind.set(qn("w:type"), "dxa")
         t._tbl.tblPr.append(ind)
         self.doc.add_paragraph().paragraph_format.space_after = Pt(2)
@@ -738,6 +952,14 @@ def plan_sections(spec, fmt, reg_items):
     return chapters, refs
 
 
+def status_is_settled(text):
+    """Whether a document status reads as settled (a green dot on the cover) and not as still open (amber):
+    "Signed off", "Approved", "Final" are settled; "Not approved", "Unsigned draft", "Awaiting final review"
+    are not."""
+    return (bool(re.search(r"\b(signed|approved|accepted|final)\b", text, re.I))
+            and not re.search(r"\b(not|no|draft|pending|awaiting|review|before|until|un\w+)\b", text, re.I))
+
+
 def short(ref):
     """'section 4.3' -> '4.3' for compact reference columns."""
     return ref.replace("section ", "") if ref else ""
@@ -768,9 +990,16 @@ def build(project):
     errors = mockup.validate(spec)
     if errors:
         sys.exit("The spec has errors. Fix them, take the screenshots again, then generate:\n  " + "\n  ".join(errors))
+    errors = document_errors(spec)
+    if errors:
+        sys.exit("The spec has errors in the parts the document prints. Fix them, then generate:\n  " + "\n  ".join(errors))
     shots = json.loads(shots_file.read_text(encoding="utf-8"))
     shot_dir = project / "mockup" / "screenshots"
     fmt = load_format()
+    errors = format_errors(fmt)
+    if errors:
+        sys.exit(f"The document format has mistakes ({own_format_file() or 'templates/document-format.yaml'}):\n  "
+                 + "\n  ".join(errors) + "\nSee docs/document-format.md for the settings.")
     co = workspace.company()
     bp = yaml.safe_load(workspace.asset("document-boilerplate.yaml").read_text(encoding="utf-8"))
     P = spec["project"]
@@ -789,7 +1018,7 @@ def build(project):
     screens = spec["screens"]
     dialogs = {d["id"]: d for d in spec.get("dialogs", [])}
     status_text = P.get("status") or labels["default_status"]
-    status_color = "ok" if re.search(r"signed|approved|final", status_text, re.I) else "warning"
+    status_color = "ok" if status_is_settled(status_text) else "warning"
     version = P.get("version", "draft")
     num = {key: number for key, number, _ in chapters if number}
 
@@ -846,6 +1075,8 @@ def build(project):
     signoff = spec.get("signoff") or [
         {"name": "", "designation": "", "organisation": names["client"], "signing_for": "Business owner"},
         {"name": "", "designation": "", "organisation": co["name"], "signing_for": "Supplier"}]
+    # The client signs first, on the summary page and in the sign-off chapter alike.
+    signers_in_order = sorted(signoff, key=lambda s_: 0 if s_.get("organisation") in (names["client"], names["client_short"]) else 1)
 
     # ====================================================================== front matter
     for part in fmt["front"]:
@@ -862,8 +1093,7 @@ def build(project):
                 cell.add_run().add_picture(str(client_logo), height=Cm(1.3))
             fixed_widths(logos, [w.text_width / 2] * 2)
             w.para("", before=110, after=0)
-            w.para([(doc_title[:1].upper() + doc_title[1:].lower() + (f" ({doc_short})" if doc_short else ""), "sec")],
-                   size=w.s["body"] + 1, after=2)
+            w.para([(doc_title + (f" ({doc_short})" if doc_short else ""), "sec")], size=w.s["body"] + 1, after=2)
             title = w.para([(P["name"], "medium")], size=w.s["cover_title"], after=4)
             title.paragraph_format.keep_with_next = True
             w.para([(f"Prepared for {names['client']}", "sec")], size=w.s["body"] + 1, after=8)
@@ -876,11 +1106,11 @@ def build(project):
             w.kv_table(pairs, [3.6, 6.2])
         elif part == "at_a_glance":
             w.page_break()
-            w.para([(fmt["titles"]["at_a_glance"], "medium")], size=w.s["h1"], after=2)
+            w.page_title(fmt["titles"]["at_a_glance"], after=2)
             w.lead("What this document covers, and what still needs a decision before sign-off.")
             n_req = sum(len(g["items"]) for g in groups)
             n_high = sum(1 for it in open_items if it["severity"] == "high")
-            w.cards([(len(roles), "User roles", None), (len([s for s in screens if s["type"] != "login"]), "Screens", None),
+            w.cards([(len(roles), "User roles", None), (len(screens), "Screens", None),
                      (n_req, "Requirements", None),
                      (len(open_items), "Decisions needed" + (f", {n_high} blocking" if n_high else ""), "accent" if open_items else None)])
             w.para([("How to review it", "medium")], size=w.s["h3"], before=8, after=3)
@@ -897,7 +1127,7 @@ def build(project):
             w.table(["Name", "Organisation", "Signing for", "Status"],
                     [[s.get("name") or "To be named", s.get("organisation", ""), s.get("signing_for", ""),
                       [("ok" if str(s.get("status", "")).lower() == "signed" else "line", "dot"), (str(s.get("status") or "Pending").capitalize(), "")]]
-                     for s in signoff], [4.6, 4.6, 3.6, w.text_width - 12.8])
+                     for s in signers_in_order], [4.6, 4.6, 3.6, w.text_width - 12.8])
             if P.get("history"):
                 w.para([("Version history", "medium")], size=w.s["h3"], before=8, after=3)
                 w.table(["Version", "Date", "Author", "Changes"],
@@ -905,14 +1135,14 @@ def build(project):
                         [1.8, 2.6, 3.4, w.text_width - 7.8])
         elif part == "about":
             w.page_break()
-            w.para([(fmt["titles"]["about"], "medium")], size=w.s["h1"], after=8)
+            w.page_title(fmt["titles"]["about"])
             for title_, key in (("Disclaimer", "disclaimer"), ("Confidentiality", "confidentiality"), ("Concept acknowledgement", "concept")):
                 w.para([(title_, "medium")], size=w.s["h3"], before=6, after=3)
                 for line in bp[key]:
                     w.para(fill(line))
         elif part == "contents":
             w.page_break()
-            w.para([("Contents", "medium")], size=w.s["h1"], after=8)
+            w.page_title("Contents")
             p = doc.add_paragraph()
             add_field(p, 'TOC \\o "1-2" \\h \\z \\u')
 
@@ -951,7 +1181,7 @@ def build(project):
                 w.bullets([fill(b, where) for b in block["bullets"]])
             if "table" in block:
                 hdr = [as_word(h) for h in block["table"]["header"]]
-                body = [[as_word(v) for v in row] for row in block["table"]["rows"]]
+                body = [[fill(v, where) if isinstance(v, str) else as_word(v) for v in row] for row in block["table"]["rows"]]
                 first = 1.3 if str(hdr[0]).lower().startswith("no") else None
                 rest = (tw - (first or 0)) / (len(hdr) - (1 if first else 0))
                 w.table(hdr, body, ([first] if first else []) + [rest] * (len(hdr) - (1 if first else 0)))
@@ -980,7 +1210,8 @@ def build(project):
                 w.heading(f"{number.split('.')[0]}.{k} {t}", 2)
 
             sub("User roles")
-            w.table(["Role", "Responsibility", "Sees"], [[[(r["name"], "medium")], r.get("description", ""), r.get("scope", "")] for r in roles],
+            w.table(["Role", "Responsibility", "Sees"],
+                    [[[(r["name"], "medium")], fill(r.get("description", ""), f"role {r['id']}"), fill(r.get("scope", ""), f"role {r['id']}")] for r in roles],
                     [3.4, tw - 7.6, 4.2])
             sub("Access matrix")
             w.lead("A tick means the role has access; blank means no access. Built from the screens, so it always matches them.")
@@ -1023,20 +1254,24 @@ def build(project):
                     flow = shot_dir / "process-flow.png"
                 if flow.exists():
                     w.figure(flow, (spec.get("process_flow") or {}).get("title") or "Process flow")
-                w.table(["Status", "Meaning"], [[[(s["name"], "medium")], s.get("meaning", "")] for s in spec["statuses"]], [3.6, tw - 3.6])
+                w.table(["Status", "Meaning"], [[[(s["name"], "medium")], fill(s.get("meaning", ""), f"status {s['name']}")] for s in spec["statuses"]],
+                        [3.6, tw - 3.6])
             if spec.get("integrations"):
                 sub("External systems")
                 w.table(["System", "Purpose", "Direction", "Notes"],
-                        [[[(x.get("system", ""), "medium")], x.get("purpose", ""), x.get("direction", ""), x.get("notes", "")] for x in spec["integrations"]],
+                        [[[(x.get("system", ""), "medium")], fill(x.get("purpose", ""), f"integration {x.get('system', '')}"), x.get("direction", ""),
+                          fill(x.get("notes", ""), f"integration {x.get('system', '')}")] for x in spec["integrations"]],
                         [3.6, 4.6, 2.2, tw - 10.4])
             if spec.get("notifications"):
                 sub("E-mail notifications")
                 w.table(["Event", "Sent to", "Template"],
-                        [[n["event"], n["recipient"], fill(n.get("template", "To be confirmed"), "notifications")] for n in spec["notifications"]],
+                        [[fill(n["event"], "notifications"), fill(n["recipient"], "notifications"),
+                          fill(n.get("template", "To be confirmed"), "notifications")] for n in spec["notifications"]],
                         [5.4, 4.2, tw - 9.6])
             if spec.get("glossary"):
                 sub("Terms")
-                w.table(["Term", "Meaning"], [[[(g["term"], "mono")], g["meaning"]] for g in spec["glossary"]], [3.0, tw - 3.0])
+                w.table(["Term", "Meaning"], [[[(g["term"], "mono")], fill(g["meaning"], f"glossary {g['term']}")] for g in spec["glossary"]],
+                        [3.0, tw - 3.0])
 
         # ---------------------------------------------------------------- requirements by role
         elif key == "by_role":
@@ -1046,7 +1281,9 @@ def build(project):
             for i, r in enumerate(roles, 1):
                 w.heading(f"{ch}.{i} {r['name']}", 2)
                 if r.get("description") or r.get("scope"):
-                    w.para([(r.get("description", ""), ""), ((" Sees: " + r["scope"] + ".") if r.get("scope") else "", "sec")])
+                    where = f"role {r['id']}"  # the same place as in the roles table: a bad reference is reported once
+                    w.para([(fill(r.get("description", ""), where), ""),
+                            ((" Sees: " + fill(r["scope"], where) + ".") if r.get("scope") else "", "sec")])
                 mine = [s for s in screens if s["type"] != "login" and r["id"] in (s.get("roles") or role_ids)]
                 if mine:
                     w.para([("Screens", "medium")], before=4, after=2, keep=True)
@@ -1063,7 +1300,7 @@ def build(project):
                 if can:
                     w.para([("Can do", "medium")], before=4, after=2, keep=True)
                     w.para(", ".join(can[:14]) + ("…" if len(can) > 14 else ""))
-                mails = [n["event"] for n in spec.get("notifications", []) or []
+                mails = [fill(n["event"], "notifications") for n in spec.get("notifications", []) or []
                          if re.search(rf"\b{re.escape(r['name'])}\b", n.get("recipient", ""), re.I)]
                 if mails:
                     w.para([("E-mails received", "medium")], before=4, after=2, keep=True)
@@ -1078,7 +1315,7 @@ def build(project):
             w.heading(f"{number} {title}", 1)
             ch = number.split(".")[0]
             for gi, g in enumerate(groups, 1):
-                w.heading(f"{ch}.{gi} {g['title']}", 2)
+                w.heading(f"{ch}.{gi} {fill(g['title'], g['id'])}", 2)
                 w.para([(g["id"], "mono")], after=4, keep=True)
                 header = ["ID", "Requirement"] + (["Priority"] if has_priority else []) + (["Screen"] if has_screens else [])
                 widths = ([2.6, tw - 2.6 - (1.9 if has_priority else 0) - (1.9 if has_screens else 0)]
@@ -1166,7 +1403,8 @@ def build(project):
         elif key == "nfr":
             w.heading(f"{number} {title}", 1)
             if spec.get("nfr"):
-                w.table(["Area", "Requirement"], [[[(x["area"], "medium")], x["requirement"]] for x in spec["nfr"]], [4.0, tw - 4.0])
+                w.table(["Area", "Requirement"], [[[(x["area"], "medium")], fill(x["requirement"], f"non-functional requirement {x['area']}")] for x in spec["nfr"]],
+                        [4.0, tw - 4.0])
             else:
                 w.para([("warning", "dot"), ("To be confirmed: number of users, performance, availability, backup, retention, security and "
                                              f"supported browsers. See {refs.get('section:open-issues', 'the decisions section')}.", "")])
@@ -1250,8 +1488,7 @@ def build(project):
             w.para([("Sign by hand: print this section, sign, stamp and scan it. Sign digitally: open the PDF in Adobe "
                      "Acrobat Reader and click a signature box to sign with your digital ID. Each box can be signed "
                      "separately, in any order.", "sec")], size=w.s["caption"], after=10)
-            ordered = sorted(signoff, key=lambda s_: 0 if s_.get("organisation") in (names["client"], names["client_short"]) else 1)
-            for s_ in ordered:
+            for s_ in signers_in_order:
                 org = s_.get("organisation", "")
                 side = "Client" if org in (names["client"], names["client_short"]) else ("Supplier" if org in (co["name"], names["company_short"]) else "")
                 signers.append(s_.get("name") or s_.get("signing_for") or f"Signatory {len(signers) + 1}")
@@ -1278,6 +1515,7 @@ def build(project):
     shutil.copy(project / "spec" / "app.yaml", out_dir / f"spec-v{version}.yaml")
     print(f"Wrote {out}")
     print(f"  {w.figures} figures, {len(groups)} requirement groups, {len(open_items)} decisions needed, {len(signoff)} signatories")
+    warnings = list(dict.fromkeys(warnings))
     if warnings:
         print(f"  {len(warnings)} WARNING(S) - fix these before issuing:")
         for x in warnings:
@@ -1378,21 +1616,28 @@ def finish_in_word(docx_path):
     pdf = docx_path.with_suffix(".pdf")
     quoted = lambda path: "'" + str(path.resolve()).replace("'", "''") + "'"  # an apostrophe in a name is doubled
     script = (
-        "$ErrorActionPreference='Stop';"
-        "$w=New-Object -ComObject Word.Application;$w.Visible=$false;"
-        f"$d=$w.Documents.Open({quoted(docx_path)});"
+        "$ErrorActionPreference='Stop';$w=$null;$d=$null;"
+        "try{"
+        # No alerts: a question nobody can see would leave Word waiting for ever. Not added to the recent files.
+        "$w=New-Object -ComObject Word.Application;$w.Visible=$false;$w.DisplayAlerts=0;"
+        f"$d=$w.Documents.Open({quoted(docx_path)},$false,$false,$false);"
         "foreach($t in $d.TablesOfContents){$t.Update()};$d.Fields.Update()|Out-Null;"
         "$d.EmbedTrueTypeFonts=$true;$d.SaveSubsetFonts=$true;"
         f"$d.Save();$d.ExportAsFixedFormat({quoted(pdf)},17);"
         "$null=$d.Content.Find.Execute('BPSIG[0-9]{1,3}',$false,$false,$true,$false,$false,$true,1,$false,'',2);"
-        "$d.Save();$d.Close();$w.Quit()"
+        "$d.Save();$d.Close();$d=$null"
+        "}finally{"
+        # Whatever went wrong, Word is closed: left running hidden it keeps the document locked for the next run.
+        "if($d){try{$d.Close([ref]0)}catch{}};if($w){try{$w.Quit([ref]0)}catch{}}"
+        "}"
     )
     try:
         r = subprocess.run(["powershell", "-NoProfile", "-Command", script], capture_output=True, timeout=240)
     except FileNotFoundError:
         return False, NO_WORD  # no PowerShell: not Windows, so no Word either
     except subprocess.TimeoutExpired:
-        return False, "Word did not finish within 4 minutes. It may be waiting on a dialog: close Word and generate again"
+        return False, ("Word did not finish within 4 minutes and may still be running hidden. In Task Manager, on the "
+                       "Details tab, end the WINWORD.EXE you did not open yourself, then generate again")
     except Exception as e:
         return False, f"PowerShell could not be run ({e})"
     if r.returncode == 0 and pdf.exists():
@@ -1404,6 +1649,8 @@ def finish_in_word(docx_path):
         return False, "Word ran but wrote no PDF"
     # PowerShell wraps long messages; the reason is the text before its "At line:1 char:..." location.
     reason = " ".join(said.split("At line:")[0].split())
+    if reason.rstrip(".").endswith("Command failed"):  # all Word says when it cannot save over a file in use
+        reason = "Word could not save the document. It is probably open in another program: close it and generate again"
     return False, reason[:400] or f"PowerShell ended with code {r.returncode}"
 
 

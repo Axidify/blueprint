@@ -10,12 +10,18 @@ The generated requirements document follows a format: `templates/document-format
 (`branding/document-template.docx`), standard wording (`branding/document-boilerplate.yaml`) and logo
 (`branding/logo.png`) sit next to it. Full reference: `docs/document-format.md`.
 
-Run `python -I tools/document_format.py show` first to see the format in effect.
+Run `python -I tools/document_format.py show` first to see the format in effect. It also lists any
+mistakes in the company's file (a setting that does not exist, a colour that is not six hex digits); run
+it again after every change you make, and fix what it reports before previewing.
 
 ## A. Change something on request
 
-1. Translate the request into format keys (colours are hex without `#`, sizes in points):
+1. Translate the request into format keys (colours are six hex digits in quotes, sizes in points):
    - colours, fonts, sizes → `colors`, `fonts`, `sizes`
+   - "make table headers navy", "black headers with white text" → `tables.header_fill` (and
+     `tables.header_text` when it should not be white)
+   - "boxes round the cells", "a normal grid table" → `tables.borders: grid`
+   - "navy headings" → `colors.heading`
    - "number sections 1.0" → `numbering: decimal`
    - "put screens before requirements", "drop the role section" → `chapters` (order and membership)
    - "no at-a-glance page", "no contents" → `front`

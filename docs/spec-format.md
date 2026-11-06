@@ -145,4 +145,18 @@ sections are added. Use a reference the generator resolves, and it warns about a
 | `{ref:extra:<extra section title>}` | "section n.0" or "Appendix X" |
 | `{ref:req:<FR id>}` | the requirement group id |
 
-`{client}` and `{system}` are replaced with the project's client and system names.
+`{client}`, `{client_short}`, `{system}`, `{company}` and `{company_short}` are replaced with the names from
+the spec and the company profile. References and names are resolved in every text the document prints:
+overview, role descriptions and scopes, status meanings, requirements and their group titles, screen
+descriptions, field rules, notifications, integrations, non-functional requirements, glossary meanings,
+the timeline and extra sections, including the cells of their tables.
+
+## What the generator checks
+
+Before it writes anything, the document generator checks the spec: everything the mock-up needs (unknown
+screens, roles and dialogs, duplicate ids, status colours) and the parts only the document prints. Each
+requirement group needs an `id` (used once), a `title` and at least one item with text; a notification its
+`event` and `recipient`; a non-functional requirement its `area` and `requirement`; a glossary entry its
+`term` and `meaning`; every screen a `title`, every field and list column a `label`. Extra sections need
+titles that differ from each other, and table rows as long as their header. Timeline weeks count from 1,
+and an activity's `end` is not before its `start`. Mistakes are listed together and nothing is written.

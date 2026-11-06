@@ -174,7 +174,7 @@ def test_company_format_reorders_renumbers_and_renames(temp_workspace, tmp_path)
     assert support.headings(result.doc, 1) == ["1.0 Users and access", "2.0 Screen designs", "3.0 Functional requirements",
                                               "Client acknowledgement and sign-off"]
     assert support.headings(result.doc, 2)[:2] == ["1.1 User roles", "1.2 Access matrix"]
-    assert "Functional specification (FS)" in all_text(result.doc)  # the cover
+    assert "Functional Specification (FS)" in all_text(result.doc)  # the cover: the title as the company writes it
 
 
 # ====================================================================== cross-references
@@ -492,7 +492,9 @@ def test_at_a_glance_lists_every_signatory(wide):
     front = support.chapters(wide.doc)[0][1]
     table = rows(support.table_starting(front, "Name"))
     assert table[0] == ["Name", "Organisation", "Signing for", "Status"]
-    assert [r[0] for r in table[1:]] == [s["name"] for s in wide.spec["signoff"]]
+    assert sorted(r[0] for r in table[1:]) == sorted(s["name"] for s in wide.spec["signoff"])
+    assert [r[1] for r in table[1:]] == ["Sample Client Sdn. Bhd.", "Sample Client Sdn. Bhd.", "Your Company"], \
+        "the client first, as in the sign-off chapter (the spec lists the supplier first)"
     assert all(r[3] == "● Pending" for r in table[1:])
 
 
@@ -859,3 +861,248 @@ def test_with_word_writes_a_pdf_with_signing_fields(sandbox, tmp_path, monkeypat
     assert fields == ["Signature 1 - Aminah Yusof", "Signature 2 - Rajesh Kumar", "Signature 3 - Tan Wei Ling"]
     assert "BPSIG" not in text and "BPSIG" not in all_text(result.doc)
     assert "Project timeline" in text
+
+
+# ====================================================================== Word is always closed
+def test_the_word_script_closes_word_whatever_happens(sandbox, tmp_path, monkeypatch):
+    """A failure half-way used to leave Word running hidden with the document open, which locked it for the
+    next run. The script now closes the document without saving and quits Word in a finally block, shows no
+    alerts (a question nobody can see would hang it) and keeps the document out of the recent files."""
+    docx = tmp_path / "doc.docx"
+    Document().save(str(docx))
+    run = FakeRun(write_pdf=docx.with_suffix(".pdf"))
+    monkeypatch.setattr(subprocess, "run", run)
+    sandbox.finish_in_word(docx)
+    script = run.calls[0][-1]
+    assert script.index("try{") < script.index("Documents.Open(") < script.index("}finally{") < script.index("$w.Quit([ref]0)")
+    assert "$d.Close([ref]0)" in script.split("}finally{")[1]
+    assert "$w.DisplayAlerts=0" in script and ",$false,$false,$false);" in script
+
+
+def test_word_saying_only_command_failed_is_explained(sandbox, tmp_path, monkeypatch):
+    monkeypatch.setattr(subprocess, "run", FakeRun(returncode=1, stderr=b"Command failed\r\nAt line:1 char:300\r\n+ ..."))
+    docx = tmp_path / "doc.docx"
+    Document().save(str(docx))
+    done, why = sandbox.finish_in_word(docx)
+    assert not done and "could not save the document" in why and "open in another program" in why
+
+
+def test_a_word_that_does_not_answer_says_how_to_close_it(sandbox, tmp_path, monkeypatch):
+    monkeypatch.setattr(subprocess, "run", FakeRun(error=subprocess.TimeoutExpired("powershell", 240)))
+    docx = tmp_path / "doc.docx"
+    Document().save(str(docx))
+    done, why = sandbox.finish_in_word(docx)
+    assert not done and "Task Manager" in why and "WINWORD.EXE" in why
+
+
+# ====================================================================== mistakes in the format file
+def company_format(workspace_folder, text, name="document-format.yaml"):
+    (workspace_folder / "branding").mkdir(exist_ok=True)
+    (workspace_folder / "branding" / name).write_text(text, encoding="utf-8")
+
+
+@pytest.mark.parametrize("text, said", [
+    ("colors:\n  accent: 12345G\n", "colors.accent: '12345G' is not a colour"),
+    ("colors:\n  accent: 1122\n", "Put it in quotes"),
+    ("colours:\n  accent: 0A66C2\n", "'colours' is not a setting (did you mean 'colors'?)"),
+    ("colors:\n  acent: 0A66C2\n", "colors: 'acent' is not a setting (did you mean 'accent'?)"),
+    ("chapters: [users_access, screens, glossary, signoff]\n", "chapters: 'glossary' is not one of users_access"),
+    ("front: [cover, summary, contents]\n", "front: 'summary' is not one of cover, at_a_glance, about, contents"),
+    ("numbering: decimals\n", "numbering: 'decimals' must be plain or decimal"),
+    ("header_footer: mine\n", "header_footer: 'mine' must be generated or template"),
+    ("sizes:\n  body: large\n", "sizes.body: 'large' must be a point size"),
+    ("fonts:\n  body: 12\n", "fonts.body: must be the name of a font"),
+    ("tables:\n  borders: boxes\n", "tables.borders: 'boxes' must be hairline or grid"),
+    ("layout:\n  screens_new_page: sometimes\n", "layout.screens_new_page: must be true or false"),
+    ("titles:\n  screens: ''\n", "titles.screens: needs a title"),
+    ("chapters: users_access\n", "chapters: must be a list"),
+], ids=["bad-colour", "number-colour", "british-spelling", "typo-in-a-key", "unknown-chapter", "unknown-front-part", "numbering",
+        "header-footer", "size", "font", "borders", "layout", "empty-title", "chapters-not-a-list"])
+def test_a_mistake_in_the_format_file_is_named(temp_workspace, tmp_path, text, said):
+    """Each of these used to end in a Python traceback, or was silently ignored."""
+    company_format(temp_workspace, text)
+    project = support.make_project(tmp_path / "leave-request")
+    with pytest.raises(SystemExit) as stop:
+        generate_requirements.build(project)
+    message = str(stop.value)
+    assert "The document format has mistakes" in message and "document-format.yaml" in message
+    assert said in message
+    assert not (project / "output").exists(), "nothing is written from a broken format"
+
+
+def test_all_mistakes_in_the_format_are_listed_together():
+    fmt = generate_requirements.default_format()
+    fmt["colors"]["accent"], fmt["numbering"], fmt["extra"] = "blue", "roman", 1
+    errors = generate_requirements.format_errors(fmt)
+    assert len(errors) == 3
+
+
+@pytest.mark.parametrize("written, used", [('"#0a66c2"', "0A66C2"), ("0a66c2", "0A66C2"), ("112233", "112233"), ('" 1F5FBF "', "1F5FBF")],
+                         ids=["hash", "lower-case", "all-digits", "spaces"])
+def test_a_colour_may_be_written_the_usual_ways(temp_workspace, tmp_path, written, used):
+    company_format(temp_workspace, f"colors:\n  accent: {written}\n")
+    assert generate_requirements.format_errors(fmt := generate_requirements.load_format()) == []
+    assert fmt["colors"]["accent"] == used
+    support.generate(support.make_project(tmp_path / "leave-request"))
+
+
+def test_the_default_format_has_no_mistakes():
+    assert generate_requirements.format_errors(generate_requirements.default_format()) == []
+
+
+def test_the_format_file_is_still_read_under_its_old_name(temp_workspace, tmp_path):
+    """branding/srs-format.yaml, the name before 0.4.0: the changelog promised it keeps working."""
+    company_format(temp_workspace, "document:\n  title: System Requirement Specifications\n  short: SRS\n", name="srs-format.yaml")
+    result = support.generate(support.make_project(tmp_path / "leave-request"))
+    assert result.path.name == "Leave Request System – System Requirement Specifications v0.1.docx"
+
+
+# ====================================================================== mistakes in the spec's document parts
+@pytest.mark.parametrize("change, said", [
+    (lambda s: s["requirements"].append({"id": "FR-NEW-001", "title": "New group"}), "requirement group FR-NEW-001: needs 'items'"),
+    (lambda s: s["requirements"].append({"id": "FR-NEW-001", "title": "New group", "items": ["", {"note": "x"}]}), "requirement group FR-NEW-001, item 2: needs its text"),
+    (lambda s: s["requirements"].append(dict(s["requirements"][0])), "the id is used twice"),
+    (lambda s: s.update(notifications=[{"event": "Submitted"}]), "notification 1: missing 'recipient'"),
+    (lambda s: s.update(nfr=[{"area": "Security"}]), "non-functional requirement 1: missing 'requirement'"),
+    (lambda s: s.update(glossary=[{"term": "LM"}]), "glossary entry 1: missing 'meaning'"),
+    (lambda s: s["screens"][1].pop("title"), "missing 'title'"),
+    (lambda s: s.update(extra_sections=[{"title": "Notes", "content": [{"text": "a"}]}, {"title": "Notes", "content": [{"text": "b"}]}]),
+     "extra section 'Notes': two sections have this title"),
+    (lambda s: s.update(extra_sections=[{"title": "Data", "content": [{"table": {"header": ["A", "B"], "rows": [["1"]]}}]}]), "every table row needs 2 cells"),
+    (lambda s: s.update(timeline={"stages": [{"name": "Start", "items": [{"milestone": "M0", "name": "Kick-off", "week": 0}]}]}), "'week' must be week numbers from 1"),
+    (lambda s: s.update(timeline={"stages": [{"name": "Build", "items": [{"name": "Development", "start": 5, "end": 2}]}]}), "'end' is before 'start'"),
+], ids=["no-items", "empty-item", "duplicate-group", "notification", "nfr", "glossary", "screen-title", "twin-extra-sections", "ragged-table",
+        "week-zero", "end-before-start"])
+def test_a_mistake_in_the_document_parts_of_the_spec_is_named(tmp_path, change, said):
+    """The mock-up's check does not look at these parts; they used to end in a traceback (or, for two extra
+    sections with one title, in the first section printed twice)."""
+    project = support.make_project(tmp_path / "leave-request")
+    spec = support.load_spec(project)
+    change(spec)
+    support.write_spec(project, spec)
+    with pytest.raises(SystemExit) as stop:
+        generate_requirements.build(project)
+    assert "The spec has errors in the parts the document prints" in str(stop.value) and said in str(stop.value)
+    assert not (project / "output").exists()
+
+
+def test_the_sample_specs_have_no_document_mistakes():
+    for source in (support.EXAMPLE, support.WIDE):
+        spec = generate_requirements.json.loads(generate_requirements.json.dumps(support.load_spec(source), default=str))
+        assert generate_requirements.document_errors(spec) == [], source.name
+
+
+# ====================================================================== references in every text
+def test_references_and_names_are_resolved_wherever_the_spec_has_text(tmp_path):
+    """They used to be resolved in some places only: a role's description, a status meaning, a non-functional
+    requirement, a glossary meaning and an integration printed {ref:...} and {client} as typed."""
+    spec = support.load_spec(support.WIDE)
+    spec["roles"][0]["description"] = "Books equipment for {client}, see {ref:screen:new-booking}."
+    spec["roles"][0]["scope"] = "Own bookings in {system}"
+    spec["statuses"][0]["meaning"] = "Explained in {ref:section:roles}."
+    spec["nfr"][0]["requirement"] = "As listed in {ref:section:access} for {client_short}."
+    spec["glossary"][0]["meaning"] = "A term of {company}, see {ref:req:FR-BKG-001}."
+    spec["integrations"][0]["purpose"] = "Sign-in for {system}"
+    spec["integrations"][0]["notes"] = "See {ref:section:integrations}"
+    spec["notifications"][0]["event"] = "Booking submitted in {system}"
+    spec["requirements"][0]["title"] = "Book Equipment in {system}"
+    result = support.generate(support.make_project(tmp_path / "refs", spec=spec))
+    text = all_text(result.doc)
+    assert PLACEHOLDER.findall(text) == []
+    for expected in ("Books equipment for Sample Client Sdn. Bhd., see section 4.3.", "Own bookings in Equipment Booking System",
+                     "Explained in section 1.1.", "As listed in section 1.2 for SAMPLE.", "see FR-BKG-001.",
+                     "Sign-in for Equipment Booking System", "See section 1.4", "Booking submitted in Equipment Booking System",
+                     "Book Equipment in Equipment Booking System"):
+        assert expected in text, expected
+    assert "WARNING" not in result.log
+
+
+def test_a_bad_reference_outside_the_requirements_is_reported_once(tmp_path):
+    spec = support.load_spec(support.WIDE)
+    spec["roles"][0]["description"] = "See {ref:screen:nowhere} and section 3.2."   # printed in two chapters
+    spec["nfr"][0]["requirement"] = "As in Figure 4."
+    result = support.generate(support.make_project(tmp_path / "bad-refs", spec=spec))
+    assert "3 WARNING(S)" in result.log
+    assert result.log.count("unknown reference {ref:screen:nowhere}") == 1
+    assert "literal cross-reference 'section 3.2'" in result.log and "literal cross-reference 'Figure 4'" in result.log
+
+
+# ====================================================================== the cover
+@pytest.mark.parametrize("status, settled", [
+    ("Signed off", True), ("Approved", True), ("Final", True), ("Approved by the client", True), ("Accepted", True),
+    ("Draft for client review", False), ("Not approved", False), ("Unsigned draft", False), ("Awaiting final review", False),
+    ("Final draft", False), ("Pending approval", False), ("For approval", False), ("Not yet signed", False),
+])
+def test_only_a_settled_status_gets_the_green_dot(status, settled):
+    assert generate_requirements.status_is_settled(status) is settled
+
+
+def test_the_cover_dot_follows_the_status(tmp_path):
+    def dot_colour(status):
+        spec = support.load_spec(support.EXAMPLE)
+        spec["project"]["status"] = status
+        doc = support.generate(support.make_project(tmp_path / status.replace(" ", "-"), spec=spec)).doc
+        para = next(p for p in doc.paragraphs if p.text == f"● {status}")
+        return str(para.runs[0].font.color.rgb)
+
+    assert dot_colour("Not approved") == FORMAT["colors"]["warning"]
+    assert dot_colour("Signed off") == FORMAT["colors"]["ok"]
+
+
+def test_the_summary_counts_every_screen_of_the_screens_chapter(wide):
+    front = support.chapters(wide.doc)[0][1]
+    cards = rows(tables(front)[2])[0]  # after the cover's logo and details tables
+    assert cards[1] == f"{len(wide.spec['screens'])}\nScreens"
+    assert len(support.split_at_headings(chapter(wide.doc, TITLES["screens"]), 2)[1:]) == len(wide.spec["screens"])
+
+
+# ====================================================================== house styles: filled headers, grids, coloured headings
+def test_tables_can_have_a_filled_header_a_grid_and_coloured_headings(temp_workspace, tmp_path):
+    company_format(temp_workspace, 'colors:\n  heading: "1F3864"\ntables:\n  header_fill: "1F3864"\n  borders: grid\n')
+    result = support.generate(support.make_project(tmp_path / "house-style", support.WIDE))
+    table = support.table_starting(chapter(result.doc, TITLES["decisions"]), "ID")
+    head, body = table.rows[0].cells[0], table.rows[1].cells[0]
+    assert 'w:fill="1F3864"' in head._tc.xml, "the header row is filled"
+    assert str(head.paragraphs[0].runs[-1].font.color.rgb) == "FFFFFF", "white text on the fill, unless header_text says otherwise"
+    assert 'w:fill=' not in body._tc.xml
+    for cell in (head, body):
+        borders = cell._tc.tcPr.find(support.qn("w:tcBorders"))
+        assert [b.tag.split("}")[1] for b in borders] == ["top", "left", "bottom", "right"], "a box round every cell"
+    heading = next(p for p in result.doc.paragraphs if p.style.name == "Heading 1")
+    assert str(heading.style.font.color.rgb) == "1F3864"
+    assert str(result.doc.styles["Heading 2"].font.color.rgb) == "1F3864"
+    title = next(p for p in result.doc.paragraphs if p.text == TITLES["at_a_glance"])
+    assert str(title.runs[0].font.color.rgb) == "1F3864", "front-matter page titles follow the headings"
+
+
+def test_the_header_text_colour_can_be_set(temp_workspace, tmp_path):
+    company_format(temp_workspace, 'tables:\n  header_fill: "E9EEF7"\n  header_text: "1F3864"\n')
+    result = support.generate(support.make_project(tmp_path / "pale-header", support.WIDE))
+    head = support.table_starting(chapter(result.doc, TITLES["decisions"]), "ID").rows[0].cells[0]
+    assert 'w:fill="E9EEF7"' in head._tc.xml and str(head.paragraphs[0].runs[-1].font.color.rgb) == "1F3864"
+
+
+def test_the_default_look_is_unchanged(wide):
+    table = support.table_starting(chapter(wide.doc, TITLES["decisions"]), "ID")
+    head, body = table.rows[0].cells[0], table.rows[1].cells[0]
+    assert 'w:fill=' not in head._tc.xml and str(head.paragraphs[0].runs[-1].font.color.rgb) == FORMAT["colors"]["secondary"]
+    assert [b.tag.split("}")[1] for b in body._tc.tcPr.find(support.qn("w:tcBorders"))] == ["bottom"], "hairlines only"
+    assert str(wide.doc.styles["Heading 1"].font.color.rgb) == FORMAT["colors"]["text"]
+
+
+# ====================================================================== contents and summary cards
+def test_contents_lines_are_set_close_together(example):
+    """They used the body text's spacing, so a contents of 36 lines ran three lines onto an empty page."""
+    for name, before in (("toc 1", 5), ("toc 2", 0)):
+        style = example.doc.styles[name]
+        assert style.paragraph_format.space_after.pt == 1 and style.paragraph_format.space_before.pt == before
+        assert style.paragraph_format.line_spacing == 1.0
+
+
+def test_summary_cards_are_as_wide_as_the_text(wide):
+    front = support.chapters(wide.doc)[0][1]
+    cards = tables(front)[2]
+    section = wide.doc.sections[0]
+    text_width = (section.page_width - section.left_margin - section.right_margin) / 360000
+    widths = [column.width / 360000 for column in cards.columns]
+    assert abs(sum(widths) + 0.32 * (len(widths) - 1) - text_width) < 0.05, "the cards and the gaps between them fill the line"

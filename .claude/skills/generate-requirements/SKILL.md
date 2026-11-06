@@ -46,7 +46,9 @@ requirement tables and screenshots all come from the spec, so they cannot contra
 
 1. `python -I tools/mockup.py screenshots projects/<slug>` (always regenerate, so the screenshots match
    the spec).
-2. `python -I tools/generate_requirements.py projects/<slug>`. This writes the `.docx` to `projects/<slug>/output/`,
+2. `python -I tools/generate_requirements.py projects/<slug>`. It first checks the spec and the document
+   format and stops with a list of mistakes if there are any: fix those in the spec (or, for the format,
+   with the `document-format` skill) and run it again. Then it writes the `.docx` to `projects/<slug>/output/`,
    and, if Microsoft Word is installed, updates the table of contents and writes a PDF next to it. A copy
    of the spec used is saved as `spec-v<version>.yaml`.
 3. Read the warnings it prints (literal cross-references, unknown `{ref:...}`, requirements that mention the

@@ -24,7 +24,7 @@ sizes:                        # points
   h3: 11.5
   cover_title: 26
 
-colors:                       # hex, no '#'
+colors:                       # six hex digits; quote a value made of digits only ("112233")
   text: 1D1D1F
   secondary: 6E6E73
   separator: E5E5EA           # lines between table rows
@@ -36,6 +36,12 @@ colors:                       # hex, no '#'
   warning: FF9500
   error: FF3B30
   timeline_bar: C9D8EF        # timeline bars; client activities use the accent
+  heading: ""                 # chapter and section headings; empty: the text colour
+
+tables:                       # how tables look; the default is hairlines and no fill
+  header_fill: ""             # a colour for the header row, e.g. "1F3864" for navy; empty: no fill
+  header_text: ""             # header text colour; empty: grey, or white on a filled header
+  borders: hairline           # hairline: a line under each row   grid: a box round every cell
 
 numbering: plain              # plain: 1, 1.1, 1.2   decimal: 1.0, 1.1, 1.2
 

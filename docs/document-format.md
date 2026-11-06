@@ -17,7 +17,9 @@ Specification".
 
 Calm and easy to scan: true greys, one accent colour for links and the number that matters on a page,
 Geist type with Geist Mono for IDs, hairline tables instead of grids, and status shown as a coloured dot
-beside a word (orange: needs an answer, red: blocks sign-off, green: done).
+beside a word (orange: needs an answer, red: blocks sign-off, green: done). The dot beside the document's
+status on the cover is green only when the status reads as settled ("Signed off", "Approved", "Final") and
+orange otherwise ("Draft for client review", "Not approved", "Awaiting final review").
 
 | Part | What it contains | Built from |
 |---|---|---|
@@ -44,6 +46,8 @@ page number).
 Generated documents are laid out so nothing is cut off awkwardly between pages:
 
 - every chapter, and every screen, starts on a new page (screens can run on; see `layout` below);
+- the lines of the contents are set close together, with a little space above each chapter, so a long
+  contents takes as few pages as it can;
 - a heading always stays on the same page as the text, screenshot or table that follows it;
 - a screenshot and its caption are never separated;
 - tables never start with a lone header at the foot of a page, short tables (up to six rows) are kept
@@ -72,7 +76,9 @@ titles:
 | `document.title`, `document.short` | What your company calls this document, e.g. "System Requirement Specifications" and "SRS", or "Functional Specification" and "FS". Used on the cover, in the sign-off wording and in file names. Default: "Requirements Specification" |
 | `fonts.body`, `fonts.heading`, `fonts.mono` | Typefaces. The defaults (Geist, Geist Medium, Geist Mono) are installed by `setup.cmd`; any other font must be installed on the machines that generate documents |
 | `sizes.*` | Point sizes: `body`, `table`, `table_header`, `caption`, `h1`, `h2`, `h3`, `cover_title` |
-| `colors.*` | Hex colours without `#`: `text`, `secondary`, `separator` (row lines), `line` (header line), `field` (tags), `ground` (cards and screenshot frames), `accent`, `ok`, `warning`, `error`, `timeline_bar` (timeline bars; client activities use `accent`) |
+| `tables.header_fill`, `tables.header_text`, `tables.borders` | For house styles with filled table headers. `header_fill`: a colour for the header row of every table, e.g. `"1F3864"` (empty: no fill). `header_text`: the header text colour (empty: grey, or white on a fill). `borders`: `hairline` (default: a line under each row) or `grid` (a box round every cell). The summary cards, the sign-off forms and the timeline chart keep their own look |
+| `colors.heading` | The colour of chapter and section headings and of the front-matter page titles (empty: the text colour) |
+| `colors.*` | Hex colours, with or without `#`: `text`, `secondary`, `separator` (row lines), `line` (header line), `field` (tags), `ground` (cards and screenshot frames), `accent`, `ok`, `warning`, `error`, `timeline_bar` (timeline bars; client activities use `accent`) |
 | `numbering` | `plain` (1, 1.1) or `decimal` (1.0, 1.1) |
 | `layout.screens_new_page` | `true` (default): every screen in the Screens chapter starts on a new page; `false`: screens run on |
 | `header_footer` | `generated` (system, version, status / company, page) or `template` (keep the header and footer of `branding/document-template.docx`; `{company}` in it is replaced) |
@@ -80,6 +86,13 @@ titles:
 | `chapters` | Chapters in order: `users_access`, `by_role`, `requirements`, `screens`, `nfr`, `timeline`, `extras`, `decisions`, `signoff`. A company file that lists its own chapters must add `timeline` to get the timeline |
 | `titles.*` | Chapter and page titles |
 | `labels.*` | Words used in the document: impact levels, "Decision needed", the default status, "Confidential" |
+
+**Mistakes are reported, not guessed at.** Before a document is generated the format is checked: a setting
+that does not exist (`colours` for `colors`, with the likely one suggested), a colour that is not six hex
+digits, a size that is not a number, an unknown chapter or front part, and anything other than the allowed
+words for `numbering`, `header_footer` and `tables.borders` stop the run with the list of what to fix.
+`python -I tools/document_format.py show` prints the same list. Quote a colour made of digits only
+(`"112233"`): unquoted, a value such as `001122` is read as a number.
 
 Other branding files in `workspace/branding/`: `logo.png` (cover), `document-template.docx` (styles, page
 set-up, and the header and footer when `header_footer: template`), `document-boilerplate.yaml` (standard
