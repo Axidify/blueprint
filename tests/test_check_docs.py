@@ -30,13 +30,16 @@ CHANGELOG = """# Changelog
 """
 
 
+SKILL = "---\nname: demo\n---\n\n# Demo\n\n## 1. Do it\n\nThe work.\n\n## Hand over\n\nWhat was made, where, for whom, the next step.\n"
+
+
 @pytest.fixture
 def repo(tmp_path):
     """A tiny repository that passes the documentation check."""
     root = tmp_path / "repo"
     files = {
         "tools/check_docs.py": (support.ROOT / "tools" / "check_docs.py").read_text(encoding="utf-8"),
-        ".claude/skills/demo/SKILL.md": "---\nname: demo\n---\n",
+        ".claude/skills/demo/SKILL.md": SKILL,
         "docs/skills.md": "# Skills\n\n### demo\nA demo skill.\n",
         "docs/tools.md": "# Tools\n\n### check_docs.py\nThe documentation check.\n",
         "CLAUDE.md": "Skills: `demo`.\n",
@@ -196,3 +199,97 @@ def test_workspace_names_must_not_appear_in_app_files(repo):
     result = check(repo)
     assert result.returncode == 1
     assert "docs/tools.md: contains 'Borrowed Name Ltd' from your workspace" in result.stderr
+
+
+# ====================================================================== the hand-over every skill ends with
+def write_skill(repo, name, text):
+    (repo / ".claude" / "skills" / name).mkdir(parents=True, exist_ok=True)
+    (repo / ".claude" / "skills" / name / "SKILL.md").write_text(text, encoding="utf-8")
+
+
+def test_a_skill_without_a_hand_over_fails(repo):
+    write_skill(repo, "demo", "---\nname: demo\n---\n\n## 1. Do it\n\n## 6. Report\nTell them.\n")
+    result = check(repo)
+    assert result.returncode == 1
+    assert ".claude/skills/demo/SKILL.md: no '## Hand over' section" in result.stderr
+
+
+def test_the_hand_over_must_be_the_last_section(repo):
+    write_skill(repo, "demo", SKILL + "\n## Rules\n\n- Something.\n")
+    assert "'## Hand over' must be the last section, but '## Rules' comes after it" in check(repo).stderr
+
+
+def test_a_hand_over_inside_a_code_block_does_not_count(repo):
+    write_skill(repo, "demo", "---\nname: demo\n---\n\n## 1. Do it\n\n```\n## Hand over\n```\n")
+    assert "no '## Hand over' section" in check(repo).stderr
+
+
+def test_the_release_skill_for_maintainers_needs_no_hand_over(repo):
+    write_skill(repo, "release", "---\nname: release\n---\n\n## 5. Publish (ask first)\n")
+    (repo / "docs" / "skills.md").write_text("# Skills\n\n### demo\n\n### release\n", encoding="utf-8")
+    (repo / "CLAUDE.md").write_text("Skills: `demo`, `release`.\n", encoding="utf-8")
+    assert check(repo).returncode == 0
+
+
+# ====================================================================== the skill evaluations
+PLUGIN = '{"name": "blueprint-evals", "skills": "./.claude/skills", "experimental": {"evals": "evals"}}\n'
+PROMPT = "---\ntags: [smoke]\nruns: 1\nmax_turns: 6\nallowed_tools: [Read, Skill]\n---\n\nHello, what can you do?\n"
+GRADERS = {
+    "skill-fired.md": "---\ntype: tool_used\ntool: Skill\ninput_match: '\"skill\"\\s*:\\s*\"(?:[\\w-]+:)?demo\"'\n---\n",
+    "says-next.md": "---\ntype: regex\npattern: next step\nflags: i\n---\n",
+    "criteria.md": "---\ntype: llm\n---\n\nPASS if it names the next step.\nFAIL otherwise.\n",
+}
+
+
+@pytest.fixture
+def evals(repo):
+    """The repository with a small, well-formed evaluation suite."""
+    (repo / ".claude-plugin").mkdir()
+    (repo / ".claude-plugin" / "plugin.json").write_text(PLUGIN, encoding="utf-8")
+    case = repo / "evals" / "says-next"
+    (case / "graders").mkdir(parents=True)
+    (case / "prompt.md").write_text(PROMPT, encoding="utf-8")
+    for name, text in GRADERS.items():
+        (case / "graders" / name).write_text(text, encoding="utf-8")
+    return repo
+
+
+def test_a_well_formed_suite_passes(evals):
+    result = check(evals)
+    assert (result.returncode, result.stderr) == (0, "")
+
+
+def test_a_repository_without_a_suite_is_not_checked(repo):
+    assert check(repo).returncode == 0
+
+
+def test_results_of_a_run_are_not_cases(evals):
+    (evals / "evals" / "results" / "2026-11-06").mkdir(parents=True)
+    (evals / "evals" / "results" / "2026-11-06" / "prompt.md").write_text("copied by a run", encoding="utf-8")
+    assert check(evals).returncode == 0
+
+
+@pytest.mark.parametrize("change, message", [
+    (lambda case: [g.unlink() for g in (case / "graders").glob("*.md")], "evals/says-next: no graders"),
+    (lambda case: (case / "prompt.md").write_text("Hello\n", encoding="utf-8"), "no frontmatter"),
+    (lambda case: (case / "prompt.md").write_text(PROMPT.replace("runs: 1", "repeat: 1"), encoding="utf-8"),
+     "unknown frontmatter key 'repeat'"),
+    (lambda case: (case / "prompt.md").write_text(PROMPT.split("Hello")[0], encoding="utf-8"), "no prompt after the frontmatter"),
+    (lambda case: (case / "graders" / "says-next.md").write_text("---\ntype: guess\n---\n", encoding="utf-8"),
+     "graders/says-next.md: type must be one of"),
+    (lambda case: (case / "graders" / "says-next.md").write_text("---\ntype: regex\nflags: i\n---\n", encoding="utf-8"),
+     "a regex grader needs 'pattern'"),
+    (lambda case: (case / "graders" / "criteria.md").write_text("---\ntype: llm\n---\n", encoding="utf-8"),
+     "an llm grader needs its PASS/FAIL criteria"),
+    (lambda case: (case / "graders" / "skill-fired.md").write_text(GRADERS["skill-fired.md"].replace("demo", "gone"), encoding="utf-8"),
+     "expects the skill 'gone', which does not exist"),
+])
+def test_a_malformed_case_fails(evals, change, message):
+    change(evals / "evals" / "says-next")
+    result = check(evals)
+    assert result.returncode == 1 and message in result.stderr
+
+
+def test_the_plugin_must_load_the_skills(evals):
+    (evals / ".claude-plugin" / "plugin.json").write_text('{"name": "blueprint-evals"}', encoding="utf-8")
+    assert "'skills' must be \"./.claude/skills\"" in check(evals).stderr

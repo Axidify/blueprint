@@ -399,6 +399,10 @@ def main():
     print(f"  For the client:  {client}")
     print(f"  For you only:    {internal}")
     print("  The facilitator notes are internal: send the agenda, keep the notes.")
+    try:  # the project's overview page follows what was just written; it never stops this command
+        import overview; overview.refresh(project)
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":

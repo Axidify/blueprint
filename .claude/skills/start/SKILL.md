@@ -20,7 +20,16 @@ template (`document-template.docx`) and standard wording (`document-boilerplate.
 ## 2. Show where things stand
 
 Run `python -I tools/status.py` and summarise it in a few lines: each project, what stage it is at, and
-its suggested next step. Mention anything waiting in the inbox.
+its suggested next step (the `next:` line, in the words to say to Claude). An `also:` line is a hint for
+the lead developer (an estimate missing or older than the spec): mention it to them. Mention anything
+waiting in the inbox.
+
+Tell them, once, that every project folder has a page at its top, `Project overview.html`: double-click it
+(in the shared folder too) to see each document in the order of the process, who it is for (from the
+client, for the client, internal) and the next step, with the words to say. Teammates who only browse the
+folder can use it to find their files. A project with a mock-up also has **Open the mock-up** beside it,
+which starts the mock-up so comments are saved. If a page is missing or out of date, run
+`python -I tools/overview.py build projects/<slug>` (or `build --all`).
 
 ## 3. Ask what they want to do
 
@@ -33,15 +42,24 @@ Use AskUserQuestion with these options (the tool adds "Other" automatically):
 | Build or update a mock-up | the `build-mockup` skill |
 | Process the inbox / apply feedback | the `process-inbox` skill (it routes mock-up feedback to `apply-feedback`) |
 
+When the person seems new (they said so, said hello, there are no projects yet, or they are unsure what
+Blueprint does), make the first option **Take a ten-minute tour (new here)** → the `tour` skill, in place
+of "Build or update a mock-up". The tour runs on a copy of a made-up sample, never on client documents.
+
 If they pick "Other", or mention generating the requirements document, estimating mandays, presenting a mock-up or
-closing a project, use the matching skill: `generate-requirements`, `estimate`, presenting (`present.cmd <project>` or
-`python -I tools/mockup.py serve projects/<slug>`; add `--version 0.2` for an earlier mock-up),
-`close-project`. Recording that a document went to the client: `python -I tools/project.py issue <slug>`.
+closing a project, or what the platform can do, use the matching skill: `generate-requirements`, `estimate`,
+`present` (opening a mock-up or the page that lists them, an earlier version, or a live session with the
+client), `platform-fit` (what is standard, custom work or not supported on the project's tech stack),
+`prep-workshop` (an agenda for the next client session), `client-answers` (the client answered the open
+questions: a returned register, an e-mail or call notes), `uat-scripts` (test scenarios for the client's
+testers), `change-request` (the client asked for something during development or UAT: in scope or a
+change request?), `tour` (a guided first run), `close-project`. Recording that a document went to the client: `python -I tools/project.py issue <slug>`.
 If `python -I tools/project.py check` reports problems, offer to fix them with `--fix`.
 
 If a project is involved and it is not obvious which, ask which one, listing the projects by name.
 
-## 4. Hand over
+## Hand over
 
-Invoke the chosen skill and follow it. At the end, tell the person where their output is (Excel register,
-Word document, mock-up link, estimate) in plain words, and what the sensible next step is.
+Invoke the chosen skill and follow it: its own `## Hand over` tells the person what was made, where, for
+whom and the next step. If they only wanted to see where things stand, end with the one next step for the
+project they care about, in the words to say (from `status.py`), and that `/start` brings this menu back.

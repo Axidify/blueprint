@@ -36,7 +36,36 @@ W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
 R = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
 V = "{urn:schemas-microsoft-com:vml}"
-OPEN_ITEM = re.compile(r"\bTBC\b|\bTBD\b|to be confirmed|to be determined|if applicable", re.I)
+# Words that mark something as not decided yet. "Pending" alone is often a status ("Pending Approval" in a
+# status table), so it counts only where it says that something is still awaited.
+OPEN_ITEM = re.compile(
+    r"\bTBC\b|\bTBD\b|\bto be (?:confirmed|determined)\b|\bif applicable\b|\bsubject to (?:confirmation|change)\b"
+    r"|\b(?:is|are|still|remains?|currently)\s+pending\b|\(pending\)"
+    r"|\bpending\s+(?:confirmation|clarification|decisions?|discussions?|feedback|input|information|details|agreement"
+    r"|finali[sz]ation|responses?|reply|(?:the\s+)?(?:client|customer|user)s?|further)\b", re.I)
+MARKERS = 'TBC, TBD, "to be confirmed", "if applicable", "pending", "subject to confirmation/change"'
+
+
+def repaired(text):
+    """PDF metadata written as UTF-8 but read as the Windows code page comes out as "MicrosoftÂ® Word" or
+    "4-Heightsâ„¢". Read back the way it was written; text that was right to begin with is left as it is."""
+    if not isinstance(text, str) or text.isascii():
+        return text
+    for codepage in ("cp1252", "latin-1"):
+        try:
+            fixed = text.encode(codepage).decode("utf-8")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            continue
+        return fixed
+    return text
+
+
+def number_heavy(text):
+    """A page that is mostly figures (a manday table, a price list, a schedule): its cells come out of the
+    text layer one per line and lose their columns, so the page is worth a picture."""
+    tokens = text.split()
+    numbers = [t for t in tokens if re.fullmatch(r"[(\[]?[-+]?\d[\d,.]*%?[)\]]?[.,;:]?", t)]
+    return len(numbers) >= 12 and len(numbers) >= 0.25 * len(tokens)
 
 
 # ---------------------------------------------------------------- docx
@@ -270,9 +299,9 @@ def extract_pdf(path, out):
         text = page.get_text("text")
         parts.append(f"=== PAGE {i} ===\n{text}")
         # Render pages whose content the text layer cannot carry: diagrams, screenshots, formulas
-        # (math fonts extract as fragments), or pages with almost no text.
+        # (math fonts extract as fragments), tables of figures, or pages with almost no text.
         has_math = any(0x1D400 <= ord(ch) <= 0x1D7FF for ch in text)
-        if page.get_images() or has_math or len(text.strip()) < 200:
+        if page.get_images() or has_math or len(text.strip()) < 200 or number_heavy(text):
             dest = f"pages/p{i:03d}.png"
             page.get_pixmap(dpi=130).save(out / dest)
             rendered.append(i)
@@ -286,7 +315,7 @@ def extract_pdf(path, out):
             (out / dest).write_bytes(info["image"])
             images.append({"n": n, "file": dest, "page": i})
             parts.append(f"[IMAGE {n:02d}: {dest}]")
-    meta = {k: v for k, v in doc.metadata.items() if v}
+    meta = {k: repaired(v) for k, v in doc.metadata.items() if v}
     return "\n".join(parts), meta, images, {"pages": doc.page_count, "pages_rendered": len(rendered)}
 
 
@@ -393,10 +422,15 @@ def main():
     for n, line in enumerate(text.splitlines(), 1):
         if OPEN_ITEM.search(line) and "(TOC)" not in line:
             open_items.append({"line": n, "text": line.strip()[:200]})
+    # A requirements document Blueprint generated (in a project's output/ folder) says "To be confirmed"
+    # wherever its spec is silent: expected, and each one is a gap in the spec rather than in the wording.
+    generated = src.resolve().parent.name == "output" and (src.resolve().parent.parent / "spec" / "app.yaml").exists()
+    labels = sum(1 for o in open_items if "to be confirmed" in o["text"].lower()) if generated else 0
 
     (out / "text.md").write_text(text, encoding="utf-8")
     info = {
         "source": str(src),
+        "generated_by_blueprint": generated,
         "metadata": meta,
         "counts": {**counts, "images": len(images), "characters": len(text), "open_item_markers": len(open_items)},
         "images": images,
@@ -405,10 +439,22 @@ def main():
     (out / "meta.json").write_text(json.dumps(info, indent=2, ensure_ascii=False), encoding="utf-8")
 
     sys.stdout.reconfigure(encoding="utf-8")
-    print(f"Wrote {out / 'text.md'} ({len(text):,} characters)")
-    print("Metadata:", json.dumps(meta, ensure_ascii=False))
-    print("Counts:", json.dumps(info["counts"]))
-    print(f"Open-item markers (TBC/TBD/if applicable): {len(open_items)} - see meta.json")
+    c = info["counts"]
+    found = [f"{len(text):,} characters"]
+    if c.get("pages"):
+        found.append(f"{c['pages']} pages, {c.get('pages_rendered', 0)} of them also saved as pictures in pages/")
+    found.append(f"{c['images']} image{'s' if c['images'] != 1 else ''}")
+    if c.get("comments"):
+        found.append(f"{c['comments']} comment{'s' if c['comments'] != 1 else ''}")
+    print(f"Extracted {src.name} into {out.as_posix()}: {', '.join(found)}.")
+    said = [f"{key} \"{meta[key]}\"" for key in ("title", "author", "creator", "producer") if meta.get(key)]
+    if said:
+        print(f"Document properties: {', '.join(said)} (all of them in meta.json).")
+    if generated:
+        print(f"Open-item markers: {len(open_items)}, of which {labels} are this generated document's own \"To be "
+              "confirmed\" labels: each marks something the spec does not say yet. Listed in meta.json.")
+    else:
+        print(f"Open-item markers ({MARKERS}): {len(open_items)}, listed with their lines in meta.json.")
 
 
 if __name__ == "__main__":

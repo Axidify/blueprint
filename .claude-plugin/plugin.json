@@ -1,0 +1,5 @@
+{
+  "name": "blueprint-evals",
+  "description": "Blueprint's skills as a plugin, only so that `claude plugin eval .` can run the skill evaluations in evals/. Not for installing: Blueprint is used from this folder. See docs/maintaining.md.",
+  "skills": "./.claude/skills"
+}

@@ -9,6 +9,7 @@ The format lives in templates/document-format.yaml (defaults) and workspace/bran
 overrides, key by key). See docs/document-format.md.
 """
 import collections
+import html
 import re
 import sys
 import zipfile
@@ -36,9 +37,32 @@ def show():
         sys.exit(1)
 
 
+WORD_FILES = (".docx", ".dotx", ".docm", ".dotm")
+
+
+def open_sample(sample):
+    """The sample as a Word file, or a plain sentence saying why it cannot be read (and what to ask for)."""
+    path = Path(sample)
+    if not path.is_file():
+        sys.exit(f"No file at {path}. Give the path of the sample requirements document, as a Word file (.docx).")
+    suffix = path.suffix.lower()
+    if suffix not in WORD_FILES:
+        kind = {".pdf": "a PDF", ".doc": "a Word 97-2003 file (.doc)"}.get(suffix, f"a {suffix} file" if suffix else "a file without an extension")
+        hint = (" Open it in Word and save it as a Word Document (.docx), then run learn on that." if suffix == ".doc"
+                else " Ask for the Word version of the sample document and run learn on that.")
+        sys.exit(f"{path.name} is {kind}. learn reads the fonts, colours and chapters from a Word file (.docx).{hint}")
+    try:
+        z = zipfile.ZipFile(path)
+        z.getinfo("word/document.xml")
+        return z
+    except (zipfile.BadZipFile, KeyError, OSError):
+        sys.exit(f"{path.name} could not be read as a Word document: it may be damaged, still downloading, or another kind "
+                 "of file renamed to .docx. Open it in Word and save it again as a Word Document (.docx), then run learn on that.")
+
+
 def learn(sample):
     """Report the fonts, sizes, colours, page set-up and chapter structure a sample document uses."""
-    z = zipfile.ZipFile(sample)
+    z = open_sample(sample)
     doc = z.read("word/document.xml").decode("utf-8", "replace")
     styles = z.read("word/styles.xml").decode("utf-8", "replace") if "word/styles.xml" in z.namelist() else ""
     theme = next((z.read(n).decode("utf-8", "replace") for n in z.namelist() if n.startswith("word/theme/")), "")
@@ -57,16 +81,16 @@ def learn(sample):
     pg = re.search(r'<w:pgSz w:w="(\d+)" w:h="(\d+)"', doc)
     mar = re.search(r'<w:pgMar w:top="(\d+)"[^>]*w:right="(\d+)"[^>]*w:bottom="(\d+)"[^>]*w:left="(\d+)"', doc)
     headings = re.findall(r'<w:pStyle w:val="Heading1"/>.*?</w:pPr>(.*?)</w:p>', doc, re.S)
-    h1_texts = ["".join(re.findall(r"<w:t[^>]*>([^<]*)</w:t>", h)).strip() for h in headings]
+    # The XML writes &, < and quotes as &amp; &lt; &quot;: they are printed as the characters they stand for.
+    h1_texts = [html.unescape("".join(re.findall(r"<w:t[^>]*>([^<]*)</w:t>", h))).strip() for h in headings]
 
-    fonts = top(r'w:ascii="([^"]+)"', doc)
+    fonts = [(html.unescape(name), n) for name, n in top(r'w:ascii="([^"]+)"', doc)]
     text_sizes = [(int(s) / 2, n) for s, n in top(r'<w:sz w:val="(\d+)"', doc)]
     fills = top(r'w:fill="([0-9A-Fa-f]{6})"', doc, 6)
     text_colours = top(r'<w:color w:val="([0-9A-Fa-f]{6})"', doc, 6)
-    sys.stdout.reconfigure(encoding="utf-8")
     print(f"Sample: {sample}\n")
-    print(f"Theme fonts:      headings {major.group(1) if major else '?'}, body {minor.group(1) if minor else '?'}")
-    print(f"Normal style:     {normal_font.group(1) if normal_font else '(theme font)'} {int(normal_size.group(1)) / 2 if normal_size else '?'} pt")
+    print(f"Theme fonts:      headings {html.unescape(major.group(1)) if major else '?'}, body {html.unescape(minor.group(1)) if minor else '?'}")
+    print(f"Normal style:     {html.unescape(normal_font.group(1)) if normal_font else '(theme font)'} {int(normal_size.group(1)) / 2 if normal_size else '?'} pt")
     print(f"Heading 1:        {int(h1_size.group(1)) / 2 if h1_size else '?'} pt, colour {h1_color.group(1) if h1_color else 'default'}")
     print(f"Fonts in text:    {fonts}")
     print(f"Text sizes (pt):  {text_sizes}")
@@ -104,6 +128,11 @@ def preview():
 
 
 def main():
+    # "–", "●" and other characters in chapter names and settings are printed as they are, not as "?" or "�", on
+    # a Windows console or pipe that would otherwise use an old code page. Messages to stderr (sys.exit) too.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     if len(sys.argv) < 2 or sys.argv[1] not in ("show", "learn", "preview") or (sys.argv[1] == "learn" and len(sys.argv) != 3):
         sys.exit(__doc__)
     {"show": show, "preview": preview}.get(sys.argv[1], lambda: learn(sys.argv[2]))()

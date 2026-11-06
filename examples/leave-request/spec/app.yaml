@@ -101,7 +101,7 @@ screens:
   - id: login
     type: login
     title: Login
-    description: Users sign in with their network account. In the mock-up, choose a role to sign in.
+    description: Users sign in with their network account.
 
   - id: my-applications
     type: dashboard

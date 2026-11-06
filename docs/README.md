@@ -11,6 +11,8 @@ Start with **[Getting started](getting-started.md)** if you are new.
 | [Skills](skills.md) | Everything you can ask Blueprint to do, and what each produces |
 | [The register](register.md) | The project register: fields, statuses, the Excel file for the BA |
 | [Estimates](estimates.md) | Manday estimates: ranges, confidence, the Excel file for the lead developer |
+| [Change requests](change-requests.md) | Requests during development and UAT: in scope, ambiguous or new, the CR log and the client's note |
+| [UAT scripts](uat.md) | User acceptance test scripts from what was signed: the testers' workbook, the client's document, results |
 | [Knowledge base](knowledge.md) | Gap patterns, estimating building blocks, the requirements standard, project actuals |
 | [Troubleshooting](troubleshooting.md) | Common problems and their fixes |
 

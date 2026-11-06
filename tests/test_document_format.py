@@ -89,3 +89,53 @@ def test_the_default_format_lists_every_setting_the_generator_reads():
     assert set(fmt) == {"document", "fonts", "sizes", "colors", "tables", "numbering", "layout", "header_footer", "front", "chapters",
                         "titles", "labels"}
     assert set(fmt["tables"]) == {"header_fill", "header_text", "borders"} and "heading" in fmt["colors"]
+
+
+def heading_sample(path, *titles):
+    """A Word file with these chapter headings, made with python-docx."""
+    from docx import Document
+
+    doc = Document()
+    for title in titles:
+        doc.add_heading(title, level=1)
+    doc.save(str(path))
+    return path
+
+
+def test_learn_prints_chapter_names_as_written(tmp_path, capsys):
+    """"&" was printed as "&amp;", the way the file stores it."""
+    sample = heading_sample(tmp_path / "sample.docx", "Disclaimer, Confidentiality & Concept Acknowledgement", "Scope <draft> – \"v1\"")
+    document_format.learn(str(sample))
+    out = capsys.readouterr().out
+    assert "  - Disclaimer, Confidentiality & Concept Acknowledgement" in out and "&amp;" not in out
+    assert '  - Scope <draft> – "v1"' in out
+
+
+@pytest.mark.parametrize("name, content, said", [
+    ("sample.pdf", b"%PDF-1.7", "sample.pdf is a PDF. learn reads the fonts, colours and chapters from a Word file (.docx). "
+                               "Ask for the Word version of the sample document"),
+    ("sample.doc", b"\xd0\xcf\x11\xe0", "sample.doc is a Word 97-2003 file (.doc). learn reads the fonts, colours and chapters from a "
+                                       "Word file (.docx). Open it in Word and save it as a Word Document (.docx)"),
+    ("sample.docx", b"not a zip at all", "sample.docx could not be read as a Word document"),
+    (None, None, "No file at "),
+])
+def test_learn_says_plainly_what_it_cannot_read(tmp_path, name, content, said):
+    """A PDF sample ended in a BadZipFile traceback."""
+    path = tmp_path / (name or "missing.docx")
+    if content is not None:
+        path.write_bytes(content)
+    with pytest.raises(SystemExit) as stop:
+        document_format.learn(str(path))
+    assert said in str(stop.value)
+
+
+def test_learn_prints_a_dash_on_an_old_windows_code_page(tmp_path):
+    """Run as a person runs it: on a console with an old code page, "–" in a chapter name could stop the run
+    or come out as "?"."""
+    import subprocess
+
+    sample = heading_sample(tmp_path / "sample.docx", "Scope – what is included ●")
+    r = subprocess.run([sys.executable, "-I", str(support.ROOT / "tools" / "document_format.py"), "learn", str(sample)],
+                       capture_output=True, timeout=60)  # a pipe: cp1252 on Windows
+    assert r.returncode == 0, r.stderr.decode("utf-8", "replace")
+    assert "  - Scope – what is included ●" in r.stdout.decode("utf-8")

@@ -318,7 +318,11 @@ def compute(est, project, kdir):
 
     build_low = sum(l["low"] for l in lines if l["kind"] == "block")
     build_high = sum(l["high"] for l in lines if l["kind"] == "block")
-    build_priced = any(l["priced"] for l in lines if l["kind"] == "block")
+    build_lines = [l for l in lines if l["kind"] == "block"]
+    build_priced = any(l["priced"] for l in build_lines)
+    # The build is not priced while any building-block line has no rate: the figures are then what is priced
+    # so far, never a total for the project, and a share of the building blocks is a share of too little.
+    build_unpriced = [l for l in build_lines if not l["priced"]]
     for l in lines:
         if l["pct"]:
             pct = l["pct"]
@@ -327,7 +331,9 @@ def compute(est, project, kdir):
                 continue
             l.update(low=build_low * pct[0] / 100, high=build_high * pct[1] / 100,
                      rate_from=f"{rng(pct[0], pct[1], '%')} of building blocks"
-                               + (", knowledge base" if l["kind"] == "other" else ""))
+                               + (", knowledge base" if l["kind"] == "other" else "")
+                               + (f", of the priced ones only: understated while {len(build_unpriced)} are not priced"
+                                  if build_unpriced else ""))
 
     risks = []
     for i, r in enumerate(est.get("risks") or []):
@@ -371,19 +377,25 @@ def compute(est, project, kdir):
     if est.get("sow"):
         priced = [l for l in est["sow"].get("lines", []) if isinstance(l.get("mandays"), (int, float))]
         sow_total = sum(l["mandays"] for l in priced)
-        sow_covered = 0  # SOW lines whose estimate lines are all priced: the like-for-like figure
+        # A share of building blocks that are not all priced is understated: it cannot be compared either.
+        comparable = lambda x: x["priced"] and not (x["pct"] and build_unpriced)
+        sow_covered = 0  # SOW lines whose estimate lines can all be compared: the like-for-like figure
         for l in priced:
             mine = [x for x in lines if str(x.get("sow_ref")) == str(l.get("ref"))]
-            if mine and all(x["priced"] for x in mine):
+            if mine and all(comparable(x) for x in mine):
                 sow_covered += l["mandays"]
         for s in est["sow"].get("lines", []):
             mine = [l for l in lines if str(l.get("sow_ref")) == str(s.get("ref"))]
             lo, hi, md = sum(l["low"] for l in mine), sum(l["high"] for l in mine), s.get("mandays")
             missing = [l["id"] for l in mine if not l["priced"]]
+            shares = [l["id"] for l in mine if l["priced"] and not comparable(l)]
             if not mine:
                 verdict, diff = "Not estimated: no line of the estimate covers it", 0
             elif missing:
                 verdict, diff = f"Cannot compare: {', '.join(missing)} not priced", 0
+            elif shares:
+                verdict, diff = (f"Cannot compare yet: {', '.join(shares)} is a share of building blocks that are not "
+                                 "all priced"), 0
             elif not isinstance(md, (int, float)):
                 verdict, diff = "No mandays in the scope of work", 0
             elif md < lo:
@@ -398,7 +410,7 @@ def compute(est, project, kdir):
             if l.get("sow_ref") is None:
                 comparison.append({"ref": "–", "item": l["item"], "sow": None, "low": l["low"], "high": l["high"],
                                    "lines": l["id"], "verdict": "Not in the scope of work"
-                                   + ("" if l["priced"] else " (not priced)"), "diff": -l["low"]})
+                                   + ("" if l["priced"] else " (not priced)"), "diff": -l["low"] if comparable(l) else 0})
         comparison.sort(key=lambda c: -abs(c["diff"]))
 
     # Confidence: start high, and let each rule lower it
@@ -444,7 +456,7 @@ def compute(est, project, kdir):
     # every line lands low or every line lands high. No narrower figure is given (an estimate here is never a
     # midpoint or a "most likely" number); with many lines the reader is told what the ends mean.
     independent = [l for l in lines if l["priced"] and not l["pct"] and l["high"] > l["low"]]
-    reading = (f"The total adds the low end of every line and the high end of every line. With {len(independent)} lines that "
+    reading = "" if build_unpriced else (f"The total adds the low end of every line and the high end of every line. With {len(independent)} lines that "
                "each have a range, all of them landing low, or all of them landing high, is unlikely: expect the outcome "
                "inside the range, not at either end. The range is not narrowed for that; watch the widest lines instead."
                if len(independent) >= READING_NOTE_FROM else "")
@@ -458,6 +470,8 @@ def compute(est, project, kdir):
         "projects_logged": sorted(on_platform), "platform_known": bool(blocks), "platforms": platforms,
         "blocks": blocks, "blocks_used": used, "blocks_without_rate": no_rate, "register_flagged": flagged,
         "uncalibrated_share": share, "unpriced": unpriced, "other_work": other_work, "reading": reading,
+        "build_unpriced": build_unpriced, "build_lines": len(build_lines),
+        "partial": bool(build_unpriced) and len(unpriced) < len(lines),
     }, errors
 
 
@@ -517,20 +531,45 @@ def render_xlsx(est, res, out):
         ("Other work", res["other"][0], res["other"][1]),
         ("Total, as understood today", low, high, "", "total"),
     ]
-    if res["unpriced"]:
+    partial = res["partial"]
+    if partial:
+        n, m = len(res["build_unpriced"]), res["build_lines"]
+        shares = any(l["pct"] and l["priced"] for l in res["lines"])
+        rows[-3:] = [
+            ("The build is not priced", "", "", f"{n} of {m} building-block lines have no rate yet, so there is no "
+             "total for the project: the figures below are what is priced so far", "warn"),
+            ("Building blocks, priced lines only", res["build"][0], res["build"][1], f"{m - n} of {m} lines"),
+            ("Other work", res["other"][0], res["other"][1],
+             "Shares of the building blocks are understated: they cover the priced lines only" if shares else ""),
+            ("Priced so far (not a project figure)", low, high, "Leaves out the lines not priced", "total")]
+        rows.append(("Lines not priced (no rate or share set)", len(res["unpriced"]), "",
+                     ", ".join(l["id"] for l in res["unpriced"]) + ": left out of the figures above"))
+    elif res["unpriced"]:
         rows[-1] = ("Total of the priced lines", low, high, "Not the whole project: see the lines not priced", "total")
         rows.append(("Lines not priced (no rate or share set)", len(res["unpriced"]), "",
                      ", ".join(l["id"] for l in res["unpriced"]) + ": left out of the totals"))
     if any(r["sized"] for r in res["risks"]):
-        rows += [("Open questions, if answered the costly way", res["risk"][0], res["risk"][1]),
-                 ("Total with open questions", low, high + res["risk"][1], "", "total")]
-    if co.get("day_rate"):
+        rows += [("Open questions, if answered the costly way", res["risk"][0], res["risk"][1])]
+        if not partial:
+            rows += [("Total with open questions", low, high + res["risk"][1], "", "total")]
+    if co.get("day_rate") and partial:
+        cur = (co.get("currency") or "").strip()
+        rows += [(f"Cost at {cur} {co['day_rate']:,} a day".replace("  ", " "), "", "",
+                  "Not worked out: the build is not priced")]
+    elif co.get("day_rate"):
         cur = (co.get("currency") or "").strip()
         top = high + res["risk"][1]
         rows += [(f"Cost at {cur} {co['day_rate']:,} a day".replace("  ", " "), round(low * co["day_rate"]), round(top * co["day_rate"]),
                   "; ".join(x for x in ("Priced lines only" if res["unpriced"] else "",
                                         "Low end to the high end including open questions" if res["risk"][1] else "") if x))]
-    if res["sow_total"] is not None:
+    if res["sow_total"] is not None and partial:
+        blocked = [c for c in res["comparison"] if c["verdict"].startswith("Cannot compare") and c["ref"] != "–"]
+        rows += [("Scope of work, lines that can be compared", res["sow_covered"], "",
+                  "Compare line by line on the Against SOW sheet"
+                  + (f"; {len(blocked)} line(s) cannot be compared until the build is priced: "
+                     + ", ".join(str(c["ref"]) for c in blocked) if blocked else "")),
+                 ("Scope of work, all lines", res["sow_total"], "", est["sow"].get("source", ""))]
+    elif res["sow_total"] is not None:
         rows += [("Scope of work, lines this estimate prices", res["sow_covered"], "", "Compare this with the total above"),
                  ("Scope of work, all lines", res["sow_total"], "", est["sow"].get("source", ""))]
     rows += [("",), ("Confidence", res["confidence"].capitalize(), "", "", "total")]
@@ -577,7 +616,8 @@ def render_xlsx(est, res, out):
         rows.append(["", "", f"Subtotal: {title.lower()}", "", "", "", "", "", "", md(sum(l["low"] for l in part)),
                      md(sum(l["high"] for l in part)), "", ""])
     fills[len(rows)] = total_fill
-    rows.append(["", "", "Total of the priced lines" if res["unpriced"] else "Total, as understood today", "", "", "", "",
+    rows.append(["", "", "Priced so far (the build is not priced)" if res["partial"] else
+                 "Total of the priced lines" if res["unpriced"] else "Total, as understood today", "", "", "", "",
                  "", "", md(low), md(high), "", ""])
     table(e, cols, rows, fills=fills)
 
@@ -590,7 +630,8 @@ def render_xlsx(est, res, out):
                 for c in res["comparison"]]
         fills = {i: warn_fill for i, c in enumerate(res["comparison"]) if c["diff"]}
         fills[len(rows)] = total_fill
-        rows.append(["", "Total of the lines this estimate prices", res["sow_covered"], md(low), md(high), "", ""])
+        rows.append(["", "Priced so far (the build is not priced)" if res["partial"] else "Total of the lines this estimate prices",
+                     res["sow_covered"], md(low), md(high), "", ""])
         table(w, [("SOW ref", 9), ("Scope of work item", 44), ("SOW MD", 9), ("Estimate low", 12), ("Estimate high", 12),
                   ("Difference", 46), ("Estimate lines", 18)], rows, fills=fills)
 
@@ -798,6 +839,17 @@ def cmd_render(a):
     print(f"Estimate for {est['project']} ({est['platform']}), counted from {est['basis']}")
     if len(unpriced) == len(lines):
         print(f"  Nothing is priced: none of the {len(lines)} lines has a rate or share. This is a count only.")
+    elif res["partial"]:
+        n, m = len(res["build_unpriced"]), res["build_lines"]
+        print(f"  The build is not priced: {n} of {m} building-block lines have no rate yet, so there is no total "
+              "for the project yet.")
+        print("  Priced so far (not a project figure):")
+        print(f"    Building blocks: {rng(*res['build'])} ({m - n} of {m} lines)")
+        shares = any(l["pct"] and l["priced"] for l in lines)
+        print(f"    Other work:      {rng(*res['other'])}"
+              + (" (shares of the building blocks are understated: they cover the priced lines only)" if shares else ""))
+        if any(r["sized"] for r in res["risks"]):
+            print(f"    Open questions answered the costly way would add up to {num(res['risk'][1])} MD more")
     else:
         print(f"  Building blocks: {rng(*res['build'])}")
         print(f"  Other work:      {rng(*res['other'])}")
@@ -807,7 +859,8 @@ def cmd_render(a):
         if any(r["sized"] for r in res["risks"]):
             print(f"  With open questions answered the costly way: up to {num(high + res['risk'][1])} MD")
     if unpriced:
-        print(f"  Not priced ({len(unpriced)} of {len(lines)} lines, left out of the total):")
+        print(f"  Not priced ({len(unpriced)} of {len(lines)} lines, left out of the "
+              f"{'figures above' if res['partial'] else 'total'}):")
         for l in unpriced:
             what = f"{l.get('count')} x {l['block']} {l['block_name']}".strip() if l["kind"] == "block" else l.get("other", "")
             print(f"    - {l['id']} {l['item']}: {what}")
@@ -824,7 +877,21 @@ def cmd_render(a):
         print("  Widest lines:")
         for k, name, v in res["drivers"][:5]:
             print(f"    - {k} {name}: {num(v)} MD of range")
-    if res["sow_total"] is not None:
+    if res["sow_total"] is not None and res["partial"]:
+        blocked = [c for c in res["comparison"] if c["verdict"].startswith("Cannot compare") and c["ref"] != "–"]
+        if blocked:
+            print(f"  Scope of work ({num(res['sow_total'])} MD in all): {len(blocked)} of "
+                  f"{len(est['sow'].get('lines', []))} lines cannot be compared yet, because the build is not priced:")
+            for c in blocked:
+                sow = f"{num(c['sow'])} MD" if isinstance(c["sow"], (int, float)) else "no mandays"
+                print(f"    - {c['ref']} {c['item']} ({sow})")
+        shown = [c for c in res["comparison"] if c["diff"]][:5]
+        if shown:
+            print("  Lines that can be compared now:")
+        for c in shown:
+            sow = f"{num(c['sow'])} MD" if c["sow"] is not None else "not in the SOW"
+            print(f"    - {c['ref']} {c['item']}: {sow} against {rng(c['low'], c['high'])}. {c['verdict']}")
+    elif res["sow_total"] is not None:
         print(f"  Scope of work: {num(res['sow_covered'])} MD for the lines this estimate prices "
               f"({num(res['sow_total'])} MD in all), against {rng(low, high)}")
         for c in [c for c in res["comparison"] if c["diff"]][:5]:
@@ -836,6 +903,10 @@ def cmd_render(a):
             print(f"    - ({num(x['addresses'])} MD) {x['question']}" if x["addresses"] else f"    - {x['question']}")
     print(f"Wrote {out}")
     print("Internal: not for the client.")
+    try:  # the project's overview page follows what was just written; it never stops this command
+        import overview; overview.refresh(a.project)
+    except Exception:
+        pass
 
 
 def cmd_weeks(a):
@@ -887,7 +958,7 @@ def cmd_weeks(a):
 
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
-    ap = argparse.ArgumentParser(description="Manday estimates from building blocks.")
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--knowledge", help="knowledge base folder (default: knowledge/, or the starter one)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("blocks")

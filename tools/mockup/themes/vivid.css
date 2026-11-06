@@ -21,7 +21,6 @@ body { background: var(--bg); }
 .topbar-right .user { background: rgba(255,255,255,.1); color: #fff; }
 .topbar-right .user::before { background-color: transparent; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Ccircle cx='12' cy='8.5' r='4'/%3E%3Cpath d='M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5z'/%3E%3C/svg%3E"), var(--grad); background-size: 18px, cover; background-position: center; background-repeat: no-repeat; }
 .topbar-right .logout { color: rgba(255,255,255,.7); }
-.role-switch { background: rgba(255,255,255,.1); color: #fff; border-color: rgba(255,255,255,.2); }
 
 /* Dark gradient side menu */
 .sidebar { border-right: 0; }
@@ -37,13 +36,13 @@ body { background: var(--bg); }
 .content::after { content: ""; position: absolute; right: 40px; top: -60px; width: 260px; height: 260px; border-radius: 50%;
   background: rgba(255,255,255,.08); z-index: 0; pointer-events: none; }
 .content > * { position: relative; z-index: 1; }
-.page-head h2 { color: #fff; font-size: 28px; }
+.page-head h2 { color: #fff; font-size: calc(28px * var(--ts)); }
 .page-head p { color: rgba(255,255,255,.8); }
 .status-bar { display: inline-flex; align-items: center; gap: 8px; background: #fff; padding: 6px 8px 6px 14px; border-radius: 999px; box-shadow: var(--shadow); }
 
 /* Cards */
 .stat, .table-wrap, .form-section, .list-tools, .tabs { box-shadow: 0 10px 30px rgba(15,23,42,.08); border-color: transparent; }
-.stat-value { background: linear-gradient(120deg, var(--text), color-mix(in srgb, var(--accent) 70%, var(--text))); -webkit-background-clip: text; background-clip: text; color: transparent; font-size: 34px; }
+.stat-value { background: linear-gradient(120deg, var(--text), color-mix(in srgb, var(--accent) 70%, var(--text))); -webkit-background-clip: text; background-clip: text; color: transparent; font-size: calc(34px * var(--ts)); }
 .list-tools { box-shadow: none; }
 .list-tools:has(.filter) { background: #fff; border-radius: var(--radius); padding: 14px 16px; margin-bottom: 14px; box-shadow: 0 10px 30px rgba(15,23,42,.08); }
 .list-tools:not(:has(.filter)) .toolbar { background: #fff; padding: 8px; border-radius: var(--radius); box-shadow: 0 10px 30px rgba(15,23,42,.08); }

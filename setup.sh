@@ -100,6 +100,9 @@ for name in ("projects", "knowledge", "inbox"):
     os.symlink(target, link, target_is_directory=True)
 print(f"Workspace: {ws}")
 PYTHON
+# Where Blueprint is on this machine, for the "Open the mock-up" shortcut in each project folder: the workspace
+# is shared, and the app can be in a different place on each person's machine.
+mkdir -p "$HOME/.blueprint" && pwd > "$HOME/.blueprint/app-path"
 
 # 4. Check everything
 echo

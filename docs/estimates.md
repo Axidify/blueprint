@@ -49,7 +49,7 @@ assumption) rather than editing the Excel file: it is rewritten every time.
 
 | Sheet | Contents |
 |---|---|
-| Summary | The total range, the lines not priced, the range if the open questions are answered the costly way, the cost at your day rate, the confidence level and its reasons, how well the rates are calibrated, and the lines that make the range widest |
+| Summary | The total range (or, while the build is not priced, that it is not and what is priced so far), the lines not priced, the range if the open questions are answered the costly way, the cost at your day rate, the confidence level and its reasons, how well the rates are calibrated, and the lines that make the range widest |
 | Estimate | Every line: building block, count, rate range and where the rate comes from, mandays low and high, the scope-of-work line it belongs to, and what was counted |
 | Against SOW | Each scope-of-work line beside the estimate's range for it, largest differences first; work that is not in the scope of work; scope-of-work lines the estimate does not cover |
 | Uncertainty | Open questions (sized in mandays when the lead developer has sized them), lines not priced, open register items that can move the estimate, the gap patterns the project is exposed to, building blocks with no rate yet |
@@ -65,6 +65,11 @@ assumption) rather than editing the Excel file: it is rewritten every time.
   *provisional* and counts against the confidence level.
 - **Not priced.** A line with no rate or share from either source is counted but has no mandays. The total
   then covers the priced lines only, and says so.
+- **The build not priced.** While any building-block line has no rate, there is no total at all: the
+  estimate opens with "The build is not priced" (how many of the building-block lines), and the figures
+  that follow are *priced so far*, never a figure for the project, in chat and in the Excel file alike, with
+  no cost at the day rate. Other work set as a share of the building blocks is then a share of the priced
+  lines only, so it is understated and says so.
 - **Other work.** Items from the `Other work` table, as a share of the building-block subtotal or fixed
   mandays; or a figure the lead developer gives for the project.
 - **Totals.** The low ends added up and the high ends added up. There is no single "most likely" figure,
@@ -95,6 +100,10 @@ The scope of work's mandays are a commercial figure: they let the client gauge t
 than the likely effort after negotiation. A gap is normal. The comparison shows how large it is and which
 lines carry it, and separates a negotiated price from scope that grew (one lookup that became four
 endpoints), which is worth raising before sign-off.
+
+A scope-of-work line can only be compared when every estimate line under it is priced. While the build is
+not priced, the estimate first lists the scope-of-work lines that cannot be compared yet (a building block
+with no rate, or a share of building blocks that are not all priced), then the lines that can.
 
 ## The timeline uses the estimate
 

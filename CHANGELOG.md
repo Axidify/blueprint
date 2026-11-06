@@ -12,6 +12,95 @@ See [docs/maintaining.md](docs/maintaining.md).
 ## [Unreleased]
 
 ### Added
+- **A guided tour for newcomers.** Say "give me a tour" for a ten-minute first run on a copy of the made-up
+  sample: a quick review into the Excel register, the clickable mock-up, a comment turned into a live
+  change, and the generated requirements document. It never touches your projects or client documents,
+  and the copy is removed at the end.
+- **"The client answered."** Drop the returned register or an answers e-mail into the inbox, or paste the
+  answers. The new `client-answers` skill matches each answer to its question, records it, updates the spec
+  where it changes behaviour, flags possible change requests, and says whether the requirements document or
+  the estimate needs doing again. `register.py render --from <file>` reads the answers from the register
+  Excel file the client sent back, without changing that file.
+- **New mock-ups get the `desk` look:** calm greys and white cards in the client's colour, one main button
+  per screen, statuses as a dot and a word. Joget projects still get `joget`, and projects that already have
+  a mock-up keep their look.
+- **A drop-down can offer only some records** (`options_from: {list, field, where}`), following the
+  walk-through, and UAT scripts test it with only the records it offers.
+- **A detail screen can show the records that belong to it**, such as a car's loan history (`list` with
+  `where_record`), in the mock-up, its screenshot and the requirements document.
+- **Status moves the system makes on its own** (`auto` on a status) are no longer listed as moves no button
+  makes; the requirements document marks them "(automatic)" and UAT scripts give them a case of their own.
+- **Skill evaluations for maintainers** in `evals/`, run with `claude plugin eval .`, with a weekly and
+  on-demand GitHub workflow that has a cost cap and skips without an API key. The documentation check also
+  checks the evaluation suite's shape.
+- **Change requests, checked against what the client signed.** Tell Blueprint "the client asked for…"
+  during development or UAT and the new `change-request` skill checks the request against the version the
+  client signed, quoting it: In scope, Ambiguous (a question for the client in the register) or New. A new
+  change request is sized in building blocks for the team, kept in the project's CR log
+  (`changes/CR log (internal).xlsx`), and written up as a Word note for the client that shows a price only
+  once the project lead has set it.
+- **UAT scripts from what the client signed.** The new `uat-scripts` skill writes test scenarios from the
+  signed requirements: the main process acted as each role, rejections and cancellations, what each role may
+  not do, field checks, access, notifications and integrations, with every requirement covered. They come as
+  a workbook for the client's testers (Pass/Fail, actual result, defect reference) and a Word document in
+  your company's format. After UAT, Blueprint lists the failed and blocked steps of the filled-in workbook.
+- **A project overview page in every project folder.** Run `setup.cmd` (`setup.sh` on a Mac) once more.
+  `Project overview.html` shows the next step in the words to say, the open client questions and internal
+  fixes, and every document in process order with who it is for (From the client, For the client, Client
+  sheet only, Show the client, Can be shared, Internal). It never shows mandays, rates or cost, and
+  Blueprint keeps it up to date (`python -I tools/overview.py build`).
+- **An "Open the mock-up" shortcut** in each project folder that has a mock-up, on Windows and on a Mac.
+  It starts the mock-up so comments are saved, even from the shared folder; when Blueprint is not set up
+  on that computer, it says what to do.
+- **Reviews also come as a Word file** (`<document> review.docx`), in your template and marked internal on
+  every page (`python -I tools/review_doc.py`).
+- **What the platform can actually do, checked against its own documentation.** Give a project its tech
+  stack (`project.platform`, and `project.stack` for the other products) and the new `platform-fit` skill
+  checks the spec against it: every screen, field, list, figure, workflow step, notification, integration
+  and piece of the project's own mock-up code is matched to what the product gives as standard, by
+  configuration, by custom work or not at all. Anything not yet known is looked up in the product's own
+  documentation online, using product and feature words only, never client details; what is found is kept
+  in the knowledge base (`knowledge/platforms/`) with the page that says so, once you agree. The project's
+  spec records what is custom work (internal: never in the document or the mock-up), custom work becomes
+  internal register items, and the estimate carries it as its own lines. It runs when a project's tech
+  stack is given, after a mock-up is built, in a review and before an estimate. A starter Joget DX sheet is
+  included; none of it is checked yet, so the first project to use each row looks it up. Run `setup.cmd`
+  (`./setup.sh` on a Mac) to add it to your workspace's knowledge base.
+- **All your mock-ups on one page.** Double-click `present.cmd` (on a Mac `present.command`) and the browser
+  opens a page that lists every project with a mock-up: its version, when it was built, how many comments
+  are waiting, and its earlier versions. Click one to open it. You no longer type a folder name into a
+  console window, and a mock-up is built for you when you open it if its spec changed. This page is only
+  ever shown on your own computer; to share with the room you still present one project with `--lan`.
+- **Ask Claude to present.** "Open the mock-up for …", "show me my mock-ups" or "present the mock-up" now
+  starts it and gives you the address (the new `present` skill).
+- **A mock-up follows its spec.** When the spec changes, every open mock-up offers **Update ready** on the
+  presenter's bar within a few seconds. Nothing reloads by itself, so a walk-through is never interrupted:
+  press it when you are ready and you stay on the same screen. A change with a mistake in it never shows
+  in the room; the last good mock-up stays up.
+- **A live session: comments acted on while the client is in the room.** Say "run a live session for …".
+  Comments typed in the mock-up collect while you present, and nothing interrupts you. When you say "go",
+  Claude works through them all, groups the ones asking for the same thing, and shows you one list of
+  proposed changes; it makes the ones you approve and every open mock-up offers **Update ready**. Nothing
+  is out of reach: what the spec cannot describe, Claude writes as the project's own mock-up code. A
+  proposal that adds behaviour or goes beyond the scope of work is marked as such, and you decide. A change
+  that adds behaviour also updates the requirements, so the document says what the client saw. The bar
+  says **Live** while the session is open, each comment shows what became of it (Received, Working on it,
+  Applied, Noted for follow-up), "undo that" puts things back exactly, and the mock-up as first presented
+  is kept so it can be shown again. When the session ends, Claude releases the changes as a new version.
+- **A project's own mock-up code.** `spec/mockup.js` and `spec/mockup.css` in a project are loaded after
+  the mock-up engine, for anything the spec cannot describe. They belong to that project alone and count
+  as part of what its screenshots show. See [Spec format](docs/spec-format.md#the-projects-own-mock-up-code).
+- **Larger text.** `text_size: large` (or `larger`) under `project` in the spec makes the text of the
+  client's screens bigger, in the mock-up and in the document's pictures. The presenter's bar keeps its
+  size. Say "make the text larger" to have it set.
+- **The mock-up shows required fields, files and signatures working.** The main button of a form, and a
+  dialog's confirm button, now mark the required fields left empty before going on, on whichever step of
+  the form they are. A presenter is not made to fill in a whole form: pressing the button again goes on
+  without them. Clicking a file field attaches a sample file, and clicking a signature field signs as the
+  person signed in. Until now an empty form was "submitted" and those two fields did nothing.
+- **A presenter's bar.** The mock-up's version, **View as** (the role switch, which used to sit in the
+  system's own top bar and looked like a feature of it) and **Feedback** now sit together in one dark bar
+  at the bottom right. It is clearly not part of the client's system and never appears in screenshots.
 - **One button can move a record through a chain of approvals.** Where a single Approve button serves
   several approvers, `set_status` now takes where each status moves to, for example
   `{Submitted: verified, Verified: approved, Approved: deployed}`, so the mock-up can act out every step
@@ -23,14 +112,169 @@ See [docs/maintaining.md](docs/maintaining.md).
   `set_status: {Verification: verified, Approval: approved}`. For records without a progress table,
   `where_by_role` gives a role a filter of its own. Until now a list had one filter for everyone, so every
   role saw the first approver's tasks and the later roles could not open theirs by clicking.
+- **Blueprint spots earlier work on the same system.** Starting a project or processing the inbox lists
+  active and archived projects and systems delivered before with a similar name
+  (`python -I tools/project.py find "<name>"`), and offers to carry on, start a new phase or start fresh.
+  For a system delivered before, its change requests and actual effort come along as context. A new
+  project can no longer take the name of an archived one.
+- **Processing the inbox never files a document on a guess.** Each file is checked against every project:
+  a comments export made on its mock-up, register, UAT and change request numbers with their topic, its
+  roles and screens (`python -I tools/project.py match "<file>"`). Only a clear match goes straight into
+  the plan; for any other file you are asked which project it is for, with the best guesses and why. The
+  client's name alone is never enough. A file you leave in the inbox keeps a note of why
+  (`project.py hold`), and the start-up summary says "1 file waiting: not sure which project". The inbox
+  also recognises change request and UAT defect lists, and filled-in UAT workbooks.
+- **Submit on a new form adds the request to the mock-up.** It shows in every list, count and task list it
+  matches, with a new reference number, sample values for anything left empty, and its first approval step
+  done by whoever submitted it. The build says which forms do this; `creates` in the spec turns it on or
+  off for a button.
+- **The walk-through is kept.** Records submitted or moved stay through a reload and **Update ready**.
+  Presented with `present` (also `--lan`), every laptop in the room sees them within a few seconds, each in
+  its own role. **Reset sample data** on the presenter's bar starts again for everyone.
+- **Comments can be edited or deleted** from the Feedback panel while they wait, by whoever wrote them or by
+  the presenter. Once Claude is working on one it is locked and says why. Nothing is erased: a deleted
+  comment is kept, marked as taken back, and an edit keeps the earlier wording.
+- **Custom work is labelled in the mock-up.** Parts that are custom development on the project's platform
+  carry a small "Custom development" tag while presenting, showing on hover what they take. **Custom work**
+  on the bar hides them; they never appear in screenshots or the document. Building a mock-up and live
+  sessions now follow "build everything, label custom work": what the spec cannot describe is built in the
+  project's own mock-up code rather than left out, and the platform check records which parts of the
+  mock-up each custom feature appears in.
+- **A button can move a linked record too**, such as the courtesy car of a loan when the loan is approved,
+  with `also_move` in the spec. The build checks the move against the linked record's status rules.
+- **A form can open on a record of its own** (`record`), as a detail screen does.
+- **The page that lists every mock-up names the projects without one** and says what to tell Claude to
+  make it.
+- **The platform check recognises screens for managing users, roles and permissions**, and the starter
+  Joget DX sheet has a row for them.
+- **The requirements document is checked for text meant for your team.** The generator warns about the
+  mock-up, "proposed", mock-up comment numbers (FB-…), register numbers not listed under Decisions needed
+  and requirement numbers that are not in this spec, anywhere the client reads them, and says where to
+  fix each in the spec or register. It also warns when two figures have the same caption.
+- **The generator lists the parts still missing before issuing:** non-functional requirements, the
+  timeline, scope items and the names of the signatories.
+- **Register items are added and closed with commands, not by editing the file.**
+  `python -I tools/register.py add` takes new items from a file or standard input, gives them the next
+  numbers, fills the date raised and the status, checks every item and refuses the whole batch if one is
+  wrong; it names likely duplicates of items already in the register, and `--check` reports without
+  writing. `register.py similar` lists the items that read most like a question or finding, and
+  `register.py update` answers, resolves or changes items (`--set status=resolved --set answer="..."`).
+  Reviews, workshop preparation and estimates use them, and `register.json` is now written whole or not
+  at all.
+
+### Changed
+- **The presenter's bar, the pins and the feedback buttons are a burnt orange** on a dark bar, deep enough
+  for white text to be read on it.
+- **Feedback mode is calmer and clearer, and any part of a screen can be commented on:** the header, the
+  side menu, the page background, a row or a single cell, not only named fields, columns and buttons. A
+  comment says what it is about in plain words ("Comment on the Status cell of LV-2026-011", not
+  "column:Status"), the thing commented on stays marked while you type, Ctrl + Enter
+  saves and Esc backs out. Pins on the same thing sit side by side, and clicking a pin shows its comment.
+  The panel opens above the bar, so the bar no longer jumps.
+- **Messages are quieter and never cover each other.** They are stacked, a longer one stays longer, and
+  only a small dot carries the colour: green for done, orange for something to look at, red for a failure.
+- **Dialogs behave as dialogs do.** Esc and a click outside close them, the cursor starts in the first
+  field, and the browser's Back button no longer reopens a dialog you closed.
+- **Reject no longer looks like Approve.** With a red brand colour the danger button and the main button
+  were two near-identical reds side by side. The danger button is then drawn as an outline. Screenshots of
+  such a project look slightly different the next time they are taken.
+- **Small touches:** rows highlight under the pointer, buttons and dialogs move gently (not at all for
+  people who ask their system for less motion, and never in a screenshot), keyboard focus shows as a soft
+  ring in the project's colour, and a new screen starts at its top.
+- **The start-up summary gives each project's next step by stage, in the words to say:** review or build a
+  mock-up, prepare the workshop, apply the feedback, generate the requirements document, review it, issue
+  it, close the project. It also tells the lead developer when the spec has changed since the last
+  estimate.
+- **An estimate whose building blocks are not all priced no longer shows a total.** It says the build is
+  not priced, shows what is priced so far (not a project figure), and lists the scope-of-work lines that
+  cannot be compared yet.
+- **A review always ends with the next step,** and covers documents the client has already signed
+  (findings become possible change requests) and manday tables inside the document.
+- **Closing a project shows the proposed knowledge-base changes first** and writes only what you agree to.
+- **Extracting a document catches "pending", "subject to confirmation" and "subject to change"**, renders
+  PDF pages that are mostly figures and tables, and prints a plain summary.
+- **The sign-off page says plainly what is signed:** the version and date, how many decisions are still
+  open and that they are not part of the sign-off, and how to sign. The wording can be changed in the
+  document format (`labels`).
+- **Dates print as "6 November 2026"** on the cover, in the version history and at sign-off.
+- **Extra screenshots of a screen get captions that say what they show** (the role or the record).
+- **After Update ready the mock-up comes back with feedback mode off**, so the presenter's next click does
+  what it says.
+- **Settings the mock-up ignores are listed when it is built**, such as a misspelling or a stray key from a
+  comma in unquoted text. Start a note of your own with `_` to keep it quiet.
+- **Versions kept at a live session read "v1.4 as presented 6 Nov 19:00"** on the page that lists every
+  mock-up, which also explains in plain words how to let the room comment.
+- **In a live session each comment is finished with its own note.**
+- **Every skill ends the same way:** what was made, where it is, who it is for (the client or internal), and
+  the next step in the words to say. The documentation check requires it.
+- **The estimate, review and requirements-document skills are shorter.** Exact options come from each
+  tool's `--help`, so they cannot drift; `estimate.py --help` and `generate_requirements.py --help` now
+  print their usage.
+- **Starting a project asks less.** The system, client, short name and platform are worked out from the
+  brief or document and confirmed in one question; only what cannot be found is asked.
+- **The presenter's bar, Feedback panel and comment box are dark with a blue accent** instead of orange.
+  The bar folds away to one button, and the open Feedback panel no longer covers the last columns.
+- **The page listing every mock-up shows one card per project**, plus the projects still without one and
+  what to say to Claude.
+- **A form in steps shows Submit on the last step only**, with Next and Previous on the others.
+
+### Security
+- **Internal notes on a comment are no longer sent to the room.** A mock-up was sent each comment's note,
+  its register item and whether it was called a possible change request, where anyone with the room's
+  link could read them. It is now sent only the comment itself and one of four plain words for what became
+  of it.
 
 ### Fixed
+- **Filters are kept when you open a record and come back.** The list used to show every row again.
+- **The Feedback button no longer covers the last buttons of a page**, such as Export or Approve.
+- **The outline in feedback mode is no longer cut off** on a column heading or anything else inside a table.
+- **Switching role from a page opened by a link that names a role** was undone straight away. It now holds.
+- **A dialog opened on a later step of a form** no longer sends the form back to its first step.
 - **A row action limited to some roles is now hidden from the others in the mock-up.** `roles` on a row
   action already decided who had it in the document's access matrix, but the mock-up showed it to
   everyone who could open the list.
 - **A step marked Skipped is no longer taken for the one that is waiting.** When a button moved a record,
   the approval progress filled in the first step without a date, even one marked Skipped or Not required.
   It now fills in the first step that is really waiting.
+- **View as switches role even when both roles start on the same screen.** The page used to stay as the
+  previous role.
+- **Buttons with a `when` now show on a form opened on a record.**
+- **A text where the spec needs a list** (such as `process_flow` notes) is caught by the build, instead of
+  leaving an empty page and failing the screenshots. When screenshots stop, they name the screen and the
+  error the browser reported.
+- **A tick box with no options shows its box.**
+- **Undoing a change in a live session puts its comments back to Received** instead of leaving them
+  Applied, and says which register changes must be put back by hand.
+- **The "(n high)" next to client questions counted internal items too.**
+- **Archiving a project whose name an archived project already had** moved it inside that folder. It is
+  now refused.
+- **The platform check no longer suggests a knowledge-base sheet for the client's own systems**, which
+  would have put a client's name into the shared knowledge base.
+- **Pictures in the PDF are full size when two screenshots are identical.** None were sharpened before,
+  and the run said "0 of 34" with no reason; when pictures stay as Word made them, it now says why.
+- **Decisions needed no longer shows requirement numbers from the document a question was found in.** It
+  points at the requirement the question is linked to (`tbc`), and a note lists the questions with no
+  place in this document.
+- **Plain messages instead of error traces** when building, screenshotting or serving the mock-up of a
+  project with no spec (or a folder that does not exist), when generating for a project with no spec, and when learning
+  the format from a PDF, an old `.doc` or a damaged file. Chapter names show "&", not "&amp;".
+- **The generator and the format tool no longer stop or show "?"** for characters like "●" or "–" in a
+  Windows console.
+- **PDF document properties no longer show garbled characters** ("MicrosoftÂ®") when extracted.
+- **Creating a project prints its folder and the next step**, not a full Windows path.
+- **The starter Joget DX sheet named an old tool.**
+- **Comments deleted in the mock-up no longer count as waiting** at start-up, in `live list` or on the page
+  that lists every mock-up.
+- **Approval steps still to come read "Waiting"** instead of a blank.
+- **A new request in the mock-up is no longer the twin of one already waiting.** Fields left empty used to be
+  copied from the first open record at the same stage, so a new loan had the same customer and the same car.
+  They now come from a finished record, or one at another stage; a car or other asset is one no open record
+  holds, with its own details (such as its model).
+- **The page listing every mock-up names projects without one by their name and client**, not their folder
+  name.
+- **The start-up summary writes workshop dates for people** ("13 Nov 2026").
+- **A read-only field no longer shows the required star.**
+- **The empty corner beside the open Feedback panel no longer blocks clicks** on the page underneath.
 
 ## [0.10.0] - 2026-11-06
 

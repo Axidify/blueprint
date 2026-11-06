@@ -881,21 +881,26 @@ def rendered(tmp_path, kb, run):
 
 
 def test_render_reports_the_figures(rendered, tmp_path):
+    """The full estimate has a building block with no rate: it leads with that, and gives no total."""
     out = rendered[0].splitlines()
     for expected in (
             f"Estimate for Equipment Booking System ({PLATFORM}), counted from spec v0.1",
-            "  Building blocks: 10 – 20 MD",
-            "  Other work:      4 – 9 MD",
-            "  Total of the priced lines: 14 – 29 MD",
-            "  With open questions answered the costly way: up to 33 MD",
-            "  Not priced (1 of 4 lines, left out of the total):",
+            "  The build is not priced: 1 of 2 building-block lines have no rate yet, so there is no total for the project yet.",
+            "  Priced so far (not a project figure):",
+            "    Building blocks: 10 – 20 MD (1 of 2 lines)",
+            "    Other work:      4 – 9 MD (shares of the building blocks are understated: they cover the priced lines only)",
+            "    Open questions answered the costly way would add up to 4 MD more",
+            "  Not priced (1 of 4 lines, left out of the figures above):",
             "    - L02 Item L02: 2 x BB-07 Integration, per endpoint",
             "  Open questions not sized: 1 (K02)",
             "  Confidence: low",
             "    - 1 of 4 lines have no rate or share set and are not priced: the total leaves them out, so it is not the whole project.",
             "    - 1 high-severity register item is still open.",
             "    - L01 Item L01: 10 MD of range",
-            "  Scope of work: 7 MD for the lines this estimate prices (16 MD in all), against 14 – 29 MD",
+            "  Scope of work (16 MD in all): 2 of 3 lines cannot be compared yet, because the build is not priced:",
+            "    - 2 Integration (9 MD)",
+            "    - 3 Project management (2 MD)",
+            "  Lines that can be compared now:",
             "    - 1 Forms and lists: 5 MD against 10 – 20 MD. Scope of work is 5 MD below the low end",
             "    - – Item L03: not in the SOW against 3 – 6 MD. Not in the scope of work",
             "    - (14 MD) May two bookings overlap?",
@@ -903,6 +908,20 @@ def test_render_reports_the_figures(rendered, tmp_path):
             f"Wrote {tmp_path / 'project' / 'estimates' / '2026-11-06 estimate from spec v1.2.xlsx'}",
             INTERNAL + "."):
         assert expected in out
+    assert not any("Total" in line for line in out), "with the build not priced, nothing reads as a total"
+
+
+def test_a_priced_build_still_gives_a_total(tmp_path, kb, run):
+    """Only an unpriced building block takes the total away: an unpriced item of other work leaves it, said so."""
+    est = full_estimate()
+    est["lines"][1] = fixed("L02", 2, 4, sow_ref="2")
+    path = full_project(tmp_path / "project", est)
+    out = run(kb, "render", tmp_path / "project").splitlines()
+    assert "  Total: 16 – 33 MD" in out and "  With open questions answered the costly way: up to 37 MD" in out
+    assert "  Scope of work: 16 MD for the lines this estimate prices (16 MD in all), against 16 – 33 MD" in out
+    assert not any("build is not priced" in line for line in out)
+    summary = {r[0]: tuple(r[1:4]) for r in sheet_rows(load_workbook(path.with_suffix(".xlsx"))["Summary"]) if r[0]}
+    assert summary["Total, as understood today"][:2] == (16, 33)
 
 
 def test_workbook_sheets_are_all_marked_internal(rendered):
@@ -915,13 +934,16 @@ def test_workbook_sheets_are_all_marked_internal(rendered):
 
 def test_summary_sheet(rendered):
     summary = {r[0]: tuple(r[1:4]) for r in sheet_rows(rendered[1]["Summary"]) if r[0]}
-    assert summary["Building blocks"] == (10, 20, "")
-    assert summary["Other work"] == (4, 9, "")
-    assert summary["Total of the priced lines"] == (14, 29, "Not the whole project: see the lines not priced")
-    assert summary["Lines not priced (no rate or share set)"] == (1, "", "L02: left out of the totals")
+    assert summary["The build is not priced"] == ("", "", "1 of 2 building-block lines have no rate yet, so there is no "
+                                                  "total for the project: the figures below are what is priced so far")
+    assert summary["Building blocks, priced lines only"] == (10, 20, "1 of 2 lines")
+    assert summary["Other work"] == (4, 9, "Shares of the building blocks are understated: they cover the priced lines only")
+    assert summary["Priced so far (not a project figure)"] == (14, 29, "Leaves out the lines not priced")
+    assert summary["Lines not priced (no rate or share set)"] == (1, "", "L02: left out of the figures above")
     assert summary["Open questions, if answered the costly way"] == (0, 4, "")
-    assert summary["Total with open questions"] == (14, 33, ""), "the open question widens the high end only"
-    assert summary["Scope of work, lines this estimate prices"] == (7, "", "Compare this with the total above")
+    assert not any(str(label).startswith("Total") for label in summary), "no total while the build is not priced"
+    assert summary["Scope of work, lines that can be compared"] == (
+        5, "", "Compare line by line on the Against SOW sheet; 2 line(s) cannot be compared until the build is priced: 2, 3")
     assert summary["Scope of work, all lines"] == (16, "", "docs/2026-11-02 SOW.xlsx")
     assert summary["Confidence"][0] == "Low"
     assert summary["Delivered projects logged on this platform"][0] == 3
@@ -942,8 +964,8 @@ def test_estimate_sheet(rendered):
                        "no rate set: not priced", "", "", "2", ""], "a line not priced shows no mandays, not zero"
     assert [(r[0] or r[2], r[9], r[10]) for r in rows[3:]] == [
         ("Subtotal: building blocks", 10, 20), ("L03", 3, 6), ("L04", 1, 3), ("Subtotal: other work", 4, 9),
-        ("Total of the priced lines", 14, 29)]
-    assert rows[5][8] == "10 – 15% of building blocks, knowledge base"
+        ("Priced so far (the build is not priced)", 14, 29)]
+    assert rows[5][8] == "10 – 15% of building blocks, knowledge base, of the priced ones only: understated while 1 are not priced"
 
 
 def test_against_sow_sheet(rendered):
@@ -951,8 +973,10 @@ def test_against_sow_sheet(rendered):
     assert rows[0] == ["SOW ref", "Scope of work item", "SOW MD", "Estimate low", "Estimate high", "Difference", "Estimate lines"]
     assert rows[1] == ["1", "Forms and lists", 5, 10, 20, "Scope of work is 5 MD below the low end", "L01"]
     assert rows[2] == ["–", "Item L03", "", 3, 6, "Not in the scope of work", "L03"]
-    assert {r[0]: r[5] for r in rows[3:5]} == {"2": "Cannot compare: L02 not priced", "3": "Within the range"}
-    assert rows[5] == ["", "Total of the lines this estimate prices", 7, 14, 29, "", ""]
+    assert {r[0]: r[5] for r in rows[3:5]} == {
+        "2": "Cannot compare: L02 not priced",
+        "3": "Cannot compare yet: L04 is a share of building blocks that are not all priced"}, "a share of too little is not compared"
+    assert rows[5] == ["", "Priced so far (the build is not priced)", 5, 14, 29, "", ""]
 
 
 def test_uncertainty_sheet(rendered):
@@ -991,7 +1015,13 @@ def test_cost_uses_the_company_day_rate(tmp_path, kb, run, temp_workspace):
     path = full_project(tmp_path / "project")
     run(kb, "render", tmp_path / "project")
     summary = {r[0]: tuple(r[1:4]) for r in sheet_rows(load_workbook(path.with_suffix(".xlsx"))["Summary"]) if r[0]}
-    assert summary["Cost at XYZ 1,000 a day"] == (14000, 33000, "Priced lines only; Low end to the high end including open questions")
+    assert summary["Cost at XYZ 1,000 a day"] == ("", "", "Not worked out: the build is not priced")
+    est = full_estimate()
+    est["lines"][1] = fixed("L02", 2, 4, sow_ref="2")
+    path = full_project(tmp_path / "priced", est)
+    run(kb, "render", tmp_path / "priced")
+    summary = {r[0]: tuple(r[1:4]) for r in sheet_rows(load_workbook(path.with_suffix(".xlsx"))["Summary"]) if r[0]}
+    assert summary["Cost at XYZ 1,000 a day"] == (16000, 37000, "Low end to the high end including open questions")
 
 
 def test_risk_with_a_low_end_still_widens_the_high_end_only(tmp_path, kb, run):
@@ -1049,10 +1079,10 @@ def test_render_of_the_sample_with_some_rates_set(tmp_path, rated, run):
     out = run(rated, "render", project).splitlines()
     for expected in (
             "Estimate for Leave Request System (Joget DX), counted from spec v0.1",
-            "  Building blocks: 13.5 – 26 MD",
-            "  Other work:      2.7 – 7.8 MD",
-            "  Total of the priced lines: 16.2 – 33.8 MD",
-            "  Not priced (6 of 13 lines, left out of the total):",
+            "  The build is not priced: 5 of 11 building-block lines have no rate yet, so there is no total for the project yet.",
+            "    Building blocks: 13.5 – 26 MD (6 of 11 lines)",
+            "    Other work:      2.7 – 7.8 MD (shares of the building blocks are understated: they cover the priced lines only)",
+            "  Not priced (6 of 13 lines, left out of the figures above):",
             "    - L05 My Leave Applications dashboard: 1 x BB-07 Operational dashboard",
             "    - L12 Internal testing and fixes before UAT: OW-03",
             "  Open questions not sized: 4 (K01, K02, K03, K04)",
@@ -1079,8 +1109,11 @@ def test_render_writes_only_its_excel_file_in_the_project(tmp_path, rated, run):
     run(rated, "render", project)
     after = snapshot(project)
     excel = f"estimates/{SAMPLE_ESTIMATE.with_suffix('.xlsx').name}"
-    assert set(after) - set(before) == {excel}
-    assert {name: digest for name, digest in after.items() if name != excel} == before, "spec, mock-up and estimate file untouched"
+    # Besides the Excel file only the project's overview page (and its mock-up shortcuts) is written, and the page
+    # never shows a figure of the estimate (tests/test_overview.py).
+    page = {"Project overview.html", "Open the mock-up.cmd", "Open the mock-up.command"}
+    assert set(after) - set(before) - page == {excel}
+    assert {name: digest for name, digest in after.items() if name not in {excel, *page}} == before, "spec, mock-up and estimate file untouched"
     assert snapshot(support.EXAMPLE) == source, "the sample in the app folder is never written to"
 
 

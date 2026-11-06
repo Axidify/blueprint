@@ -1,41 +1,49 @@
-/* Layout and components shared by every theme. Themes set the variables and the look. */
+/* Layout and components shared by every theme. Themes set the variables and the look.
+   --ts is the text size of the client's screens: 1, or more when the project asks for larger text
+   (project.text_size in the spec). Every text size of those screens is a multiple of it. */
+:root { --ts: 1; }
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
-body { font-family: var(--font); font-size: 14px; color: var(--text); background: var(--bg); }
+body { font-family: var(--font); font-size: calc(14px * var(--ts)); color: var(--text); background: var(--bg); }
 a { color: var(--primary); text-decoration: none; }
-h2 { margin: 0; font-size: 20px; font-weight: 600; }
-h3 { margin: 0 0 12px; font-size: 15px; font-weight: 600; }
+h2 { margin: 0; font-size: calc(20px * var(--ts)); font-weight: 600; }
+h3 { margin: 0 0 12px; font-size: calc(15px * var(--ts)); font-weight: 600; }
 
 .topbar { height: 54px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; background: var(--topbar-bg); color: var(--topbar-text); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; }
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 16px; }
-.brand-mark { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; height: 32px; padding: 0 6px; border-radius: var(--radius-sm); background: var(--primary); color: #fff; font-size: 12px; font-weight: 700; letter-spacing: .5px; }
-.brand-mark.big { min-width: 56px; height: 56px; font-size: 18px; }
-.topbar-right { display: flex; align-items: center; gap: 14px; font-size: 13px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: calc(16px * var(--ts)); }
+.brand-mark { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; height: 32px; padding: 0 6px; border-radius: var(--radius-sm); background: var(--primary); color: #fff; font-size: calc(12px * var(--ts)); font-weight: 700; letter-spacing: .5px; }
+.brand-mark.big { min-width: 56px; height: 56px; font-size: calc(18px * var(--ts)); }
+.topbar-right { display: flex; align-items: center; gap: 14px; font-size: calc(13px * var(--ts)); }
 .topbar-right .logout { color: var(--topbar-text); opacity: .85; }
-.role-switch { font-size: 12px; padding: 3px 6px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.role-switch { font-size: calc(12px * var(--ts)); padding: 3px 6px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
 
 .layout { display: flex; min-height: calc(100vh - 54px); }
 .sidebar { width: 230px; flex-shrink: 0; background: var(--sidebar-bg); padding: 12px 0; }
-.menu-item { display: block; padding: 11px 22px; color: var(--sidebar-text); font-size: 13.5px; border-left: 3px solid transparent; }
+.menu-item { display: block; padding: 11px 22px; color: var(--sidebar-text); font-size: calc(13.5px * var(--ts)); border-left: 3px solid transparent; }
 .menu-item:hover { background: var(--sidebar-hover); }
 .menu-item.active { background: var(--sidebar-active); color: var(--sidebar-active-text); border-left-color: var(--primary); font-weight: 600; }
 .content { flex: 1; padding: 22px 28px 40px; min-width: 0; }
+body:not(.clean) .content { padding-bottom: 88px; }  /* room to scroll the last buttons clear of the presenter's tools */
 
 .page-head { margin-bottom: 18px; }
 .page-head p { margin: 4px 0 0; color: var(--muted); }
 
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-bottom: 20px; }
 .stat { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; border-top: 3px solid var(--primary); }
-.stat-value { font-size: 26px; font-weight: 700; }
-.stat-label { color: var(--muted); font-size: 12.5px; margin-top: 4px; }
+.stat-value { font-size: calc(26px * var(--ts)); font-weight: 700; }
+.stat-label { color: var(--muted); font-size: calc(12.5px * var(--ts)); margin-top: 4px; }
 
 .list-tools { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
 .filters { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
-.filter label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+.filter label { display: block; font-size: calc(12px * var(--ts)); color: var(--muted); margin-bottom: 3px; }
 .filter .f-input { min-width: 150px; }
 .toolbar { display: flex; gap: 8px; }
+/* A list: its toolbar row, the table and the count, kept together (the desk theme draws them as one card). */
+.list-block { display: block; }
+/* A list on a detail screen of the records that name the one shown. */
+.related-list { margin: 4px 0 16px; }
 .table-wrap { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: auto; }
-table.datalist { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.datalist { width: 100%; border-collapse: collapse; font-size: calc(13px * var(--ts)); }
 .datalist th { text-align: left; padding: 10px 12px; background: var(--th-bg); color: var(--th-text); font-weight: 600; border-bottom: 1px solid var(--border); white-space: nowrap; }
 .datalist td { padding: 9px 12px; border-bottom: 1px solid var(--border); }
 .datalist tbody tr:nth-child(even) td { background: var(--stripe); }
@@ -43,82 +51,228 @@ table.datalist { width: 100%; border-collapse: collapse; font-size: 13px; }
 .datalist td.actions .link { margin-right: 10px; }
 .datalist .empty { text-align: center; color: var(--muted); padding: 24px; }
 .datalist.compact td, .datalist.compact th { padding: 7px 10px; }
-.pager { font-size: 12px; color: var(--muted); margin-top: 8px; }
+.pager { font-size: calc(12px * var(--ts)); color: var(--muted); margin-top: 8px; }
 
-.chip { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+.chip { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: calc(12px * var(--ts)); font-weight: 600; }
 .chip.ok { background: #e3f4e8; color: #1e7b3c; }
 .chip.warn { background: #fff4d6; color: #8a6100; }
 .chip.bad { background: #fde4e4; color: #b42318; }
 .chip.neutral { background: #eceff3; color: #4a5565; }
+.chip.prog { background: #fff4d6; color: #8a6100; }  /* waiting or in progress: amber here, the accent in the desk theme */
 .status-bar { margin-bottom: 14px; }
 
 .tabs { display: flex; gap: 2px; border-bottom: 2px solid var(--border); margin-bottom: 16px; }
 .tab { padding: 9px 16px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -2px; }
 .tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+/* A step that still holds required fields left empty, once the main button has pointed them out. */
+.tab.missing::after { content: ""; display: inline-block; width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: #d92d20; vertical-align: 2px; }
 
 .form-section { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; margin-bottom: 16px; }
 .form-section .note { color: var(--muted); margin-top: -6px; }
 .f-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 28px; }
 .f-row { display: grid; grid-template-columns: var(--label-width) 1fr; gap: 10px; align-items: start; }
 .f-row.wide { grid-column: 1 / -1; }
-.f-label { padding-top: 7px; font-size: 13px; color: var(--label); }
+.f-label { padding-top: 7px; font-size: calc(13px * var(--ts)); color: var(--label); }
 .req { color: #d92d20; margin-left: 3px; }
 .f-input { width: 100%; padding: 7px 9px; border: 1px solid var(--input-border); border-radius: var(--radius-sm); font: inherit; background: #fff; }
 .f-value { padding: 7px 0; min-height: 32px; }
-.f-help { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+.f-help { font-size: calc(11.5px * var(--ts)); color: var(--muted); margin-top: 3px; }
+.f-error { font-size: calc(12px * var(--ts)); color: #b42318; margin-top: 3px; }
+.f-row.invalid .f-input, .f-row.invalid .file-drop, .f-row.invalid .signature { border-color: #d92d20; }
+.f-row.invalid .choices { outline: 1px solid #d92d20; outline-offset: 3px; border-radius: var(--radius-sm); }
+[data-fake] { cursor: pointer; }
+.file-name { color: var(--text); font-weight: 600; }
 .choices { display: flex; flex-wrap: wrap; gap: 6px 16px; padding-top: 7px; }
-.file-drop { border: 1px dashed var(--input-border); border-radius: var(--radius-sm); padding: 12px; text-align: center; color: var(--muted); font-size: 13px; }
+.file-drop { border: 1px dashed var(--input-border); border-radius: var(--radius-sm); padding: 12px; text-align: center; color: var(--muted); font-size: calc(13px * var(--ts)); }
 .signature { height: 90px; border: 1px dashed var(--input-border); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; color: var(--muted); background: #fafbfc; }
-.sig-ink { font-family: "Segoe Script", cursive; font-size: 22px; color: #1d3b8b; }
+.sig-ink { font-family: "Segoe Script", cursive; font-size: calc(22px * var(--ts)); color: #1d3b8b; }
 
 .form-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
-.btn { padding: 7px 16px; border-radius: var(--radius-sm); border: 1px solid var(--btn-border); background: var(--btn-bg); color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+.btn { padding: 7px 16px; border-radius: var(--radius-sm); border: 1px solid var(--btn-border); background: var(--btn-bg); color: var(--text); font: inherit; font-size: calc(13px * var(--ts)); cursor: pointer; }
 .btn:hover { filter: brightness(.97); }
 .btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
 .btn.danger { background: #d92d20; border-color: #d92d20; color: #fff; }
-.btn.small { padding: 4px 10px; font-size: 12px; }
+/* A red brand colour: the danger button is an outline, so it cannot be mistaken for the main button beside it. */
+.danger-outline .btn.danger, .danger-outline .btn.danger:hover { background: #fff; border-color: #d92d20; color: #b42318; box-shadow: none; filter: none; }
+.danger-outline .btn.danger:hover { background: #fff5f5; }
+.btn.small { padding: 4px 10px; font-size: calc(12px * var(--ts)); }
 .btn.block { width: 100%; margin-top: 16px; padding: 9px; }
 
 .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--login-bg); }
 .login-card { width: 380px; background: var(--card); border-radius: var(--radius); padding: 30px 32px; box-shadow: 0 8px 30px rgba(0,0,0,.12); }
 .login-card .f-label { display: block; margin-top: 12px; padding: 0 0 4px; }
 .login-brand { text-align: center; margin-bottom: 10px; }
-.login-brand h1 { font-size: 19px; margin: 12px 0 2px; }
-.login-brand p { color: var(--muted); margin: 0; font-size: 13px; }
-.demo-roles { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
+.login-brand h1 { font-size: calc(19px * var(--ts)); margin: 12px 0 2px; }
+.login-brand p { color: var(--muted); margin: 0; font-size: calc(13px * var(--ts)); }
+.demo-roles { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: calc(12px * var(--ts)); color: var(--muted); }
 .demo-roles span { width: 100%; }
 .denied { padding: 40px; text-align: center; color: var(--muted); }
 
 .modal-back { position: fixed; inset: 0; background: rgba(15, 23, 42, .45); display: flex; align-items: center; justify-content: center; z-index: 50; }
 .modal { width: 520px; max-width: 94vw; background: var(--card); border-radius: var(--radius); box-shadow: 0 12px 40px rgba(0,0,0,.25); }
 .modal-head { padding: 14px 18px; font-weight: 600; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; }
-.modal-x { color: var(--muted); font-size: 20px; line-height: 1; }
+.modal-x { color: var(--muted); font-size: calc(20px * var(--ts)); line-height: 1; }
 .modal-body { padding: 16px 18px; }
 .modal-body .f-row { grid-template-columns: 1fr; gap: 4px; margin-bottom: 10px; }
 .modal-body .f-label { padding: 0; }
 .modal-foot { padding: 12px 18px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
 
-.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1f2937; color: #fff; padding: 10px 18px; border-radius: 6px; z-index: 60; font-size: 13px; }
-.toast.error { background: #b42318; z-index: 90; max-width: 560px; font-weight: 600; line-height: 1.4; }
+#toasts { position: fixed; bottom: 72px; left: 50%; transform: translateX(-50%); z-index: 90; display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: min(560px, 92vw); pointer-events: none; }
+/* A message is a raised neutral card; only its dot carries the colour. */
+.toast { display: flex; align-items: flex-start; gap: 10px; background: #fff; color: #1d1d1f; padding: 11px 16px 11px 14px; border-radius: 12px; font-size: 13.5px; line-height: 1.4;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .05), 0 8px 24px rgba(0, 0, 0, .14); animation: fb-rise .2s cubic-bezier(.2, .8, .2, 1); }
+.toast::before { content: ""; flex: 0 0 8px; height: 8px; margin-top: 5px; border-radius: 50%; background: #34c759; }
+.toast.error { font-weight: 600; box-shadow: 0 0 0 1px rgba(215, 0, 21, .35), 0 8px 24px rgba(0, 0, 0, .16); }
+.toast.error::before { background: #ff3b30; }
+.toast.warn::before { background: #ff9500; }
 
-/* Feedback mode */
-.fb-tools { position: fixed; right: 16px; bottom: 16px; z-index: 70; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
-#fb-toggle { background: #7c3aed; border-color: #7c3aed; color: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
-#fb-panel { width: 330px; max-height: 60vh; overflow: auto; background: #fff; border: 1px solid #ddd6fe; border-radius: 8px; padding: 12px; box-shadow: 0 6px 24px rgba(0,0,0,.18); font-size: 13px; }
-.fb-panel-head { font-weight: 600; margin-bottom: 8px; color: #5b21b6; }
-.fb-item { border-top: 1px solid #ede9fe; padding: 8px 0; }
-.fb-el { font-size: 11px; color: #7c3aed; }
-.fb-meta { font-size: 11px; color: #6b7280; margin-top: 3px; }
+/* The presenter's tools and feedback mode. This is Blueprint's own interface, not the client's system, so it
+   looks the same in every theme and is kept apart from the client's light screens: dark charcoal surfaces
+   (#1C1C1E, raised #2C2C2E) with one accent, Cobalt as it is drawn on dark (#2A6FD6). Status is a dot and a word;
+   tags are the field fill. Sizes follow one scale (12, 13, 15, 17), corners grow with the thing (9 controls,
+   16 panels, 20 dialogs), and motion is 120, 200 or 320 ms, easing out. To change the accent, change --fb-mark
+   and the shades made from it. */
+:root { --fb-mark: #2a6fd6; --fb-mark-dark: #2563c0; --fb-mark-press: #1f56a8; --fb-tint: rgba(42, 111, 214, .1); --fb-halo: rgba(42, 111, 214, .4);
+  --fb-prog-text: #6a9ae2;
+  --fb-card: #1c1c1e; --fb-raised: #2c2c2e; --fb-ink: #f5f5f7; --fb-sub: #98989d; --fb-line: #48484a; --fb-hair: #2e2e31;
+  --fb-done: #30d158; --fb-red-text: #ff6961; --fb-red-solid: #d70015; --fb-neutral: #8e8e93;
+  --fb-font: "Geist", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; --ease: cubic-bezier(.2, .8, .2, 1);
+  --fb-ring: 0 0 0 1px rgba(255, 255, 255, .07); }
+.fb-tools { position: fixed; right: 16px; bottom: 16px; z-index: 70; display: flex; flex-direction: column-reverse; align-items: flex-end; gap: 10px; font-family: var(--fb-font); pointer-events: none; }
+/* Only the bar and the panel take clicks: the empty corner beside the panel stays part of the page. */
+.fb-tools > * { pointer-events: auto; }
+.fb-bar { display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 5px; background: rgba(28, 28, 30, .86); -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%);
+  color: var(--fb-ink); border-radius: 999px; box-shadow: var(--fb-ring), 0 10px 30px rgba(0, 0, 0, .35); font-size: 13px; white-space: nowrap; }
+@media (prefers-reduced-transparency: reduce) { .fb-bar { background: var(--fb-card); -webkit-backdrop-filter: none; backdrop-filter: none; } }
+.fb-badge { font-weight: 600; letter-spacing: -.01em; }
+.fb-home, .fb-fold { display: flex; align-items: center; justify-content: center; flex: 0 0 34px; width: 34px; height: 34px; border-radius: 999px; color: var(--fb-sub); background: transparent; border: 0; padding: 0;
+  cursor: pointer; transition: background-color .12s var(--ease), color .12s var(--ease); }
+.fb-home { margin-left: -8px; color: var(--fb-ink); }
+.fb-home:hover, .fb-fold:hover { background: var(--fb-raised); color: var(--fb-ink); }
+.fb-viewas { display: flex; align-items: center; gap: 8px; color: var(--fb-sub); }
+.fb-viewas[hidden] { display: none; }
+.fb-bar .role-switch { font: inherit; font-weight: 500; height: 30px; padding: 0 8px; background: var(--fb-raised); color: var(--fb-ink); border: 0; border-radius: 9px; max-width: 170px; cursor: pointer; }
+#fb-toggle { font: inherit; font-weight: 600; height: 34px; padding: 0 16px; background: var(--fb-mark); color: #fff; border: 0; border-radius: 999px; cursor: pointer; transition: background-color .12s var(--ease), color .12s var(--ease); }
+#fb-toggle:hover { background: var(--fb-mark-dark); }
+#fb-toggle:active { background: var(--fb-mark-press); }
+body.fb-active #fb-toggle { background: var(--fb-ink); color: #1d1d1f; }
+#fb-toggle.fb-unsent, body.fb-active #fb-toggle.fb-unsent { background: var(--fb-red-solid); color: #fff; }
+.fb-live { display: flex; align-items: center; gap: 6px; color: var(--fb-sub); }
+.fb-live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--fb-done); }
+#fb-update { font: inherit; font-weight: 600; height: 34px; padding: 0 14px; background: var(--fb-ink); color: #1d1d1f; border: 0; border-radius: 999px; cursor: pointer; animation: fb-rise .2s var(--ease); }
+#fb-update:hover { background: #e5e5ea; }
+.fb-live[hidden], #fb-update[hidden] { display: none; }
+.fb-tools :focus-visible, .fb-dialog :focus-visible { outline: 3px solid var(--fb-halo); outline-offset: 1px; }
+/* Folded away: one small button, and what must not be missed (Update ready, a comment not saved). */
+.fb-tools.folded .fb-bar { gap: 6px; }
+.fb-tools.folded .fb-bar > :not(.fb-fold):not(#fb-update):not(#fb-toggle.fb-unsent), .fb-tools.folded #fb-panel { display: none !important; }
+
+/* The Feedback panel: a dark card above the bar. */
+#fb-panel { width: 340px; max-width: calc(100vw - 32px); max-height: min(60vh, 520px); overflow: auto; background: var(--fb-card); color: var(--fb-ink); border-radius: 16px; padding: 16px 16px 14px;
+  box-shadow: var(--fb-ring), 0 10px 30px rgba(0, 0, 0, .5); font-size: 13px; line-height: 1.45; animation: fb-rise .2s var(--ease); color-scheme: dark; }
+/* While it is open on a wide screen the page makes room for it, so it never covers the last columns or buttons. */
+@media (min-width: 1100px) { body.fb-panel-open:not(.clean) #app { margin-right: 372px; } }
+.fb-panel-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 15px; font-weight: 600; letter-spacing: -.01em; margin-bottom: 6px; }
+.fb-count { color: var(--fb-sub); font-size: 13px; font-weight: 400; }
+.fb-item { display: flex; gap: 10px; padding: 10px 0; border-top: 1px solid var(--fb-hair); border-radius: 9px; }
+.fb-panel-head + .fb-item { border-top: 0; }
+.fb-item.flash { animation: fb-flash 1.4s var(--ease); }
+.fb-num { flex: 0 0 22px; height: 22px; border-radius: 50%; background: var(--fb-mark); color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.fb-num.unsent { background: var(--fb-red-solid); }
+.fb-body { min-width: 0; }
+.fb-el, .fb-meta { color: var(--fb-sub); font-size: 12px; }
+.fb-text { font-size: 15px; margin: 1px 0 2px; overflow-wrap: anywhere; }
+/* What became of a comment: a dot and a word. */
+.fb-st { display: flex; align-items: center; gap: 6px; margin-top: 4px; color: var(--fb-sub); font-size: 12px; }
+.fb-st::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--fb-neutral); }
+.fb-st.working { color: var(--fb-prog-text); } .fb-st.working::before { background: var(--fb-mark); animation: fb-pulse 1.2s ease-in-out infinite; }
+.fb-st.applied { color: var(--fb-done); } .fb-st.applied::before { background: var(--fb-done); }
+.fb-empty { color: var(--fb-sub); margin: 4px 0 0; }
+.fb-state { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; padding-top: 12px; border-top: 1px solid var(--fb-hair); color: var(--fb-sub); font-size: 12px; }
+.fb-state.ok::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--fb-done); }
+.fb-warn { margin-top: 12px; padding: 12px; border-radius: 12px; box-shadow: inset 0 0 0 1px rgba(255, 69, 58, .45); font-size: 13px; }
+.fb-warn b { display: block; color: var(--fb-red-text); margin-bottom: 4px; }
+.fb-warn-buttons { display: flex; gap: 8px; margin-top: 12px; }
+.fb-btn { font: inherit; font-size: 13px; font-weight: 500; height: 34px; padding: 0 14px; border-radius: 9px; cursor: pointer; transition: background-color .12s var(--ease), border-color .12s var(--ease); }
+.fb-btn.solid { background: var(--fb-mark); border: 1px solid var(--fb-mark); color: #fff; }
+.fb-btn.solid:hover { background: var(--fb-mark-dark); border-color: var(--fb-mark-dark); }
+.fb-btn.quiet { background: transparent; border: 1px solid var(--fb-line); color: var(--fb-ink); }
+.fb-btn.quiet:hover { background: var(--fb-raised); }
+#fb-panel > #fb-export { margin-top: 12px; }
+
+/* In feedback mode the thing under the pointer is outlined in the accent, and stays outlined while its comment
+   is typed. The outline is drawn inside the element, so a table or card that clips its content cannot cut it
+   off, and only the innermost thing is marked. */
 body.fb-active #app * { cursor: crosshair !important; }
-body.fb-active #app [data-el]:hover { outline: 2px dashed #7c3aed; outline-offset: 2px; }
-.fb-pin { position: absolute; z-index: 65; width: 22px; height: 22px; border-radius: 50%; background: #7c3aed; color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 4px rgba(0,0,0,.3); pointer-events: auto; }
-#fb-toggle.fb-unsent { background: #b42318; border-color: #b42318; }
-.fb-pin.unsent { background: #b42318; }
-.fb-warn { margin-top: 10px; padding: 9px 11px; border: 1px solid #f5b5b5; border-radius: 6px; background: #fde4e4; color: #8a1c13; font-size: 12.5px; line-height: 1.45; }
-.fb-warn-buttons { display: flex; gap: 8px; margin-top: 8px; }
-.fb-dialog { position: fixed; inset: 0; background: rgba(15,23,42,.35); z-index: 80; display: flex; align-items: center; justify-content: center; }
-.fb-dialog-inner { width: 420px; background: #fff; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
-body.clean .fb-tools, body.clean .fb-pin, body.clean .fb-hide { display: none !important; }
+body.fb-active #app [data-el]:hover:not(:has([data-el]:hover)), #app .fb-target { outline: 2px solid var(--fb-mark); outline-offset: -2px; box-shadow: inset 0 0 0 9999px var(--fb-tint); }
+.fb-pin { position: absolute; z-index: 65; width: 22px; height: 22px; border-radius: 50%; background: var(--fb-mark); color: #fff; font: 700 11px/1 var(--fb-font); display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0, 0, 0, .3); cursor: pointer; transition: transform .12s var(--ease); }
+.fb-pin:hover { transform: scale(1.12); }
+.fb-pin.unsent { background: var(--fb-red-solid); }
+
+/* The comment box and the question before something is undone: dark dialogs, 20px corners, over a dimmed page. */
+.fb-dialog { position: fixed; inset: 0; background: rgba(0, 0, 0, .4); z-index: 80; display: flex; align-items: center; justify-content: center; font-family: var(--fb-font); animation: fb-fade .2s var(--ease); }
+.fb-dialog-inner { width: 440px; max-width: 92vw; background: var(--fb-card); color: var(--fb-ink); border-radius: 20px; padding: 24px; display: flex; flex-direction: column;
+  box-shadow: var(--fb-ring), 0 24px 64px rgba(0, 0, 0, .6); animation: fb-pop .32s var(--ease); color-scheme: dark; }
+.fb-title { font-size: 17px; font-weight: 600; letter-spacing: -.01em; margin-bottom: 16px; }
+.fb-label { font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+.fb-label span { color: var(--fb-sub); font-weight: 400; }
+.fb-field { font: inherit; font-size: 15px; width: 100%; padding: 8px 10px; margin-bottom: 16px; border: 1px solid var(--fb-line); border-radius: 9px; background: var(--fb-card); color: var(--fb-ink); resize: vertical; }
+input.fb-field { height: 36px; }
+.fb-dialog .fb-field:focus { outline: 3px solid var(--fb-halo); outline-offset: 0; border-color: var(--fb-mark); }
+.fb-actions { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.fb-hint { margin-right: auto; color: var(--fb-sub); font-size: 12px; }
+/* Reset sample data and the Custom work switch, on the bar. Reset takes the walk-through back: red words in a
+   quiet button, solid red only in the box that asks first. The switch is the accent when on. */
+#fb-reset { display: flex; align-items: center; gap: 6px; font: inherit; font-weight: 500; height: 30px; padding: 0 10px; background: transparent; color: var(--fb-red-text);
+  border: 1px solid var(--fb-line); border-radius: 9px; cursor: pointer; transition: background-color .12s var(--ease); }
+#fb-reset:hover { background: var(--fb-raised); }
+#fb-reset[hidden], .fb-custom[hidden] { display: none; }
+.fb-custom { display: flex; align-items: center; gap: 8px; color: var(--fb-sub); cursor: pointer; }
+.fb-custom input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.fb-switch { position: relative; width: 30px; height: 18px; border-radius: 999px; background: var(--fb-line); transition: background-color .2s var(--ease); }
+.fb-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .2s var(--ease); }
+.fb-custom input:checked + .fb-switch { background: var(--fb-mark); }
+.fb-custom input:checked + .fb-switch::after { transform: translateX(12px); }
+.fb-custom input:focus-visible + .fb-switch { outline: 3px solid var(--fb-halo); outline-offset: 1px; }
+
+/* Edit and Delete on a comment that waits; why not, once it is taken. */
+.fb-acts { display: flex; gap: 6px; margin-top: 6px; }
+.fb-act { font: inherit; font-size: 12px; font-weight: 500; height: 26px; padding: 0 10px; border-radius: 7px; background: transparent; border: 1px solid var(--fb-line); color: var(--fb-ink); cursor: pointer;
+  transition: background-color .12s var(--ease); }
+.fb-act:hover { background: var(--fb-raised); }
+.fb-act.destroy { color: var(--fb-red-text); }
+.fb-locked { display: flex; align-items: flex-start; gap: 6px; margin-top: 6px; color: var(--fb-sub); font-size: 12px; }
+.fb-locked svg { flex: 0 0 13px; margin-top: 2px; }
+.fb-btn.destroy { background: var(--fb-red-solid); border: 1px solid var(--fb-red-solid); color: #fff; }
+.fb-btn.destroy:hover { background: #b80012; border-color: #b80012; }
+.fb-ask-body { margin: -6px 0 18px; color: var(--fb-sub); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+
+/* "Custom development": what the platform does not give as standard. A tag in the field fill (6px corners, a
+   line icon, the word carrying the colour) laid over the corner of the part it is about, so it never clashes
+   with the client's theme and never moves the layout. Hover says what it takes. Never in a screenshot. */
+.cw-tag { position: absolute; z-index: 66; display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px; border-radius: 6px; background: #e9e9ee; color: #1d1d1f;
+  font: 500 12px/1 var(--fb-font); letter-spacing: 0; white-space: nowrap; box-shadow: 0 0 0 1px rgba(0, 0, 0, .06), 0 1px 3px rgba(0, 0, 0, .08); cursor: help; pointer-events: auto; }
+.cw-tag svg { flex: 0 0 12px; color: #6e6e73; }
+.cw-tag.warn, .cw-tag.warn svg { color: #c93400; }
+body.clean .fb-tools, body.clean .fb-pin, body.clean .fb-hide, body.clean .cw-tag { display: none !important; }
+
+/* Motion shows what changed and nothing more. None in a screenshot, and none for people who ask for less. */
+@keyframes fb-rise { from { opacity: 0; transform: translateY(8px); } }
+@keyframes fb-pop { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+@keyframes fb-fade { from { opacity: 0; } }
+@keyframes fb-flash { from { background: var(--fb-tint); } }
+@keyframes fb-pulse { 50% { opacity: .35; } }
+.modal-back { animation: fb-fade .2s var(--ease); }
+.modal { animation: fb-pop .32s var(--ease); }
+.btn, .menu-item, .tab, .link { transition: background-color .12s var(--ease), border-color .12s var(--ease), color .12s var(--ease), filter .12s var(--ease); }
+.datalist tbody tr[data-row] td { transition: background-color .12s var(--ease); }
+.datalist tbody tr[data-row]:hover td { background: color-mix(in srgb, var(--text) 5%, var(--card)); }  /* neutral: a tint of a red brand would read as an error */
+/* Keyboard focus: one soft halo in the project's colour, on everything that can take it. */
+:where(#app) :where(a, button, input, select, textarea):focus-visible { outline: 3px solid color-mix(in srgb, var(--primary) 30%, transparent); outline-offset: 1px; }
+:where(#app) .f-input:focus { border-color: var(--primary); }
+body.clean *, body.clean *::before, body.clean *::after { animation: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 
 /* Process flow diagram (#/__flow) */
 .flow { padding: 28px 32px; background: #fff; }
@@ -126,14 +280,14 @@ body.clean .fb-tools, body.clean .fb-pin, body.clean .fb-hide { display: none !i
 .flow-row { display: flex; align-items: stretch; gap: 6px; flex-wrap: nowrap; }
 .flow-step { flex: 1; min-width: 0; border: 2px solid var(--primary); border-radius: 8px; padding: 12px 10px; text-align: center; background: #f7faff; }
 .flow-step.optional { border-style: dashed; background: #fff; }
-.flow-num { width: 24px; height: 24px; margin: 0 auto 6px; border-radius: 50%; background: var(--primary); color: #fff; font-size: 12px; font-weight: 700; line-height: 24px; }
-.flow-name { font-weight: 700; font-size: 13.5px; }
-.flow-role { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+.flow-num { width: 24px; height: 24px; margin: 0 auto 6px; border-radius: 50%; background: var(--primary); color: #fff; font-size: calc(12px * var(--ts)); font-weight: 700; line-height: 24px; }
+.flow-name { font-weight: 700; font-size: calc(13.5px * var(--ts)); }
+.flow-role { font-size: calc(11.5px * var(--ts)); color: var(--muted); margin-top: 3px; }
 .flow-status { margin-top: 8px; }
-.flow-arrow { display: flex; align-items: center; color: var(--primary); font-size: 20px; }
-.flow-reject { margin-top: 18px; display: flex; align-items: center; gap: 10px; color: #b42318; font-size: 13px; font-weight: 600; }
+.flow-arrow { display: flex; align-items: center; color: var(--primary); font-size: calc(20px * var(--ts)); }
+.flow-reject { margin-top: 18px; display: flex; align-items: center; gap: 10px; color: #b42318; font-size: calc(13px * var(--ts)); font-weight: 600; }
 .flow-reject-line { flex: 0 0 60px; border-top: 2px dashed #b42318; }
-.flow-notes { margin: 16px 0 0; padding-left: 18px; color: var(--muted); font-size: 12.5px; }
-.notice { background: #fde4e4; border: 1px solid #f5b5b5; color: #8a1c13; border-radius: var(--radius); padding: 10px 14px; margin-bottom: 14px; font-size: 13px; }
-.datalist.dense { font-size: 11.5px; }
+.flow-notes { margin: 16px 0 0; padding-left: 18px; color: var(--muted); font-size: calc(12.5px * var(--ts)); }
+.notice { background: #fde4e4; border: 1px solid #f5b5b5; color: #8a1c13; border-radius: var(--radius); padding: 10px 14px; margin-bottom: 14px; font-size: calc(13px * var(--ts)); }
+.datalist.dense { font-size: calc(11.5px * var(--ts)); }
 .datalist.dense td, .datalist.dense th { padding: 7px 7px; white-space: nowrap; }

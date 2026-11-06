@@ -1,15 +1,42 @@
-"""Project register: validate register.json and render register.xlsx for the BA.
+"""Project register: add and update items, validate register.json and render register.xlsx for the BA.
 
 Usage:
-    python -I tools/register.py render   projects/<slug> [--overwrite]
+    python -I tools/register.py add      projects/<slug> --file <items.json> [--check]
+    python -I tools/register.py add      projects/<slug> [--check]  < items.json   (items on standard input)
+    python -I tools/register.py similar  projects/<slug> "<question or finding>" [--top 5]
+    python -I tools/register.py update   projects/<slug> R-001 [R-002 ...] --set field=value [--set field=value ...]
+    python -I tools/register.py render   projects/<slug> [--overwrite] [--from "<returned register.xlsx>"]
     python -I tools/register.py validate projects/<slug>
     python -I tools/register.py next-id  projects/<slug>
+
+add takes one item or a list of items (JSON, UTF-8) from a file or standard input. It gives each the next
+free id (an id in the input is ignored: ids are never chosen by hand), fills raised with today and status
+with open where they are missing, and checks every item with the same rules as validate. One bad item
+stops the whole batch and nothing is written. Before writing it lists the existing items each new one
+may duplicate (by the words of its question and finding); it still writes them, unless --check is given:
+then it only checks and reports, and writes nothing. It prints the ids given.
+
+similar lists the existing items closest to a question or finding, to check a candidate before adding it.
+
+update changes fields of existing items: --set status=resolved --set answer="..." --set resolved_in="...".
+Unknown fields and values not allowed are refused, and nothing is written. An empty value (--set owner=)
+removes an optional field. An answer on an open or asked item moves it to answered, as in Excel, unless
+--set status is given too.
+
+add and update write register.json only. Run render afterwards for the Excel file.
 
 render writes register.xlsx from register.json. First it takes over what was typed into the existing
 register.xlsx since it was written: a client's answer (Client response, Answer / decision) or a changed
 Status. Those go into register.json, so they are not lost when the Excel file is written again. When
 Excel and register.json both changed the same thing, it stops and says so; --overwrite writes the file
 from register.json regardless and drops what was typed in Excel.
+
+--from also takes over a copy of the register that came back from the client (the file sent to them, with
+their answers in Client response or a Status changed), after the project's own register.xlsx and by the
+same rules: what the client changed since that copy was written goes into register.json, and an item that
+was also changed here since then stops it, naming both values. The returned file is only read; keep it
+(file it into docs/ with project.py file). A copy without the hidden note of what it held (made by an older
+Blueprint, or pasted into a new workbook) gives only the answers to items that have none yet.
 
 register.json:
 {
@@ -38,8 +65,12 @@ Item fields (required unless marked optional):
   due             optional: date by which it is needed, YYYY-MM-DD
 """
 import json
+import os
+import re
 import sys
+import tempfile
 from collections import Counter
+from datetime import date
 from pathlib import Path
 
 TYPES = {"question", "gap", "contradiction", "assumption", "decision", "fix"}
@@ -49,6 +80,10 @@ STATUSES = {"open", "asked", "answered", "resolved", "wont-fix"}
 STAGES = {"sow", "workshop-1", "mockup", "workshop-2", "requirements-draft", "requirements-final", "development", "uat",
           "srs-draft", "srs-final"}  # the last two are the names used before 0.4.0
 REQUIRED = ["id", "type", "audience", "severity", "category", "stage", "source", "finding", "status", "raised"]
+FIELDS = ["id", "type", "audience", "severity", "category", "stage", "source", "finding", "question", "recommendation",
+          "effort_impact", "status", "answer", "raised", "resolved_in", "owner", "due"]  # every field, in the order written
+EFFORTS = {"none", "low", "medium", "high"}
+DUPLICATE = 0.5  # similarity from which add names an existing item as a likely duplicate
 SEV_ORDER = {"high": 0, "medium": 1, "low": 2}
 RENDERED = "_rendered"  # a hidden sheet: the status and answer of every item as the file was written
 EDITABLE = {"Status": "status", "Client response": "answer", "Answer / decision": "answer"}  # column -> field
@@ -58,20 +93,26 @@ def text(value):
     return "" if value is None else str(value).strip()
 
 
-def excel_edits(project, reg):
-    """What was typed into register.xlsx since it was written: ({(id, field): value}, conflicts).
+def excel_edits(project, reg, path=None):
+    """What was typed into register.xlsx (or the returned copy at `path`) since it was written:
+    ({(id, field): value}, conflicts).
 
     The hidden sheet says what each cell held when the file was written, so an edit made in Excel can be
     told from a change made in register.json since. A file written by an older Blueprint has no such
     sheet; there the one safe sign of an edit is an answer in Excel where the register has none."""
     from openpyxl import load_workbook
 
-    path = Path(project) / "register.xlsx"
+    returned = path is not None
+    path = Path(path) if returned else Path(project) / "register.xlsx"
     if not path.exists():
+        if returned:
+            sys.exit(f"No file at {path}. Nothing was written.")
         return {}, []
     try:
         wb = load_workbook(path)
     except Exception as e:
+        if returned:
+            sys.exit(f"Cannot read {path} as an Excel register ({type(e).__name__}). Nothing was written.")
         sys.exit(f"Cannot read {path} to see whether anything was typed into it ({type(e).__name__}). Close it in Excel "
                  "and run this again, or add --overwrite to write it afresh from register.json.")
     written = None
@@ -128,7 +169,7 @@ def take_excel_edits(project, reg, edits):
         if field == "answer" and value and (rid, "status") not in edits and items[rid].get("status") in ("open", "asked"):
             items[rid]["status"] = "answered"
             done.append(f"{rid} status: answered (it has an answer now)")
-    (Path(project) / "register.json").write_text(json.dumps(reg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    save(project, reg)
     return done
 
 
@@ -137,6 +178,22 @@ def load(project):
     if not path.exists():
         sys.exit(f"No register at {path}")
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def save(project, reg):
+    """Write register.json whole or not at all: into a temporary file next to it, then put in its place."""
+    path = Path(project) / "register.json"
+    fd, tmp = tempfile.mkstemp(prefix=".register-", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
+            f.write(json.dumps(reg, indent=2, ensure_ascii=False) + "\n")
+        os.replace(tmp, path)
+    except PermissionError:
+        Path(tmp).unlink(missing_ok=True)
+        sys.exit(f"Cannot write {path}: another program has it open. Close it and run this again.")
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
 def validate(reg):
@@ -163,10 +220,203 @@ def next_id(reg):
     return f"R-{(max(nums) if nums else 0) + 1:03d}"
 
 
-def render(project, reg, overwrite=False):
+def field_errors(it, where, keys=None):
+    """The rules add and update apply on top of validate: known fields, text values, effort and dates."""
+    errors = []
+    for key in (it if keys is None else keys):
+        if key not in FIELDS:
+            errors.append(f"{where}: unknown field '{key}' (fields: {', '.join(FIELDS)})")
+        elif it.get(key) is not None and not isinstance(it[key], str):
+            errors.append(f"{where}: {key} must be text, not {json.dumps(it[key], ensure_ascii=False)}")
+    effort = it.get("effort_impact")
+    if isinstance(effort, str) and effort and effort not in EFFORTS and (keys is None or "effort_impact" in keys):
+        errors.append(f"{where}: effort_impact '{effort}' not in {sorted(EFFORTS)}")
+    for key in ("raised", "due"):
+        value = it.get(key)
+        if isinstance(value, str) and value and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value) and (keys is None or key in keys):
+            errors.append(f"{where}: {key} '{value}' is not a date (YYYY-MM-DD)")
+    return errors
+
+
+def put(it, key, value):
+    """Set a field; a new one goes in its documented place among the fields the item already has."""
+    if key in it:
+        it[key] = value
+        return
+    rank, out = FIELDS.index(key), {}
+    for k, v in it.items():
+        if key not in out and k in FIELDS and FIELDS.index(k) > rank:
+            out[key] = value
+        out[k] = v
+    out.setdefault(key, value)
+    it.clear()
+    it.update(out)
+
+
+# ---------------------------------------------------------------------- likely duplicates
+STOP = set("""a an the and or nor of to in on for by with at from as is are was were be been being it its this that
+these those which what when who whom whose how why where there their they them we our us you your he she his her not no
+do does did can could should would will shall may might must has have had if then than so such any all each every other
+only also about into per via up out over under more most less very just same""".split())
+
+
+def stem(word):
+    for _ in range(2):
+        for suffix in ("ing", "ed", "es", "s", "e"):
+            if word.endswith(suffix) and not word.endswith("ss") and len(word) - len(suffix) >= 3:
+                word = word[:-len(suffix)]
+                break
+        else:
+            break
+    return word
+
+
+def words(value):
+    """The words that carry meaning: lower case, hyphens joined (e-mail, email), common words dropped, crude stems."""
+    flat = re.sub(r"(?<=\w)[-'’](?=\w)", "", text(value).lower())
+    return {stem(w) for w in re.findall(r"[a-z0-9]+", flat) if len(w) > 1 and w not in STOP}
+
+
+def dice(a, b):
+    return 2 * len(a & b) / (len(a) + len(b)) if a and b else 0.0
+
+
+def similarity(one, other):
+    """How alike two items read, 0 to 1: the best of question against question, finding against finding, and
+    both together. A field of fewer than three words is too short to compare on its own."""
+    def both(it):
+        return words(f"{text(it.get('question'))} {text(it.get('finding'))}")
+    scores = [dice(both(one), both(other))]
+    for key in ("question", "finding"):
+        a, b = words(one.get(key)), words(other.get(key))
+        if len(a) >= 3 and len(b) >= 3:
+            scores.append(dice(a, b))
+    return round(max(scores), 2)
+
+
+def closest(items, probe, top=5, floor=0.0):
+    """The items most like `probe`, best first: [(score, item)], each at least `floor`."""
+    scored = [(similarity(probe, it), it) for it in items if isinstance(it, dict)]
+    scored = [(s, it) for s, it in scored if s > 0 and s >= floor]
+    return sorted(scored, key=lambda pair: (-pair[0], text(pair[1].get("id"))))[:top]
+
+
+def short(it, width=90):
+    line = " ".join((text(it.get("question")) or text(it.get("finding"))).split())
+    return line if len(line) <= width else line[:width - 3] + "..."
+
+
+# ---------------------------------------------------------------------- add and update
+def read_items(source):
+    """The items to add, from a file, or from standard input when `source` is None or '-'."""
+    if source in (None, "-"):
+        if sys.stdin is None or sys.stdin.isatty():
+            sys.exit("Give the items with --file <items.json>, or on standard input. Nothing was added.")
+        raw, where = sys.stdin.buffer.read(), "standard input"
+    else:
+        path = Path(source)
+        if not path.is_file():
+            sys.exit(f"No file at {path}. Nothing was added.")
+        raw, where = path.read_bytes(), str(path)
+    try:
+        content = raw.decode("utf-16") if raw[:2] in (b"\xff\xfe", b"\xfe\xff") else raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        sys.exit(f"{where} is not UTF-8 text. Save it as UTF-8 and run this again. Nothing was added.")
+    if not content.strip():
+        sys.exit(f"{where} is empty. Nothing was added.")
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError as e:
+        sys.exit(f"{where} is not valid JSON (line {e.lineno}, column {e.colno}: {e.msg}). Nothing was added.")
+    if isinstance(data, dict) and isinstance(data.get("items"), list):
+        data = data["items"]
+    if isinstance(data, dict):
+        data = [data]
+    if not isinstance(data, list) or not data:
+        sys.exit("Give one item ({...}) or a list of items ([{...}, ...]). Nothing was added.")
+    return data
+
+
+def prepare(reg, batch, today=None):
+    """The batch as add would write it: (items, notes, errors). Each item gets the next free id (an id it
+    carries is ignored), and raised and status where missing. Nothing may be written while there are errors."""
+    today = today or date.today().isoformat()
+    first = int(next_id(reg)[2:])
+    new, notes, errors = [], [], []
+    for n, given in enumerate(batch, 1):
+        if not isinstance(given, dict):
+            errors.append(f"item {n}: not an item (an item is {{\"type\": ..., \"finding\": ..., ...}})")
+            continue
+        rid = f"R-{first + len(new):03d}"
+        if given.get("id") and given["id"] != rid:
+            notes.append(f"item {n}: the id {given['id']} it carried is not used; it is {rid} (add gives the ids)")
+        it = {"id": rid}
+        for key in sorted((k for k in given if k != "id"), key=lambda k: FIELDS.index(k) if k in FIELDS else len(FIELDS)):
+            it[key] = given[key]
+        for key, value in (("status", "open"), ("raised", today)):
+            if not it.get(key):
+                put(it, key, value)
+        new.append(it)
+        where = f"item {n} ({rid})"
+        errors += [where + e[len(rid):] for e in validate({"items": [it]})]
+        errors += field_errors(it, where)
+    return new, notes, errors
+
+
+def likely_duplicates(reg, new, floor=DUPLICATE):
+    """[(new id, existing item, score)] for each new item that reads like one already in the register, or
+    like one earlier in the same batch."""
+    pool, found = [it for it in reg.get("items", []) if isinstance(it, dict)], []
+    for it in new:
+        found += [(it["id"], old, score) for score, old in closest(pool, it, top=3, floor=floor)]
+        pool.append(it)
+    return found
+
+
+def update(reg, ids, sets):
+    """Apply `field=value` changes to the items `ids`: (changes, errors). Nothing is changed when there are errors."""
+    errors, values = [], {}
+    for s in sets:
+        key, sep, value = s.partition("=")
+        key = key.strip()
+        if not sep or not key:
+            errors.append(f"--set {s}: write it as field=value")
+        elif key == "id":
+            errors.append("id cannot be changed: ids are never reused")
+        elif key not in FIELDS:
+            errors.append(f"unknown field '{key}' (fields: {', '.join(f for f in FIELDS if f != 'id')})")
+        else:
+            values[key] = value.strip()
+    items = {it.get("id"): it for it in reg.get("items", []) if isinstance(it, dict)}
+    missing = [f"{rid}: no such item in the register" for rid in ids if rid not in items]
+    if missing:
+        return [], errors + missing
+    changed, changes = {rid: json.loads(json.dumps(items[rid])) for rid in ids}, []
+    for rid, it in changed.items():
+        for key, value in values.items():
+            before = text(it.get(key))
+            if value:
+                put(it, key, value)
+            else:
+                it.pop(key, None)
+            if before != value:
+                changes.append(f"{rid} {key}: {before or '(empty)'} -> {value or '(removed)'}")
+        if values.get("answer") and "status" not in values and it.get("status") in ("open", "asked"):
+            changes.append(f"{rid} status: {it['status']} -> answered (it has an answer now)")
+            it["status"] = "answered"
+        errors += validate({"items": [it]}) + field_errors(it, rid, keys=values)
+    if not errors:
+        for rid, it in changed.items():
+            items[rid].clear()
+            items[rid].update(it)
+    return changes, errors
+
+
+def render(project, reg, overwrite=False, returned=None):
     """Write register.xlsx. Unless `overwrite`, what was typed into the existing file is taken into the
     register first (and register.json saved), so writing the file again never loses it. This happens here,
-    not in the command around it, so that no caller can write the file without it."""
+    not in the command around it, so that no caller can write the file without it. `returned` is a copy
+    that came back from the client: what was typed into it is taken next, by the same rules."""
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill
     from openpyxl.utils import get_column_letter
@@ -182,6 +432,20 @@ def render(project, reg, overwrite=False):
         if edits:
             print("Taken from register.xlsx into register.json:")
             print("\n".join(f"  - {line}" for line in take_excel_edits(project, reg, edits)))
+    if returned:
+        name = Path(returned).name
+        edits, conflicts = excel_edits(project, reg, returned)
+        if conflicts:
+            print(f"{name} and register.json disagree. register.xlsx was not written:")
+            print("\n".join(f"  - {c.replace('Excel has', 'the returned file has')}" for c in conflicts))
+            print("Settle each with the BA: record the right value with register.py update (or leave register.json "
+                  "as it is), then run this again; a value register.json already holds is not taken again.")
+            sys.exit(1)
+        if edits:
+            print(f"Taken from {name} into register.json:")
+            print("\n".join(f"  - {line}" for line in take_excel_edits(project, reg, edits)))
+        else:
+            print(f"Nothing new in {name}: no answer or status differs from what it held when it was written.")
 
     header_fill = PatternFill("solid", fgColor="1F3864")
     sev_fill = {"high": "F8CBAD", "medium": "FFE699", "low": "E2EFDA"}
@@ -261,17 +525,119 @@ def render(project, reg, overwrite=False):
     return out
 
 
-def main():
-    flags = [a for a in sys.argv[1:] if a.startswith("--")]
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    if len(args) != 2 or args[0] not in ("render", "validate", "next-id") or any(f != "--overwrite" for f in flags):
+COMMANDS = {  # command: (switches, options that take a value, (fewest, most) plain arguments)
+    "add": ({"--check"}, {"--file"}, (1, 1)),
+    "similar": (set(), {"--top"}, (2, None)),
+    "update": (set(), {"--set"}, (2, None)),
+    "render": ({"--overwrite"}, {"--from"}, (1, 1)),
+    "validate": (set(), set(), (1, 1)),
+    "next-id": (set(), set(), (1, 1)),
+}
+
+
+def parse(argv):
+    """(command, plain arguments, {option: True or [values]}); the usage for anything else."""
+    if not argv or argv[0] not in COMMANDS:
         sys.exit(__doc__)
-    cmd, project = args
+    cmd, (switches, valued, (fewest, most)) = argv[0], COMMANDS[argv[0]]
+    args, opts, rest = [], {}, list(argv[1:])
+    while rest:
+        a = rest.pop(0)
+        name, eq, inline = a.partition("=")
+        if a in switches:
+            opts[a] = True
+        elif a in valued or (eq and name in valued):
+            if not eq and not rest:
+                sys.exit(__doc__)
+            opts.setdefault(name, []).append(inline if eq else rest.pop(0))
+        elif a.startswith("--"):
+            sys.exit(__doc__)
+        else:
+            args.append(a)
+    if len(args) < fewest or (most is not None and len(args) > most) or (cmd == "update" and "--set" not in opts):
+        sys.exit(__doc__)
+    return cmd, args, opts
+
+
+def cmd_add(project, reg, opts):
+    files = opts.get("--file", [])
+    if len(files) > 1:
+        sys.exit("Give one --file. Nothing was added.")
+    new, notes, errors = prepare(reg, read_items(files[0] if files else None))
+    for line in notes:
+        print(f"Note: {line}")
+    if errors:
+        print("Nothing was added. Fix these and run it again:")
+        print("\n".join(f"  - {e}" for e in errors))
+        sys.exit(1)
+    dupes = likely_duplicates(reg, new)
+    ids = f"{new[0]['id']}" if len(new) == 1 else f"{new[0]['id']} to {new[-1]['id']}"
+    if "--check" in opts:
+        print(f"Checked, nothing written: {len(new)} item{'s' * (len(new) != 1)} would be added as {ids}.")
+    else:
+        reg.setdefault("items", []).extend(new)
+        save(project, reg)
+        print(f"Added {len(new)} item{'s' * (len(new) != 1)} to register.json: {ids}")
+    for it in new:
+        print(f"  {it['id']}  {it['audience']:<8} {it['severity']:<6} {short(it, 80)}")
+    if dupes:
+        print("Possible duplicates: check each, and merge or drop the new item if it is one.")
+        for rid, old, score in dupes:
+            print(f"  {rid} may be a duplicate of {old.get('id')} (similarity {score:.2f}, {old.get('status')}): {short(old, 70)}")
+    existing = validate(reg)
+    if existing and "--check" not in opts:
+        print("Note: register.json has problems render will refuse; fix them first:")
+        print("\n".join(f"  - {e}" for e in existing))
+    if "--check" not in opts:
+        print(f"Next: python -I tools/register.py render {project}")
+
+
+def cmd_similar(reg, args, opts):
+    probe = " ".join(args)
+    try:
+        top = int((opts.get("--top") or ["5"])[-1])
+    except ValueError:
+        sys.exit("--top takes a number, e.g. --top 10")
+    found = closest(reg.get("items", []), {"question": probe, "finding": probe}, top=top, floor=0.2)
+    if not found:
+        print("No existing item reads like it (similarity below 0.20).")
+        return
+    print(f"Closest items (similarity from 0 to 1; from {DUPLICATE:.2f} up it is likely the same thing):")
+    for score, it in found:
+        print(f"  {it.get('id')}  {score:.2f}  {text(it.get('status')):<9} {text(it.get('audience')):<8} {short(it)}")
+
+
+def cmd_update(project, reg, args, opts):
+    changes, errors = update(reg, args, opts["--set"])
+    if errors:
+        print("Nothing was changed:")
+        print("\n".join(f"  - {e}" for e in errors))
+        sys.exit(1)
+    if not changes:
+        print("Nothing to change: the items already hold those values.")
+        return
+    save(project, reg)
+    print("Changed in register.json:")
+    print("\n".join(f"  - {c if len(c) <= 110 else c[:107] + '...'}" for c in changes))
+    print(f"Next: python -I tools/register.py render {project}")
+
+
+def main():
+    cmd, args, opts = parse(sys.argv[1:])
+    project = args[0]
     sys.stdout.reconfigure(encoding="utf-8") if hasattr(sys.stdout, "reconfigure") else None
     reg = load(project)
     if cmd == "next-id":
         print(next_id(reg))
         return
+    if cmd == "add":
+        cmd_add(project, reg, opts)
+        return refresh_overview(project)
+    if cmd == "similar":
+        return cmd_similar(reg, args[1:], opts)
+    if cmd == "update":
+        cmd_update(project, reg, args[1:], opts)
+        return refresh_overview(project)
     errors = validate(reg)
     if errors:
         print("\n".join(errors))
@@ -279,9 +645,20 @@ def main():
     if cmd == "validate":
         print(f"OK: {len(reg['items'])} items")
         return
-    out = render(project, reg, overwrite="--overwrite" in flags)
+    returned = opts.get("--from", [])
+    if len(returned) > 1:
+        sys.exit("Give one --from file. Nothing was written.")
+    out = render(project, reg, overwrite="--overwrite" in opts, returned=returned[0] if returned else None)
     c = Counter(it["audience"] for it in reg["items"])
     print(f"Wrote {out}: {c['client']} client items, {c['internal']} internal fixes")
+    refresh_overview(project)
+
+
+def refresh_overview(project):
+    try:  # the project's overview page follows what was just written; it never stops this command
+        sys.path.insert(0, str(Path(__file__).resolve().parent)); import overview; overview.refresh(project)
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":
