@@ -181,6 +181,12 @@ def render_reviews(project):
                 review_doc.render_note(project, note)
         except Exception:  # the page links the note itself instead
             continue
+    # The mock-up's comments as one workbook in 2 Reviews, when the comments changed since it was written. (In
+    # the old layout it is written only as comments are marked: a page built there adds nothing to the folder.)
+    comments, book = layout.feedback_file(project), layout.comments_xlsx(project)
+    if layout.is_new(project) and comments.exists() and (not book.exists() or book.stat().st_mtime < comments.stat().st_mtime):
+        import mockup
+        mockup.refresh_comments_workbook(project)
 
 
 def knowledge_dir():
@@ -264,6 +270,10 @@ def gather(project):
             generated_reviews.setdefault(version, []).append(md.parent)
     m["reviews"], m["generated_reviews"] = reviews, generated_reviews
     m["notes"] = layout.review_notes(p)
+    try:
+        m["comments"] = [c for c in json.loads(layout.feedback_file(p).read_text(encoding="utf-8")) if isinstance(c, dict)] if layout.feedback_file(p).exists() else []
+    except Exception:
+        m["comments"] = []
     m["workshops"] = []
     sources = layout.workshops_source(p)
     for f in sorted(sources.glob("*.json")) if sources.exists() else []:
@@ -418,6 +428,14 @@ def stage_mockup(m):
         if note == next((n for n in reversed(m["notes"]) if n.name.startswith("mockup-v")), None) and m["scope"]:
             sub += [", ", ("status", "late", plural(m["scope"], "possible change request"))]
         rows.append(row("file", f"What changed in {hit.group(1)}", sub, "internal", file_day(note), link(p, note_word(p, note))))
+    book = layout.comments_xlsx(p)
+    if book.exists():
+        comments = [c for c in m.get("comments") or [] if not c.get("withdrawn")]
+        waiting = sum(1 for c in comments if not c.get("status") or c.get("status") == "working")
+        sub = [f"Every comment on the mock-up and what became of it, {plural(len(comments), 'comment')}"]
+        if waiting:
+            sub += [", ", ("status", "late", f"{waiting} not worked in yet")]
+        rows.append(row("file", "Mock-up comments", sub, "internal", file_day(book), link(p, book)))
     if m["shots"]:
         folder = layout.screenshots_dir(p)
         rows.append(row("image", "Screenshots", [f"{plural(len(m['shots']), 'screen')}, as used in the requirements document"],

@@ -26,7 +26,8 @@ it is worked on; Submit on a new form adds the request to the lists and action b
 on; the walk-through is kept through reloads and shared with every laptop in the room, and **Reset sample
 data** on the bar starts it again. Grey **Custom development** tags mark what is custom work on the
 platform; **Custom work** on the bar hides them. When the project changes, the bar offers **Update ready**:
-nothing reloads by itself, and the walk-through survives it. The window that started the mock-up must stay
+nothing reloads by itself, and the walk-through survives it. After it a **What changed** panel lists each change
+and the comments worked in; **Start** and **Next** take the room to each one with the element outlined. The window that started the mock-up must stay
 open: if it is closed, the mock-up says in red that a comment was not saved and keeps it in the browser
 until the mock-up is started again and **Try again** is pressed in the Feedback panel. Opened straight from
 the mock-up's `index.html` (in `_blueprint/mockup`) without the server, comments are exported with a button instead.

@@ -134,7 +134,13 @@ live session, the comments waiting, earlier versions as links); projects without
 below, each with what to say in Claude to make one. A mock-up is built when it is opened if its spec changed.
 
 An open mock-up follows its spec: when the spec changes it is built again and the presenter's bar offers
-**Update ready** (nothing reloads by itself; after the update feedback mode is off). A spec with a mistake
+**Update ready** (nothing reloads by itself; after the update feedback mode is off). After it a **What changed** panel lists what is new or different since the version on screen:
+screens, fields, buttons, list columns, figures, dialogs, statuses, roles, sample data and the look, each
+with the comments worked in for it, and the comments dealt with elsewhere. Click a change, or press **Start**
+and **Next**, to open its screen (as a role that can see it) with the element outlined; **What changed** on
+the bar opens the list again until the next update.
+The comparison is made in the page, from the spec it was opened with and the new one; text only the
+requirements document prints (descriptions, captions, requirements) is left out. A spec with a mistake
 keeps the last good mock-up on show.
 
 The walk-through (records added by a new form's Submit and moved by action buttons) is kept for the browser
@@ -161,7 +167,11 @@ comments "Working on it" and keeps the spec and the project's own mock-up code a
 the change, refuses it when it has a mistake, and marks the comments applied: run it once per comment, each
 with its own note (several ids share one note). `mark` records what became of a comment (`working`, `applied`, `question`, `decision`,
 `scope`, `declined`, or `received` to make it wait again); it also works outside a session and is the safe
-way to write to `feedback.json` while a mock-up is open. `undo` puts the spec and the project's own code
+way to write to `feedback.json` while a mock-up is open. Marking a comment records the spec's version as the
+one it was worked into, and writes `Mock-up comments.xlsx` again (in `2 Reviews/`; `feedback/comments.xlsx` in
+the old layout): every comment, one row each across all versions, with where it was made, who wrote it, its
+outcome as a dot and a word, the note, the register item and the version it was worked into, filterable,
+with a summary by outcome and by version. The project overview writes it too when the comments changed. `undo` puts the spec and the project's own code
 back as they were before the last change, and makes its comments wait again (Received); it does not touch
 the register, so register items made for that change are put back with `register.py update` (it names them). `end` closes the session and says what to release. (`wait`,
 which returns as soon as a comment arrives, and `checkpoint`, which keeps the project without marking a

@@ -1725,7 +1725,8 @@ def test_a_changed_spec_is_offered_as_an_update_and_never_reloads_by_itself(brow
     live = browser["live"]
     assert live["offered"] == {"button": True, "title": "Pending Approvals", "typed": "half-typed"}, "offered, and nothing on the page was touched"
     assert live["after"] == "Waiting For Me" and live["hash"] == "#/approvals?role=manager", "pressed: the change, on the screen it was on"
-    assert live["toasts"] == ["Updated: this is the mock-up as the spec is now."]
+    assert live["toasts"] == [], "something changed, so the panel says what instead of a message"
+    assert "Title: Pending Approvals → Waiting For Me" in live["changes"], "What changed lists the renamed screen"
     assert not live["feedbackOn"], "feedback mode is off after an update: the presenter's next click does what it says"
 
 
@@ -2678,3 +2679,89 @@ def test_a_desk_search_box_reads_as_a_field_not_disabled():
     rule = re.search(r'\.filter\[data-el\^="search:"\] \.f-input \{([^}]*)\}', css).group(1)
     assert "background: #fff" in rule and "var(--field)" not in rule and "border-color" not in rule
     assert "%3Ccircle" in rule, "a search icon"
+
+
+# ---------------------------------------------------------------------- what changed, after Update ready
+CHANGES_SCRIPT = support.ROOT / "tests" / "mockup_changes.mjs"
+
+
+def what_changed(tmp_path, before, after):
+    node = shutil.which("node")
+    if not node or not (support.ROOT / "node_modules" / "playwright-core").is_dir():
+        pytest.skip("needs Node.js and the Node packages (run setup.cmd or `npm install`)")
+    project = tmp_path / "changes"
+    support.write_spec(project, after)
+    quiet_build(project)
+    (tmp_path / "before.json").write_text(json.dumps(before, default=str), encoding="utf-8")
+    (tmp_path / "after.json").write_text(json.dumps(after, default=str), encoding="utf-8")
+    run = subprocess.run([node, str(CHANGES_SCRIPT), str(project / "mockup" / "index.html"), str(tmp_path / "before.json"), str(tmp_path / "after.json")],
+                         cwd=support.ROOT, capture_output=True, text=True, encoding="utf-8", timeout=120)
+    if run.returncode == 77:
+        pytest.skip(f"Microsoft Edge could not be started: {run.stderr.strip()[:200]}")
+    assert run.returncode == 0, run.stderr
+    seen = json.loads(run.stdout.strip().splitlines()[-1])
+    assert seen["errors"] == []
+    return seen["changes"]
+
+
+def test_what_changed_names_each_change_and_where_to_see_it(tmp_path):
+    before = sample()
+    after = sample()
+    form = next(s for s in after["screens"] if s["id"] == "new-application")
+    form["sections"][0]["fields"].append({"id": "contact", "label": "Contact number", "type": "text"})
+    form["buttons"] = [b for b in form["buttons"] if b["label"] != "Save as Draft"]
+    after["screens"].append({"id": "help", "type": "custom", "title": "Help", "roles": ["employee"], "html": "<p>Help</p>"})
+    after["statuses"].append({"id": "withdrawn", "name": "Withdrawn", "color": "grey"})
+    after["data"]["applications"][0]["reason"] = "Changed"
+    after["project"]["primary_color"] = "#2F6B6A"
+    for s in after["screens"]:
+        s["description"] = "Reworded for the document only."
+    changes = what_changed(tmp_path, before, after)
+    said = {c["text"]: c for c in changes}
+    assert said["Look: colour"]["look"] is True
+    assert said["New field: Contact number"] == {"text": "New field: Contact number", "screen": "new-application", "element": "field:contact"}
+    assert said["Button taken out: Save as Draft"]["screen"] == "new-application"
+    assert said["New screen: Help"]["screen"] == "help"
+    assert "New status: Withdrawn" in said
+    assert said["Sample data changed: applications"]["element"] == "region:list"
+    assert not any("Changed:" in t for t in said), "rewording a description changes nothing on a screen"
+
+
+def test_nothing_changed_says_nothing(tmp_path):
+    assert what_changed(tmp_path, sample(), sample()) == []
+
+
+# ---------------------------------------------------------------------- the comments workbook
+def test_marking_a_comment_writes_the_comments_workbook(tmp_path):
+    """Every comment, one row each, with what became of it and the version it was worked into."""
+    from openpyxl import load_workbook
+
+    import sheets
+
+    project = tmp_path / "leave-request"
+    spec = sample()
+    support.write_spec(project, spec)
+    fb = mockup.layout.feedback_file(project)
+    fb.parent.mkdir(parents=True, exist_ok=True)
+    fb.write_text(json.dumps([
+        {"id": "FB-001", "screen": "new-application", "role": "employee", "element": "field:leave_type", "text": "Add sick leave", "author": "amir", "version": "0.1", "received": "2026-11-07T10:00:00"},
+        {"id": "FB-002", "screen": "approvals", "role": "manager", "element": "region:area above the list", "text": "Too busy", "author": "amir", "version": "0.1"},
+        {"id": "FB-003", "screen": "approvals", "role": "manager", "element": "", "text": "Taken back", "version": "0.1", "withdrawn": "2026-11-07T10:05:00"},
+    ]), encoding="utf-8")
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(sys, "stdout", io.StringIO())
+        mockup.live_mark(project, "FB-001", "applied", "Sick leave added", register="R-001")
+    book = mockup.layout.comments_xlsx(project)
+    assert book.exists(), "written as the comment is marked"
+    ws = load_workbook(book)["Comments"]
+    header = [c.value for c in ws[1]]
+    rows = [dict(zip(header, (c.value for c in row))) for row in ws.iter_rows(min_row=2)]
+    assert [r["ID"] for r in rows] == ["FB-001", "FB-002"], "a comment taken back is left out"
+    first, second = rows
+    assert first["Outcome"] == "Applied" and first["What was done"] == "Sick leave added" and first["Register"] == "R-001"
+    assert first["Worked in"] == "v" + str(spec["project"]["version"]) and first["Made on"] == "v0.1"
+    assert first["Where"] == "Field: Leave Type" and first["Screen"] == "New Leave Application" and first["From"] == "amir · Employee"
+    assert second["Outcome"] == "Open" and second["Where"] == "Area above the list" and not second["Worked in"]
+    outcome = ws.cell(row=2, column=header.index("Outcome") + 1)
+    assert outcome.number_format == sheets.DOT_FORMAT
+    assert "Internal" in ws.oddHeader.center.text

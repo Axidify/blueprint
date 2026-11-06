@@ -43,7 +43,8 @@ is; every tool goes through it.
   shared folder.
 - `Questions and fixes register.xlsx` – the register rendered for the BA (only its "For client" sheet goes out).
 - `1 Client documents/` – the client's documents, filed with dated names. Never modify them.
-- `2 Reviews/` – each review as an internal Word file, and the mock-up's change notes as Word files.
+- `2 Reviews/` – each review as an internal Word file, the mock-up's change notes as Word files, and
+  `Mock-up comments.xlsx`: every comment on the mock-up and what became of it.
 - `3 Workshops/` – the agenda for the client and the facilitator notes (internal) of each workshop.
 - `4 Mock-up screenshots/` – the pictures of the mock-up, as used in the requirements document.
 - `5 Requirements document/` – each version's `.docx` and `.pdf`. Issued versions are locked (read-only):
