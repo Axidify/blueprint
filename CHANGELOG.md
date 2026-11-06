@@ -11,6 +11,8 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-11-07
+
 ### Fixed
 - **Setup no longer changes `package-lock.json`.** It used to rewrite the file whenever the machine's npm
   was another version than the one that wrote it, so a fresh copy of Blueprint showed a changed file and the
@@ -850,7 +852,8 @@ First release.
 - One-step setup (`setup.cmd`) with a machine check, `present.cmd` for sessions, shared Claude Code
   permissions and a start-up status greeting.
 
-[Unreleased]: https://github.com/Axidify/blueprint/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/Axidify/blueprint/compare/v1.3.2...HEAD
+[1.3.2]: https://github.com/Axidify/blueprint/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/Axidify/blueprint/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/Axidify/blueprint/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/Axidify/blueprint/compare/v1.2.0...v1.2.1
