@@ -11,6 +11,8 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-06
+
 ### Added
 - **Prepare a workshop.** Say "prepare the workshop" or "what should we ask the client next?" and Blueprint
   builds the agenda for a requirement workshop, mock-up review or sign-off meeting: the open questions from
@@ -417,7 +419,8 @@ First release.
 - One-step setup (`setup.cmd`) with a machine check, `present.cmd` for sessions, shared Claude Code
   permissions and a start-up status greeting.
 
-[Unreleased]: https://github.com/Axidify/blueprint/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/Axidify/blueprint/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/Axidify/blueprint/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/Axidify/blueprint/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/Axidify/blueprint/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Axidify/blueprint/compare/v0.6.0...v0.7.0
