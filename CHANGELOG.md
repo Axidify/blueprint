@@ -11,6 +11,23 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+### Added
+- **Comment with a box.** In feedback mode, drag a box instead of clicking: around several things, it is one
+  comment about all of them ("make these one date range"); where there is nothing yet, it marks where
+  something new should go ("an Export button here"). The box stays drawn on the screen with its number,
+  follows the things it was drawn around when the window changes, and reads as "2 things: …" or "New, in …"
+  in the Feedback panel, the comments list and the comments workbook.
+- **Every mock-up comment in one workbook.** `Mock-up comments.xlsx` in `2 Reviews` lists every comment on
+  a project's mock-up, one row each across all versions: where it was made, who wrote it, what became of it
+  (applied, decision, question, possible change request), the note, the register item and the version it was
+  worked into, with filters and a summary. It is written as each comment is marked, so what is still open is
+  one filter away, and the project overview lists it with the number not worked in yet.
+- **What changed, after Update ready.** Pressing **Update ready** in an open mock-up now shows a list of what
+  the update changed since the version on screen: new or changed screens, fields, buttons, columns, figures,
+  dialogs, statuses, roles, sample data and the look, each with the comments worked in for it. Click a change,
+  or press Start and Next, to open its screen with the element outlined, so the room can go through the
+  changes one by one. Nothing has to be written for it: the mock-up compares the two versions itself.
+
 ## [1.2.1] - 2026-11-07
 
 ### Fixed

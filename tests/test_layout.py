@@ -241,7 +241,7 @@ def test_migrate_moves_everything_to_its_place_and_undo_puts_it_back_byte_for_by
     assert top == ["1 Client documents", "2 Reviews", "3 Workshops", "4 Mock-up screenshots", "5 Requirements document",
                    "6 UAT", "7 Change requests", "Internal – estimates and change requests", "Open the mock-up.cmd",
                    "Open the mock-up.command", "Project overview.html", "Questions and fixes register.xlsx", "_blueprint"]
-    assert sorted(x.name for x in (p / "2 Reviews").iterdir()) == ["Mock-up v0.1 changes.docx", "SRS v1.0 review.docx"]
+    assert sorted(x.name for x in (p / "2 Reviews").iterdir()) == ["Mock-up comments.xlsx", "Mock-up v0.1 changes.docx", "SRS v1.0 review.docx"]
     assert sorted(x.name for x in (p / "3 Workshops").iterdir()) == [
         "2026-02-10 workshop 2 - agenda.docx", "2026-02-10 workshop 2 - facilitator notes (internal).docx"]
     assert all(f.suffix == ".png" for f in (p / "4 Mock-up screenshots").iterdir()) and (p / "4 Mock-up screenshots" / "login.png").exists()

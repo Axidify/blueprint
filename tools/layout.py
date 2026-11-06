@@ -142,6 +142,12 @@ def note_docx(project, note):
     return Path(project) / REVIEWS / f"{words[:1].upper() + words[1:]}.docx"
 
 
+def comments_xlsx(project):
+    """The mock-up's comments as one internal workbook: in 2 Reviews/ in the new layout, beside the comments
+    in the old one."""
+    return Path(project) / REVIEWS / "Mock-up comments.xlsx" if is_new(project) else feedback_dir(project) / "comments.xlsx"
+
+
 def workshops_source(project):
     return machine(project) / "workshops"
 
@@ -622,8 +628,8 @@ def plan_undo(project):
             continue
         for x in sorted(f.iterdir()):
             rel = f"{folder}/{x.name}"
-            if folder == REVIEWS and x.name in notes and x.is_file():
-                removes.append(rel)  # made from a note, which stays the source
+            if folder == REVIEWS and (x.name in notes or x.name == comments_xlsx(p).name) and x.is_file():
+                removes.append(rel)  # made from a note or from the comments, which stay the source
                 continue
             back = old_place(p, rel, review_dirs)
             if back:

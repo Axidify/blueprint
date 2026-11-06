@@ -10,7 +10,10 @@ description: Turn client feedback from a mock-up session (comments saved in the 
 - In-mock-up comments: `python -I tools/mockup.py feedback projects/<slug>` (from
   `_blueprint/feedback/feedback.json`). It shows each comment's latest text, marked "(edited)" when it
   was changed in the mock-up, and leaves out comments deleted there (kept in the file with `withdrawn`;
-  the earlier texts are in `history`). Work from the latest text and skip withdrawn comments. If the mock-up
+  the earlier texts are in `history`). Work from the latest text and skip withdrawn comments. A comment drawn as a box is about
+  several things at once (`[2 things: field:from, field:to]`: change them together) or asks for something new
+  where there was nothing (`[new, in <element>]`: it goes in or beside that element, at the place drawn; its
+  `box` holds the position on the page). Something new is a Change if it is within scope, else a Scope item. If the mock-up
   was opened without the server, or the server stopped during the session and comments were exported with
   **Export unsaved**, the BA will have a `feedback-<date>.json`; merge it into `feedback.json`, skipping
   comments that are already there and those marked `withdrawn`.
@@ -65,8 +68,9 @@ To act on comments while the client is still in the room, use the `present` skil
   first, any possible change request (scope items, not built until the user agrees) or reason to revisit
   the estimate.
 - **Where and for whom:** the new mock-up version (for the client, shown in the next session), the change
-  note (in `2 Reviews` as a Word file, made when the overview page is built) and the register's internal sheets (**internal**), the questions on the register's
-  **For client** sheet. `Project overview.html` lists them.
+  note (in `2 Reviews` as a Word file, made when the overview page is built) and the register's internal sheets (**internal**), `Mock-up comments.xlsx` in `2 Reviews`
+  (every comment and what became of it, written as each comment is marked; **internal**), the questions on
+  the register's **For client** sheet. `Project overview.html` lists them.
 - **Next step, in the words to say:** "present the mock-up" to walk the client through the new version, or
   "prepare the workshop" for the open questions; for the lead developer, with scope items: "estimate this
   project" again.

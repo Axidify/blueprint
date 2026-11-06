@@ -1124,7 +1124,7 @@ def feedback_lock(fb_file):
 
 # What a mock-up is told about a comment. Everyone with the room's link can read this, so the internal part
 # stays out: the note, the register item, and whether it was called a possible change request.
-ROOM_FIELDS = ("id", "screen", "role", "element", "text", "author", "x", "y", "time", "received", "version", "build", "edited")
+ROOM_FIELDS = ("id", "screen", "role", "element", "elements", "box", "text", "author", "x", "y", "time", "received", "version", "build", "edited")
 ROOM_WORDS = {"received": "Received", "working": "Working on it", "applied": "Applied", "noted": "Noted for follow-up"}
 
 
@@ -1982,14 +1982,23 @@ def live_mark(project, comment, status, note=None, register=None):
             sys.exit(f"{found['id']} was taken back by {found.get('withdrawn_by') or 'its writer'} at {str(found['withdrawn'])[11:16]}: there is nothing to mark.")
         if status == "received":
             found.pop("status", None)
+            found.pop("done_in", None)
         else:
             found["status"] = status
+            if status != "working":  # the version it was worked into: the spec's version as it is marked
+                try:
+                    version = (yaml.safe_load(layout.spec_file(project).read_text(encoding="utf-8")) or {}).get("project", {}).get("version")
+                except Exception:
+                    version = None
+                if version is not None:
+                    found["done_in"] = str(version)
         if note is not None:
             found["note"] = note
         if register:
             found["register_id"] = register
         fb_file.write_text(json.dumps(items, indent=2, ensure_ascii=False), encoding="utf-8")
     live_alive(project)
+    refresh_comments_workbook(project)
     print(f"{found['id']}: {status}" + (f" ({note})" if note else "") + f". In the mock-up it reads \"{ROOM_WORDS[room_state(found)]}\".")
 
 
@@ -2599,6 +2608,143 @@ def try_look(project, tries):
         print("Note: " + note)
 
 
+# ------------------------------------------------------------------ the comments workbook
+# Every comment on a project's mock-up in one internal Excel file, one row each across all versions, with what
+# became of it: "2 Reviews/Mock-up comments.xlsx" (beside the comments in the old layout). Made from the
+# comments file, so it never drifts from what the mock-up shows; changed in Claude, never in the file.
+OUTCOMES = {None: ("Open", "orange"), "received": ("Open", "orange"), "working": ("Being worked on", "accent"),
+            "applied": ("Applied", "green"), "decision": ("Decision", "green"), "question": ("Question for the client", "accent"),
+            "scope": ("Possible change request", "orange"), "declined": ("Declined", "grey")}
+ELEMENT_WORDS = {"field": "Field", "button": "Button", "column": "Column", "section": "Section", "region": "Area",
+                 "cell": "Cell", "menu": "Menu", "stat": "Figure", "list": "List", "search": "Search", "filter": "Filter",
+                 "action": "Action", "header": "Top bar", "title": "Title", "dialog": "Dialog", "row": "Row", "tab": "Tab"}
+
+
+def readable_where(comment, labels):
+    """What a comment is about, in words: one thing, several a box was drawn around, or something new."""
+    several = comment.get("elements") if isinstance(comment.get("elements"), list) else []
+    if len(several) > 1:
+        return f"{len(several)} things: " + "; ".join(readable_element(e, labels) for e in several)
+    if comment.get("box"):
+        element = comment.get("element")
+        return "New, " + (f"in {readable_element(element, labels)}" if element and element != "region:page background" else "on the screen")
+    return readable_element(comment.get("element"), labels)
+
+
+def readable_element(element, labels):
+    """'field:uom' -> 'Field: Unit'; 'cell:Status|JOB-1' -> 'Cell: Status, JOB-1'; '' -> 'The screen'."""
+    kind, _, name = str(element or "").partition(":")
+    if not kind:
+        return "The screen"
+    name = labels.get(name, name).replace("|", ", ")
+    if kind == "region" and name:  # 'region:area above the list' -> 'Area above the list'
+        return name[:1].upper() + name[1:]
+    return f"{ELEMENT_WORDS.get(kind, kind.capitalize())}: {name}" if name else ELEMENT_WORDS.get(kind, kind.capitalize())
+
+
+def write_comments_workbook(project):
+    """Write the project's comments workbook; returns its path, or None when there are no comments yet."""
+    from openpyxl import Workbook
+    from openpyxl.utils import get_column_letter
+
+    import re
+
+    import sheets
+
+    project = Path(project)
+    fb_file = layout.feedback_file(project)
+    comments = [c for c in read_feedback(fb_file) if isinstance(c, dict) and c.get("id") and not c.get("withdrawn")] if fb_file.exists() else []
+    if not comments:
+        return None
+    try:
+        spec = yaml.safe_load(layout.spec_file(project).read_text(encoding="utf-8")) or {}
+    except Exception:
+        spec = {}
+    screens = {s.get("id"): s for s in spec.get("screens") or [] if isinstance(s, dict)}
+    roles = {r.get("id"): r.get("name") for r in spec.get("roles") or [] if isinstance(r, dict)}
+    labels = {}
+    for s in screens.values():
+        for sec in s.get("sections") or []:
+            for f in (sec or {}).get("fields") or []:
+                if isinstance(f, dict) and f.get("id"):
+                    labels.setdefault(str(f["id"]), str(f.get("label") or f["id"]))
+    number = lambda c: int(re.sub(r"\D", "", str(c["id"])) or 0)
+    comments.sort(key=number)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Comments"
+    internal = "Internal: not for the client"
+    columns = [("ID", 9), ("Made on", 9), ("Screen", 24), ("Where", 26), ("Comment", 50), ("From", 22), ("Date", 12),
+               ("Outcome", 22), ("What was done", 60), ("Register", 10), ("Worked in", 10)]
+    sheets.setup(ws, [w for _, w in columns], freeze="C2", internal=internal)
+    for c, (name, _) in enumerate(columns, 1):
+        ws.cell(row=1, column=c, value=name)
+    for r, c in enumerate(comments, 2):
+        screen = screens.get(c.get("screen")) or {}
+        who = " · ".join(x for x in (c.get("author"), roles.get(c.get("role")) or c.get("role")) if x)
+        values = [c["id"], f"v{c['version']}" if c.get("version") else "", screen.get("title") or c.get("screen") or "",
+                  readable_where(c, labels), c.get("text", ""), who, str(c.get("received") or c.get("time") or "")[:10],
+                  OUTCOMES.get(c.get("status"), (str(c.get("status")), "grey"))[0], c.get("note", ""), c.get("register_id", ""),
+                  f"v{c['done_in']}" if c.get("done_in") else ""]
+        for col, value in enumerate(values, 1):
+            ws.cell(row=r, column=col, value=value)
+    last = len(comments) + 1
+    sheets.header(ws, 1, len(columns))
+    sheets.rows(ws, 2, last, len(columns))
+    outcome = get_column_letter(8)
+    sheets.status(ws, f"{outcome}2:{outcome}{last}", {word: tone for word, tone in OUTCOMES.values()})
+    ws.auto_filter.ref = f"A1:{get_column_letter(len(columns))}{last}"
+
+    s = sheets.setup(wb.create_sheet("Summary"), [30, 12], internal=internal, landscape=False, titles=None)
+    p = spec.get("project") or {}
+    sheets.title(s, "A1", f"{p.get('name') or project.name}: mock-up comments",
+                 f"Made from the comments saved in the mock-up · up to v{p.get('version', '')}. Change them in Claude, not here.")
+    rows = [("Comments", len(comments))]
+    counts = {}
+    for c in comments:
+        word = OUTCOMES.get(c.get("status"), (str(c.get("status")), "grey"))[0]
+        counts[word] = counts.get(word, 0) + 1
+    line = 4
+    for label, value in rows:
+        sheets.label(s.cell(row=line, column=1, value=label))
+        sheets.value(s.cell(row=line, column=2, value=value), bold=True)
+        line += 1
+    line += 1
+    sheets.section(s.cell(row=line, column=1, value="By outcome"))
+    for word, _ in dict.fromkeys(OUTCOMES.values()):
+        if counts.get(word):
+            line += 1
+            sheets.label(s.cell(row=line, column=1, value=word))
+            sheets.value(s.cell(row=line, column=2, value=counts[word]))
+    line += 2
+    sheets.section(s.cell(row=line, column=1, value="Made on each version"))
+    versions = {}
+    for c in comments:
+        versions[str(c.get("version") or "?")] = versions.get(str(c.get("version") or "?"), 0) + 1
+    for v in sorted(versions, key=lambda x: [int(n) if n.isdigit() else 0 for n in x.split(".")]):
+        line += 1
+        sheets.label(s.cell(row=line, column=1, value=f"v{v}"))
+        sheets.value(s.cell(row=line, column=2, value=versions[v]))
+
+    out = layout.comments_xlsx(project)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        wb.save(out)
+    except PermissionError:
+        print(f"{out.name} is open in Excel, so it was not brought up to date: close it, and it is written again next time.")
+        return None
+    return out
+
+
+def refresh_comments_workbook(project):
+    """Bring the comments workbook up to date; it never stops the command that changed the comments."""
+    try:
+        return write_comments_workbook(project)
+    except Exception:
+        return None
+
+
 def show_feedback(project):
     fb = layout.feedback_file(project)
     items = standing(json.loads(fb.read_text(encoding="utf-8"))) if fb.exists() else []  # taken back in the mock-up: left out
@@ -2612,7 +2758,9 @@ def show_feedback(project):
     for screen, lst in by_screen.items():
         print(f"\n## {screen}")
         for it in lst:
-            print(f"- {it.get('id', '')} [{it.get('element') or 'screen'}] ({it.get('author') or 'anon'}, {it.get('role')}, v{it.get('version')}): {it.get('text')}"
+            several = it.get("elements") if isinstance(it.get("elements"), list) and len(it.get("elements")) > 1 else None
+            place = f"{len(several)} things: {', '.join(several)}" if several else f"new, in {it.get('element') or 'screen'}" if it.get("box") else it.get("element") or "screen"
+            print(f"- {it.get('id', '')} [{place}] ({it.get('author') or 'anon'}, {it.get('role')}, v{it.get('version')}): {it.get('text')}"
                   + (" (edited)" if it.get("edited") else "") + (f"  -> {it['status']}" if it.get("status") else ""))
 
 

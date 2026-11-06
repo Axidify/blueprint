@@ -162,11 +162,13 @@ body.fb-active #fb-toggle { background: var(--fb-ink); color: #1d1d1f; }
 .fb-live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--fb-done); }
 #fb-update { font: inherit; font-weight: 600; height: 34px; padding: 0 14px; background: var(--fb-ink); color: #1d1d1f; border: 0; border-radius: 999px; cursor: pointer; animation: fb-rise .2s var(--ease); }
 #fb-update:hover { background: #e5e5ea; }
-.fb-live[hidden], #fb-update[hidden] { display: none; }
+#fb-changes-btn { font: inherit; font-weight: 500; height: 34px; padding: 0 14px; background: var(--fb-raised); color: var(--fb-ink); border: 0; border-radius: 999px; cursor: pointer; }
+#fb-changes-btn:hover, #fb-changes-btn.on { background: #48484a; }
+.fb-live[hidden], #fb-update[hidden], #fb-changes-btn[hidden] { display: none; }
 .fb-tools :focus-visible, .fb-dialog :focus-visible { outline: 3px solid var(--fb-halo); outline-offset: 1px; }
 /* Folded away: one small button, and what must not be missed (Update ready, a comment not saved). */
 .fb-tools.folded .fb-bar { gap: 6px; }
-.fb-tools.folded .fb-bar > :not(.fb-fold):not(#fb-update):not(#fb-toggle.fb-unsent), .fb-tools.folded #fb-panel { display: none !important; }
+.fb-tools.folded .fb-bar > :not(.fb-fold):not(#fb-update):not(#fb-toggle.fb-unsent), .fb-tools.folded #fb-panel, .fb-tools.folded #fb-changes { display: none !important; }
 
 /* The Feedback panel: a dark card above the bar. */
 #fb-panel { width: 340px; max-width: calc(100vw - 32px); max-height: min(60vh, 520px); overflow: auto; background: var(--fb-card); color: var(--fb-ink); border-radius: 16px; padding: 16px 16px 14px;
@@ -259,6 +261,11 @@ input.fb-field { height: 36px; }
 body.clean .fb-tools, body.clean .fb-pin, body.clean .fb-hide, body.clean .cw-tag { display: none !important; }
 
 /* Motion shows what changed and nothing more. None in a screenshot, and none for people who ask for less. */
+/* Something new, drawn on the screen in feedback mode: a dashed box where it should go, with its number. */
+.fb-box { position: absolute; z-index: 64; border: 2px dashed var(--fb-mark); background: rgba(42, 111, 214, .08); border-radius: 8px; cursor: pointer; box-sizing: border-box; }
+.fb-box.drawing { pointer-events: none; background: rgba(42, 111, 214, .12); }
+.fb-box.unsent { border-color: var(--fb-red-solid); background: rgba(255, 69, 58, .08); }
+body.fb-active #app { -webkit-user-select: none; user-select: none; }  /* dragging draws a box, it does not select text */
 @keyframes fb-rise { from { opacity: 0; transform: translateY(8px); } }
 @keyframes fb-pop { from { opacity: 0; transform: translateY(8px) scale(.98); } }
 @keyframes fb-fade { from { opacity: 0; } }
@@ -292,3 +299,22 @@ body.clean *, body.clean *::before, body.clean *::after { animation: none !impor
 .notice { background: #fde4e4; border: 1px solid #f5b5b5; color: #8a1c13; border-radius: calc(var(--radius) * var(--rs)); padding: 10px 14px; margin-bottom: 14px; font-size: calc(13px * var(--ts)); }
 .datalist.dense { font-size: calc(11.5px * var(--ts)); }
 .datalist.dense td, .datalist.dense th { padding: 7px 7px; white-space: nowrap; }
+
+/* What changed: after Update ready, the changes as a list to go through one by one, in the Feedback panel's
+   card. A visited change's element is outlined on the screen for a moment. */
+#fb-changes { width: 340px; max-width: calc(100vw - 32px); max-height: min(60vh, 520px); overflow: auto; background: var(--fb-card); color: var(--fb-ink); border-radius: 16px; padding: 16px 16px 12px;
+  box-shadow: var(--fb-ring), 0 10px 30px rgba(0, 0, 0, .5); font-size: 13px; line-height: 1.45; animation: fb-rise .2s var(--ease); color-scheme: dark; }
+.fb-wc-x { font: inherit; font-size: 18px; line-height: 1; width: 28px; height: 28px; border-radius: 8px; border: 0; background: transparent; color: var(--fb-sub); cursor: pointer; }
+.fb-wc-x:hover { background: var(--fb-raised); color: var(--fb-ink); }
+.fb-wc-item { width: 100%; text-align: left; font: inherit; color: inherit; background: transparent; border: 0; border-top: 1px solid var(--fb-hair); cursor: pointer; padding: 10px 8px; margin: 0 -8px; width: calc(100% + 16px); }
+.fb-panel-head + .fb-wc-item { border-top: 0; }
+.fb-wc-item:hover:not(:disabled) { background: var(--fb-raised); }
+.fb-wc-item.on { background: var(--fb-tint); }
+.fb-wc-item:disabled { cursor: default; opacity: .75; }
+.fb-wc-item .fb-body { display: flex; flex-direction: column; }
+.fb-wc-item .fb-text { font-size: 14px; }
+.fb-wc-nav { position: sticky; bottom: -12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px -16px -12px; padding: 10px 16px 12px; background: var(--fb-card); border-top: 1px solid var(--fb-hair); }
+.fb-wc-nav .fb-btn:disabled { opacity: .4; cursor: default; }
+.fb-wc-flash { outline: 3px solid var(--fb-mark) !important; outline-offset: 3px; animation: fb-wc-flash 2.6s var(--ease); }
+@keyframes fb-wc-flash { 0%, 60% { outline-color: var(--fb-mark); } 100% { outline-color: transparent; } }
+@media (prefers-reduced-motion: reduce) { .fb-wc-flash { animation: none; } }

@@ -21,12 +21,14 @@ description: Open a project's mock-up to present it, or run a live session with 
 
 Tell them: the dark bar at the bottom right is theirs (version, **View as** to switch role, **Feedback**; the
 arrows at its left fold it away to one small button when it is in the way); any
-part of a screen can be commented on, and a comment can be edited or deleted from the Feedback panel until
+part of a screen can be commented on by clicking it, and dragging a box comments on several things at once or
+marks where something new should go (it stays drawn, numbered); a comment can be edited or deleted from the Feedback panel until
 it is worked on; Submit on a new form adds the request to the lists and action buttons move the sample record
 on; the walk-through is kept through reloads and shared with every laptop in the room, and **Reset sample
 data** on the bar starts it again. Grey **Custom development** tags mark what is custom work on the
 platform; **Custom work** on the bar hides them. When the project changes, the bar offers **Update ready**:
-nothing reloads by itself, and the walk-through survives it. The window that started the mock-up must stay
+nothing reloads by itself, and the walk-through survives it. After it a **What changed** panel lists each change
+and the comments worked in; **Start** and **Next** take the room to each one with the element outlined. The window that started the mock-up must stay
 open: if it is closed, the mock-up says in red that a comment was not saved and keeps it in the browser
 until the mock-up is started again and **Try again** is pressed in the Feedback panel. Opened straight from
 the mock-up's `index.html` (in `_blueprint/mockup`) without the server, comments are exported with a button instead.

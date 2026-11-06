@@ -86,7 +86,9 @@ never appears in the document's pictures: it shows which mock-up version is open
 role you are signed in as, and **Feedback** (or F2) starts commenting. The arrows at its left fold it away
 to one small button when it is in the way, and while the Feedback panel is open the screen makes room for
 it. Click anything on the screen and type the
-client's comment. Comments are saved to the project automatically. Afterwards, say
+client's comment. Or drag a box: around several things for one comment about all of them ("make these one
+date range"), or where there is nothing yet for something new ("an Export button here"); the box stays drawn
+on the screen with its number. Comments are saved to the project automatically. Afterwards, say
 **"apply the feedback"**.
 
 Buttons such as Approve or Reject move the sample record to its next status when the mock-up was built
@@ -115,7 +117,11 @@ A few things behave as the real system would, so they can be shown and not just 
 - **Lists** keep their filters while you open a record and come back.
 
 When the spec changes while a mock-up is open, the bar offers **Update ready**. Nothing reloads by itself:
-press it when you are ready and you stay on the same screen.
+press it when you are ready and you stay on the same screen. After the update a **What changed** panel lists what is new or different since the version on screen:
+screens, fields, buttons, list columns, figures, dialogs, statuses, roles, sample data and the look, each
+with the comments worked in for it, and the comments dealt with elsewhere. Click a change, or press **Start**
+and **Next**, to open its screen (as a role that can see it) with the element outlined; **What changed** on
+the bar opens the list again until the next update.
 
 **A live session.** To have comments acted on while the client is still in the room, say "run a live
 session for …" in Claude. Comments collect as they are typed and nothing interrupts you. When you are ready,

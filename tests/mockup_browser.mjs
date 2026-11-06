@@ -377,6 +377,8 @@ if (process.env.MOCKUP_RED_URL) {
   out.live.after = await page.textContent(".page-head h2");
   out.live.hash = await page.evaluate(() => location.hash);
   out.live.toasts = await page.evaluate(() => [...document.querySelectorAll(".toast")].map((t) => t.textContent));
+  await page.waitForSelector("#fb-changes:not([hidden])", { timeout: 5000 }).catch(() => {});
+  out.live.changes = await page.evaluate(() => [...document.querySelectorAll("#fb-changes .fb-wc-item .fb-text")].map((t) => t.textContent));
   out.live.feedbackOn = await page.evaluate(() => document.body.classList.contains("fb-active"));   // off after an update
   // A change with a mistake in it: the last good mock-up stays, and the room is told nothing.
   await page.waitForTimeout(3500);                                // the "updated" message has gone

@@ -59,6 +59,9 @@
 (function () {
   "use strict";
   const S = window.SPEC;
+  // The spec as this page was opened, before the walk-through changes its sample data: compared with the new one
+  // after Update ready, to say what changed.
+  const SPEC_AS_OPENED = JSON.stringify(window.SPEC);
   const P = S.project;
   S.data = S.data || {};
   // What the build worked out for the engine: the buttons that add a record, and what to tag as custom work.
@@ -1154,6 +1157,7 @@
     },
     toggle() {
       this.active = !this.active;
+      if (this.active && changes.shown) changes.close();  // one panel at a time
       document.body.classList.toggle("fb-active", this.active);
       this.refresh();
     },
@@ -1211,7 +1215,7 @@
       } catch (e) { return { ok: false, status: 0, body: {} }; }
     },
     renderPins() {
-      document.querySelectorAll(".fb-pin").forEach((p) => p.remove());
+      document.querySelectorAll(".fb-pin, .fb-box:not(.drawing)").forEach((p) => p.remove());
       if (document.body.classList.contains("clean")) return;
       const onSame = {};  // several comments on one thing: their pins sit side by side, not on top of each other
       this.forScreen().forEach((c, i) => {
@@ -1230,7 +1234,20 @@
         pin.className = unsent ? "fb-pin unsent" : "fb-pin";
         pin.textContent = this.number(c);
         pin.title = (unsent ? "NOT SAVED YET: " : "") + c.text;
-        const rect = target ? target.getBoundingClientRect() : { right: c.x, top: c.y };
+        if (c.box) {  // something new: its box, and the number at its corner
+          const b = this.boxRect(c);
+          const frame = document.createElement("div");
+          frame.className = unsent ? "fb-box unsent" : "fb-box";
+          frame.title = pin.title;
+          frame.onclick = pin.onclick;
+          Object.assign(frame.style, { left: `${b.x}px`, top: `${b.y}px`, width: `${b.w}px`, height: `${b.h}px` });
+          document.body.appendChild(frame);
+          pin.style.left = `${b.x + b.w - 12}px`;
+          pin.style.top = `${b.y - 10}px`;
+          document.body.appendChild(pin);
+          return;
+        }
+        const rect = target ? target.getBoundingClientRect() : { right: c.x - window.scrollX, top: c.y - window.scrollY };
         const place = target ? c.element : `${c.x},${c.y}`;
         onSame[place] = (onSame[place] || 0) + 1;
         pin.style.left = `${rect.right + window.scrollX - 12 - (onSame[place] - 1) * 18}px`;
@@ -1246,6 +1263,10 @@
       panel.hidden = false;
       const list = this.forScreen();
       const about = (c) => [c.author, (byId(S.roles, c.role) || {}).name || c.role, when(c)].filter(Boolean).join(" · ");
+      // What a comment is about: one thing, several things a box was drawn around, or something new drawn where
+      // there is nothing yet.
+      const where = (c) => (Array.isArray(c.elements) && c.elements.length > 1 ? `${c.elements.length} things: ${c.elements.map((e) => nameOf(e)).join(", ")}`
+        : c.box ? `New, ${c.element && c.element !== "region:page background" ? `in ${nameOf(c.element)}` : "on this screen"}` : capital(nameOf(c.element)));
       // What became of a comment, in a word the client may read. "Received" only while an assistant is listening.
       const words = { received: "Received", working: "Working on it", applied: "Applied", noted: "Noted for follow-up" };
       const state = (c) => (words[c.state] && (c.state !== "received" || live.listening) ? `<div class="fb-st ${c.state}">${words[c.state]}</div>` : "");
@@ -1257,7 +1278,7 @@
         return can.why ? `<div class="fb-locked" title="${esc(can.why)}">${LOCK}<span>${esc(can.why)}</span></div>` : "";
       };
       panel.innerHTML = `<div class="fb-panel-head">Feedback on this screen <span class="fb-count">${list.length}</span></div>
-        ${list.map((c, i) => `<div class="fb-item" data-fb="${i}"><span class="fb-num${this.unsent.includes(c) ? " unsent" : ""}">${esc(this.number(c))}</span><div class="fb-body"><div class="fb-el">${esc(capital(nameOf(c.element)))}</div><div class="fb-text">${esc(c.text)}</div><div class="fb-meta">${esc(about(c))}${c.edited ? " · edited" : ""}</div>${state(c)}${actions(c, i)}</div></div>`).join("") || '<p class="fb-empty">No feedback yet. Click anything on the screen to comment on it.</p>'}
+        ${list.map((c, i) => `<div class="fb-item" data-fb="${i}"><span class="fb-num${this.unsent.includes(c) ? " unsent" : ""}">${esc(this.number(c))}</span><div class="fb-body"><div class="fb-el">${esc(where(c))}</div><div class="fb-text">${esc(c.text)}</div><div class="fb-meta">${esc(about(c))}${c.edited ? " · edited" : ""}</div>${state(c)}${actions(c, i)}</div></div>`).join("") || '<p class="fb-empty">No feedback yet. Click anything on the screen to comment on it.</p>'}
         ${!this.remote ? `<button class="fb-btn quiet" id="fb-export">Export feedback (${this.items.filter((c) => !c.withdrawn).length})</button>`
           : !this.unsent.length ? `<p class="fb-state ok">Saved to the project folder.</p>`
           : `<div class="fb-warn"><b>${this.unsent.length} comment${this.unsent.length > 1 ? "s" : ""} not saved to the project yet.</b> The mock-up server is not answering. Check that the window that started the mock-up is still open, then try again. The comments are kept in this browser until then.</div>
@@ -1283,7 +1304,8 @@
       };
     },
     capture(e) {
-      if (!this.active || e.target.closest(".fb-tools,.fb-dialog,.fb-pin,.cw-tag")) return;
+      if (this.drew) { this.drew = false; e.preventDefault(); e.stopPropagation(); return; }  // the click that ends a drawn box
+      if (!this.active || e.target.closest(".fb-tools,.fb-dialog,.fb-pin,.fb-box,.cw-tag")) return;
       e.preventDefault();
       e.stopPropagation();
       const target = e.target.closest("[data-el]");
@@ -1295,14 +1317,84 @@
           time: new Date().toISOString(), version: P.version, ...(live.stamp ? { build: live.stamp } : {}) });  // the build it was made on, when changes are made during the session
       });
     },
+    // A box drawn on the screen (dragging in feedback mode). Drawn around things that are there (fields,
+    // buttons, columns …) it is one comment about all of them; drawn where there is nothing, it is for
+    // something new: a button, a field, a column. It is kept relative to the element it was drawn on, so it
+    // stays in place when the window changes size, and that element is named as where it goes.
+    captureBox(drawn, rect) {
+      // The things wholly inside the box: the smallest named parts, not the areas around them.
+      const PARTS = /^(field|button|column|stat|menu|action|search|filter|cell|tab|title|header|chip|link):/;
+      const inside = [...document.querySelectorAll("#app [data-el]")].filter((el) => {
+        if (!PARTS.test(el.dataset.el)) return false;
+        const at = el.getBoundingClientRect();
+        if (!at.width && !at.height) return false;
+        const x = at.left + window.scrollX, y = at.top + window.scrollY;
+        return x >= rect.x - 2 && y >= rect.y - 2 && x + at.width <= rect.x + rect.w + 2 && y + at.height <= rect.y + rect.h + 2;
+      }).filter((el, i, all) => !all.some((other) => other !== el && other.contains(el)));  // a part inside another counts once
+      const elements = [...new Set(inside.map((el) => el.dataset.el))];
+      if (elements.length) return this.captureMany(drawn, rect, inside, elements);
+      const cx = rect.x + rect.w / 2 - window.scrollX, cy = rect.y + rect.h / 2 - window.scrollY;
+      drawn.style.visibility = "hidden";
+      const under = document.elementFromPoint(cx, cy);
+      drawn.style.visibility = "";
+      const anchor = under && under.closest("#app [data-el]");
+      const element = anchor ? anchor.dataset.el : "";
+      const at = anchor ? anchor.getBoundingClientRect() : null;
+      const box = { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.w), h: Math.round(rect.h),
+        ...(at ? { dx: Math.round(rect.x - (at.left + window.scrollX)), dy: Math.round(rect.y - (at.top + window.scrollY)) } : {}) };
+      const r = route();
+      const named = element && element !== "region:page background";  // the empty page is no place worth naming
+      this.openBox({ title: `Something new${named ? ` in ${nameOf(element)}` : " here"}`, ask: "What should go here?", author: true }).then((text) => {
+        drawn.remove();
+        if (!text) return;
+        this.save({ screen: app.dataset.screen, role: r.role || "", element, box, text, author: localStorage.getItem("mock-author") || "",
+          x: box.x + box.w, y: box.y, time: new Date().toISOString(), version: P.version, ...(live.stamp ? { build: live.stamp } : {}) });
+      });
+    },
+    // A box drawn around several things: one comment about all of them, each named.
+    captureMany(drawn, rect, inside, elements) {
+      const r = route();
+      const names = elements.map((el) => nameOf(el));
+      inside.forEach((el) => el.classList.add("fb-target"));
+      const first = inside[0].getBoundingClientRect();
+      const box = { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.w), h: Math.round(rect.h),
+        dx: Math.round(rect.x - (first.left + window.scrollX)), dy: Math.round(rect.y - (first.top + window.scrollY)) };
+      const title = elements.length === 1 ? `Comment on ${names[0]}` : `Comment on ${elements.length} things: ${names.join(", ")}`;
+      this.openBox({ title, author: true }).then((text) => {
+        inside.forEach((el) => el.classList.remove("fb-target"));
+        drawn.remove();
+        if (!text) return;
+        this.save({ screen: app.dataset.screen, role: r.role || "", element: elements[0], ...(elements.length > 1 ? { elements, box } : {}),
+          text, author: localStorage.getItem("mock-author") || "", x: box.x + box.w, y: box.y,
+          time: new Date().toISOString(), version: P.version, ...(live.stamp ? { build: live.stamp } : {}) });
+      });
+    },
+    // Where a drawn box is now: at its element, or where it was drawn when that element is not on the screen.
+    boxRect(c) {
+      const b = c.box || {};
+      // A box drawn around several things follows them: around where they are now, whatever the window's width.
+      const parts = (Array.isArray(c.elements) ? c.elements : []).map((e) => document.querySelector(`#app [data-el="${CSS.escape(e)}"]`)).filter(Boolean);
+      if (parts.length) {
+        const rects = parts.map((el) => el.getBoundingClientRect());
+        const left = Math.min(...rects.map((r) => r.left)), top = Math.min(...rects.map((r) => r.top));
+        const right = Math.max(...rects.map((r) => r.right)), bottom = Math.max(...rects.map((r) => r.bottom));
+        return { x: left + window.scrollX - 6, y: top + window.scrollY - 6, w: right - left + 12, h: bottom - top + 12 };
+      }
+      const target = c.element && b.dx != null ? document.querySelector(`#app [data-el="${CSS.escape(c.element)}"]`) : null;
+      if (target) {
+        const at = target.getBoundingClientRect();
+        return { x: at.left + window.scrollX + b.dx, y: at.top + window.scrollY + b.dy, w: b.w, h: b.h };
+      }
+      return { x: b.x, y: b.y, w: b.w, h: b.h };
+    },
     // The comment box: a new comment (with the writer's name), or an earlier one to edit. Resolves to the text,
     // or null when it was closed without saving.
-    openBox({ title, text, author, target, save }) {
+    openBox({ title, text, author, target, save, ask }) {
       return new Promise((done) => {
         const box = document.createElement("div");
         box.className = "fb-dialog";
         box.innerHTML = `<div class="fb-dialog-inner" role="dialog" aria-modal="true" aria-labelledby="fb-title"><div class="fb-title" id="fb-title">${esc(title)}</div>
-          <label class="fb-label" for="fb-text">What should change?</label>
+          <label class="fb-label" for="fb-text">${esc(ask || "What should change?")}</label>
           <textarea class="fb-field" id="fb-text" rows="4">${esc(text || "")}</textarea>
           ${author ? `<label class="fb-label" for="fb-author">Your name <span>(optional)</span></label>
           <input class="fb-field" id="fb-author" value="${esc(localStorage.getItem("mock-author") || "")}">` : ""}
@@ -1331,6 +1423,32 @@
   };
 
   document.addEventListener("click", (e) => feedback.capture(e), true);
+  let drawing = null;
+  document.addEventListener("mousedown", (e) => {
+    if (!feedback.active || e.button !== 0 || e.target.closest(".fb-tools,.fb-dialog,.fb-pin,.fb-box,.cw-tag")) return;
+    drawing = { x: e.pageX, y: e.pageY, el: null };
+  }, true);
+  document.addEventListener("mousemove", (e) => {
+    if (!drawing) return;
+    const w = Math.abs(e.pageX - drawing.x), h = Math.abs(e.pageY - drawing.y);
+    if (!drawing.el && w + h < 14) return;  // a click that wobbled is still a click
+    e.preventDefault();
+    if (!drawing.el) {
+      drawing.el = document.createElement("div");
+      drawing.el.className = "fb-box drawing";
+      document.body.appendChild(drawing.el);
+    }
+    Object.assign(drawing.el.style, { left: `${Math.min(e.pageX, drawing.x)}px`, top: `${Math.min(e.pageY, drawing.y)}px`, width: `${w}px`, height: `${h}px` });
+  }, true);
+  document.addEventListener("mouseup", (e) => {
+    const d = drawing;
+    drawing = null;
+    if (!d || !d.el) return;
+    feedback.drew = true;  // the click that follows ends the drawing; it is not a comment on what is under it
+    setTimeout(() => { feedback.drew = false; }, 0);
+    const rect = { x: Math.min(e.pageX, d.x), y: Math.min(e.pageY, d.y), w: Math.max(Math.abs(e.pageX - d.x), 16), h: Math.max(Math.abs(e.pageY - d.y), 16) };
+    feedback.captureBox(d.el, rect);
+  }, true);
   document.addEventListener("keydown", (e) => {
     if (e.key === "F2") {
       if (fold.folded) fold.toggle();  // the bar comes back with the panel
@@ -1361,7 +1479,8 @@
     + `<label class="fb-custom" hidden title="Show custom work: tag what the platform does not give as standard"><input type="checkbox" id="fb-custom" role="switch" aria-label="Show custom work"><span class="fb-switch" aria-hidden="true"></span>Custom work</label>`
     + `<button id="fb-reset" hidden title="Put the sample data back and start the walk-through again"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M 3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M 3 3v5h5"/></svg>Reset sample data</button>`
     + `<button id="fb-update" hidden title="The mock-up was changed. Press when you are ready: you stay on this screen.">Update ready</button>`
-    + `<button id="fb-toggle">Feedback</button></div><div id="fb-panel" hidden></div>`;
+    + `<button id="fb-changes-btn" hidden title="What the last update changed: go through it one by one">What changed</button>`
+    + `<button id="fb-toggle">Feedback</button></div><div id="fb-panel" hidden></div><div id="fb-changes" hidden></div>`;
   document.body.appendChild(tools);
   function syncTools(r, screen) {
     tools.querySelector(".fb-viewas").hidden = !r.role || screen.type === "login";
@@ -1662,6 +1781,187 @@
     },
   };
 
+
+  // ------------------------------------------------------------------ what changed
+  // After Update ready the page says what the update changed, worked out by comparing the spec the room was
+  // looking at with the new one: screens, fields, buttons, list columns, figures, dialogs, statuses, roles,
+  // sample data and the look, and the comments worked in since. Each change can be visited: the screen opens
+  // as a role that can see it, and the element is outlined. Previous and Next go through them one by one.
+  const BEFORE_KEY = "mock-before";
+  // Spec text only the requirements document prints: rewording it changes nothing on a screen.
+  const DOC_ONLY = new Set(["description", "caption", "meaning", "scope", "source", "validation", "length", "sort", "access",
+    "doc_table", "srs_table", "formula", "tbc", "note", "notes", "priority", "requirements", "history", "date"]);
+  const plain = (v) => JSON.stringify(v === undefined ? null : v, (k, x) => (DOC_ONLY.has(k) ? undefined : x));
+  const LOOK_WORDS = { theme: "theme", primary_color: "colour", data_colors: "data colours", text_size: "text size", font: "font",
+    font_file: "font", corners: "corners", menu: "side menu", header: "top bar", logo: "logo" };
+  // The mock-up's own styles and code as served: a change there (a new look, the project's own code) shows too.
+  function styleSignature() {
+    if (!location.protocol.startsWith("http")) return Promise.resolve("");
+    const files = ["assets/theme.css", "assets/look.css", "assets/project.css", "assets/project.js"];
+    return Promise.all(files.map((u) => fetch(u, { cache: "no-store" }).then((r) => (r.ok ? r.text() : "")).catch(() => "")))
+      .then((texts) => {
+        let h = 5381;
+        for (const ch of texts.join("\u0000")) h = ((h * 33) ^ ch.charCodeAt(0)) >>> 0;
+        return String(h);
+      });
+  }
+  const styleAtOpen = styleSignature();
+
+  function whatChanged(A, B) {
+    const out = [];
+    const add = (text, where) => out.push({ text, ...(where || {}) });
+    const keyed = (list, key) => new Map((list || []).filter((x) => x && x[key] != null).map((x) => [String(x[key]), x]));
+    const big = (word) => word[0].toUpperCase() + word.slice(1);
+    const pa = A.project || {}, pb = B.project || {};
+    const looks = [...new Set(Object.keys(LOOK_WORDS).filter((k) => plain(pa[k]) !== plain(pb[k])).map((k) => LOOK_WORDS[k]))];
+    if (looks.length) add(`Look: ${looks.join(", ")}`, { look: true });
+    const screensA = keyed(A.screens, "id"), screensB = keyed(B.screens, "id");
+    const fieldsOf = (s) => keyed((s.sections || []).flatMap((sec) => (sec && sec.fields) || []), "id");
+    const compare = (id, a, b, kind, element, label) => {
+      for (const [k, x] of b) {
+        const y = a.get(k);
+        if (!y) add(`New ${kind}: ${label(x, k)}`, { screen: id, element: element(x, k) });
+        else if (plain(y) !== plain(x)) add(`${big(kind)} changed: ${label(x, k)}`, { screen: id, element: element(x, k) });
+      }
+      for (const [k, y] of a) if (!b.has(k)) add(`${big(kind)} taken out: ${label(y, k)}`, { screen: id });
+    };
+    for (const [id, s] of screensB) {
+      const o = screensA.get(id);
+      const name = s.title || id;
+      if (!o) { add(`New screen: ${name}`, { screen: id, element: "region:page heading" }); continue; }
+      if (plain(o) === plain(s)) continue;
+      const before = out.length;
+      if (o.title !== s.title) add(`Title: ${o.title} → ${s.title}`, { screen: id, element: `title:${s.title}` });
+      compare(id, fieldsOf(o), fieldsOf(s), "field", (f, k) => `field:${k}`, (f, k) => f.label || k);
+      compare(id, keyed(o.buttons, "label"), keyed(s.buttons, "label"), "button", (b) => `button:${b.label}`, (b) => b.label);
+      compare(id, keyed((o.list || {}).columns, "field"), keyed((s.list || {}).columns, "field"), "column", (c) => `column:${c.label}`, (c, k) => c.label || k);
+      compare(id, keyed(o.stats, "label"), keyed(s.stats, "label"), "figure", (x) => `stat:${x.label}`, (x) => x.label);
+      if (out.length === before) add(`Changed: ${name}`, { screen: id, element: "region:page heading" });
+    }
+    for (const [id, s] of screensA) if (!screensB.has(id)) add(`Screen taken out: ${s.title || id}`);
+    // A dialog is seen on the screen whose button opens it.
+    const host = (dialog) => (B.screens || []).find((s) => [...(s.buttons || []), ...((s.list || {}).actions || [])].some((b) => b && b.dialog === dialog));
+    const dialogsA = keyed(A.dialogs, "id"), dialogsB = keyed(B.dialogs, "id");
+    for (const [id, d] of dialogsB) {
+      const o = dialogsA.get(id), h = host(id);
+      if (o && plain(o) === plain(d)) continue;
+      add(`${o ? "Dialog changed" : "New dialog"}: ${d.title || id}`, h ? { screen: h.id, dialog: id } : {});
+    }
+    for (const [id, d] of dialogsA) if (!dialogsB.has(id)) add(`Dialog taken out: ${d.title || id}`);
+    const statusesA = keyed(A.statuses, "id"), statusesB = keyed(B.statuses, "id");
+    for (const [id, x] of statusesB) {
+      const o = statusesA.get(id);
+      if (!o) add(`New status: ${x.name || id}`);
+      else if (o.name !== x.name) add(`Status renamed: ${o.name} → ${x.name}`);
+    }
+    for (const [id, x] of statusesA) if (!statusesB.has(id)) add(`Status taken out: ${x.name || id}`);
+    const rolesA = keyed(A.roles, "id"), rolesB = keyed(B.roles, "id");
+    for (const [id, x] of rolesB) if (!rolesA.has(id)) add(`New role: ${x.name || id}`);
+    for (const [id, x] of rolesA) if (!rolesB.has(id)) add(`Role taken out: ${x.name || id}`);
+    const lists = new Set([...Object.keys(A.data || {}), ...Object.keys(B.data || {})]);
+    for (const name of lists) {
+      if (plain((A.data || {})[name]) === plain((B.data || {})[name])) continue;
+      const shown = (B.screens || []).find((s) => s.list && s.list.data === name);
+      add(`Sample data changed: ${name.replace(/_/g, " ")}`, shown ? { screen: shown.id, element: "region:list" } : {});
+    }
+    return out;
+  }
+  window.MockupWhatChanged = whatChanged;  // for the tests
+
+  const screenName = (id) => (byId(S.screens, id) || {}).title || (id === "__flow" ? "Process flow" : id);
+  const changes = {
+    list: [], at: -1, from: null, to: null, shown: false, doneAtOpen: null,
+    dealtWith: () => feedback.items.filter((c) => c.id && (c.state === "applied" || c.state === "noted")).map((c) => c.id),
+    remember() {
+      // Pressing Update ready: keep what the room was looking at, to compare once the page has reloaded.
+      return styleAtOpen.then((style) => {
+        // The comments already dealt with when this version was opened: any other comment dealt with by the time
+        // the page reloads was worked in since, also one written after the page was opened.
+        const done = this.doneAtOpen || [];
+        try { sessionStorage.setItem(BEFORE_KEY, JSON.stringify({ spec: SPEC_AS_OPENED, style, done, version: P.version })); } catch (e) { /* too big to keep: no list */ }
+      });
+    },
+    async work() {
+      let before;
+      try { before = JSON.parse(sessionStorage.getItem(BEFORE_KEY) || "null"); } catch (e) { before = null; }
+      sessionStorage.removeItem(BEFORE_KEY);
+      if (!before || !before.spec) return;
+      const list = whatChanged(JSON.parse(before.spec), JSON.parse(SPEC_AS_OPENED));
+      if (before.style && (await styleAtOpen) !== before.style && !list.some((c) => c.look)) list.unshift({ text: "Look: the mock-up's styles", look: true });
+      // The comments worked in since: beside the change on their screen, or as a line of their own.
+      const done = feedback.items.filter((c) => c.id && !c.withdrawn && (c.state === "applied" || c.state === "noted") && !(before.done || []).includes(c.id));
+      for (const c of done) {
+        const said = { id: c.id, state: c.state };
+        const on = list.find((x) => x.screen === c.screen);
+        if (on) (on.comments = on.comments || []).push(said);
+        else list.push({ text: `“${c.text}”`, screen: c.screen, element: c.element, role: c.role, comments: [said] });
+      }
+      this.list = list;
+      this.from = before.version;
+      this.to = P.version;
+      document.getElementById("fb-changes-btn").hidden = !list.length;
+      if (list.length) this.open();
+    },
+    open() {
+      if (feedback.active) feedback.toggle();
+      this.shown = true;
+      this.draw();
+    },
+    close() {
+      this.shown = false;
+      this.draw();
+    },
+    draw() {
+      const panel = document.getElementById("fb-changes");
+      panel.hidden = !this.shown;
+      document.body.classList.toggle("fb-panel-open", this.shown || feedback.active);
+      document.getElementById("fb-changes-btn").classList.toggle("on", this.shown);
+      if (!this.shown) return;
+      const n = this.list.length;
+      const versions = this.from != null && String(this.from) !== String(this.to) ? ` · v${esc(this.from)} → v${esc(this.to)}` : "";
+      const where = (c) => (c.screen ? `${screenName(c.screen)}${c.dialog ? " · dialog" : ""}` : c.look ? "Every screen" : "Not on one screen");
+      panel.innerHTML = `<div class="fb-panel-head"><span>What changed${versions}</span><button class="fb-wc-x" id="wc-close" aria-label="Close" title="Close">×</button></div>
+        ${this.list.map((c, i) => `<button type="button" class="fb-item fb-wc-item${i === this.at ? " on" : ""}" data-wc="${i}" ${c.screen ? "" : "disabled"}><span class="fb-num">${i + 1}</span><span class="fb-body"><span class="fb-text">${esc(c.text)}</span><span class="fb-el">${esc(where(c))}</span>${(c.comments || []).map((x) => `<span class="fb-st ${x.state === "applied" ? "applied" : ""}">${esc(x.id)} ${x.state === "applied" ? "applied" : "noted for follow-up"}</span>`).join("")}</span></button>`).join("")}
+        <div class="fb-wc-nav"><button type="button" class="fb-btn quiet" id="wc-prev" ${this.at <= 0 ? "disabled" : ""}>Previous</button><span class="fb-count">${this.at >= 0 ? `${this.at + 1} of ${n}` : `${n} change${n === 1 ? "" : "s"}`}</span><button type="button" class="fb-btn solid" id="wc-next" ${this.at >= n - 1 ? "disabled" : ""}>${this.at < 0 ? "Start" : "Next"}</button></div>`;
+      panel.onclick = (e) => {
+        const item = e.target.closest("[data-wc]");
+        if (item) return this.visit(Number(item.dataset.wc));
+        if (e.target.closest("#wc-prev")) return this.step(-1);
+        if (e.target.closest("#wc-next")) return this.step(1);
+        if (e.target.closest("#wc-close")) return this.close();
+      };
+      const on = panel.querySelector(".fb-wc-item.on");
+      if (on) on.scrollIntoView({ block: "nearest" });
+    },
+    step(by) {
+      let i = this.at + by;
+      while (i >= 0 && i < this.list.length && !this.list[i].screen) i += by;  // a change on no one screen is read, not visited
+      if (i >= 0 && i < this.list.length) this.visit(i);
+    },
+    visit(i) {
+      const c = this.list[i];
+      this.at = i;
+      this.draw();
+      if (!c.screen) return;
+      const target = byId(S.screens, c.screen);
+      const now = route();
+      const role = c.role && target && canSee(target, c.role) ? c.role
+        : target && now.role && !canSee(target, now.role) ? (target.roles || [])[0] : now.role;
+      go(c.screen, { ...(role ? { role } : {}), ...(c.dialog ? { dialog: c.dialog } : {}) });
+      setTimeout(() => {
+        const el = c.element ? document.querySelector(`#app [data-el="${CSS.escape(c.element)}"]`) : null;
+        const shown = el || (c.dialog ? document.querySelector(".modal") : null);
+        if (!shown) return;
+        shown.scrollIntoView({ block: "center", behavior: "smooth" });
+        shown.classList.remove("fb-wc-flash");
+        void shown.offsetWidth;  // start the outline again when the same element is visited twice
+        shown.classList.add("fb-wc-flash");
+        setTimeout(() => shown.classList.remove("fb-wc-flash"), 2600);
+      }, 150);
+    },
+  };
+  document.getElementById("fb-changes-btn").onclick = () => (changes.shown ? changes.close() : changes.open());
+
   // ------------------------------------------------------------------ following the spec
   // The server builds the mock-up again when its spec changes; a page that is open then reloads itself.
   // A spec with a mistake in it never shows here: the server keeps the last good build, and the mistake is
@@ -1688,22 +1988,26 @@
   }
   // After an update feedback mode is off, whatever it was: the presenter's next click (Approve, say) does what
   // it says instead of opening a comment box.
-  document.getElementById("fb-update").onclick = () => {
+  document.getElementById("fb-update").onclick = async () => {
+    await changes.remember();
     sessionStorage.setItem("mock-updated", "1");
     location.reload();
   };
   const updated = sessionStorage.getItem("mock-updated");
   sessionStorage.removeItem("mock-updated");
-  if (updated) setTimeout(() => toast("Updated: this is the mock-up as the spec is now."), 300);
+  if (!updated) sessionStorage.removeItem(BEFORE_KEY);
 
   document.getElementById("fb-reset").onclick = () => demo.reset();
   document.getElementById("fb-custom").checked = custom.shown;
   document.getElementById("fb-custom").onchange = (e) => custom.toggle(e.target.checked);
 
   Promise.all([feedback.load(), demo.load()]).then(() => {
+    changes.doneAtOpen = changes.dealtWith();
     render();
     feedback.refresh();
     follow();
+    // After Update ready: say what changed, or that it is the mock-up as the spec is now.
+    if (updated) changes.work().then(() => { if (!changes.list.length) toast("Updated: this is the mock-up as the spec is now."); });
   });
   setInterval(() => feedback.sync(), 5000);
   setInterval(follow, 2500);
