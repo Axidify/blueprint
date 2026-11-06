@@ -43,6 +43,19 @@ See [docs/maintaining.md](docs/maintaining.md).
   register. Internal items and unanswered ones still never reach the document.
 
 ### Changed
+- **Screenshots stay sharp in the PDF.** Word's PDF export reduces every picture, so the small text of a
+  screenshot went soft when zoomed. After Word has made the PDF, Blueprint now puts each screenshot back
+  at its full size. The PDF is larger for it: about as large as its screenshots together.
+- **The default standard wording is shorter and says each thing once.** "About this document" and the
+  sign-off text went from twelve paragraphs to seven. They no longer say twice that screens may be
+  refined, and the sign-off now states that the signed document is the basis for development and for
+  acceptance testing, that open decisions are not covered until resolved, and that a change after
+  sign-off is a change request. **A company with its own `branding/document-boilerplate.yaml` keeps its
+  wording**; copy what you want from `templates/document-boilerplate.yaml`.
+- **An estimate with many lines says how to read its total.** The total adds every low end and every
+  high end; from five lines with a range, the estimate now says that all of them landing low or all high
+  is unlikely, so the outcome is to be expected inside the range. No narrower figure is given: an
+  estimate is still never a midpoint or a "most likely" number.
 - **Reviews can point to the section numbers the reader sees.** In many Word documents the numbers in
   front of headings and numbered paragraphs ("3.2", "(a)", "Appendix B") are produced by Word and are not
   in the text. They are now worked out when a document is read, so findings can say "section 3.2" and

@@ -95,6 +95,11 @@ words for `numbering`, `header_footer` and `tables.borders` stop the run with th
 `python -I tools/document_format.py show` prints the same list. Quote a colour made of digits only
 (`"112233"`): unquoted, a value such as `001122` is read as a number.
 
+The standard wording (`document-boilerplate.yaml`) is a file a company replaces as a whole: `disclaimer`,
+`confidentiality`, `concept` and `signoff` (lists of paragraphs), and the one-line introductions
+`mockup_intro`, `open_issues_intro`, `scope_intro` and `decisions_made_intro`. An introduction a company's
+file does not have falls back to the built-in sentence.
+
 Other branding files in `workspace/branding/`: `logo.png` (cover), `document-template.docx` (styles, page
 set-up, and the header and footer when `header_footer: template`), `document-boilerplate.yaml` (standard
 wording). See [Workspace and company profile](workspace.md).

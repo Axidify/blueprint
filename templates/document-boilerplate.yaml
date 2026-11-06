@@ -2,17 +2,13 @@
 # Copy to workspace/branding/document-boilerplate.yaml to change it for your company.
 
 disclaimer:
-  - "This document has been developed based on the requirements gathered during the User Requirement Study (URS) sessions conducted between {client} and {company} ({company_short}) for the proposed {system}."
-  - "The content presented herein represents a structured translation of the agreed business processes, system requirements, and operational needs into a proposed system design, including workflows, features, and functional specifications. While all efforts have been made to accurately capture the requirements, the content remains subject to further validation, refinement, and formal approval."
+  - "This document sets out the requirements for {system}, as gathered in the requirement workshops between {client} and {company} ({company_short}). It remains a draft until both parties have signed it, and its content may change until then."
 
 confidentiality:
-  - "All information contained in this document is confidential and proprietary to {client} and {company} ({company_short}). This document, in whole or in part, shall not be disclosed, reproduced, distributed, or transmitted to any third party without prior written consent from both parties."
-  - "The information provided shall be used solely for the purpose of requirement validation, system design confirmation, and project implementation."
+  - "This document is confidential to {client} and {company}. It shall not be disclosed, copied or passed to a third party without the written consent of both, and is to be used only to agree the requirements and to deliver the project."
 
 concept:
-  - "The system concepts, process flows, screen designs, mock-ups, user interface elements, and functional specifications documented herein are derived from the requirements captured during the URS sessions. These representations aim to reflect the intended system behaviour and user interaction based on the agreed requirements."
-  - "All visual elements, including layouts, colours, labels, and user experience flows, are subject to refinement and adjustment during subsequent design and development phases, based on stakeholder confirmation and final approval."
-  - "{client} is requested to review and formally acknowledge the documented requirements, scope, system flows, and functional specifications presented in this document. Any discrepancies, clarifications, or change requests should be communicated to ensure alignment prior to finalisation."
+  - "The screens shown are conceptual. They show what the system does and what each role sees; colours, labels and layout may be refined during development without changing the behaviour agreed in this document."
 
 mockup_intro: "The screens below are taken from the conceptual mock-up with sample data. Labels, layouts and colours are subject to refinement during development."
 
@@ -23,8 +19,7 @@ decisions_made_intro: "Questions raised during the requirement study and the ans
 open_issues_intro: "The following items remain open at the time of this version. They shall be resolved before sign-off or carried forward as agreed by both parties; resolutions may affect the scope, timeline and effort."
 
 signoff:
-  - "By signing this document, the client acknowledges that the {system} – {document} has been reviewed for discussion, alignment, and confirmation purposes."
-  - "The client acknowledges that the document outlines the proposed system concept, high-level process flow, user roles, access matrix, functional requirements, and conceptual screen pages based on discussions between the relevant parties."
-  - "The client further acknowledges that the conceptual screen pages, user interface design, colours, labels, layout, and user experience flow are subject to refinement based on feedback, validation, and final agreement during the project implementation stage."
-  - "Any changes, additions, or refinements requested after sign-off may be subject to further review, impact assessment, timeline adjustment, and mutual agreement between the parties."
-  - "The client acknowledges that timely provision of external system integration details, environment access, credentials, URLs, test data, and technical support contacts is required to support development, testing, UAT, and production deployment activities."
+  - "By signing, the client confirms that this document, the {system} – {document}, describes the requirements agreed for the system. It is the basis for development and for acceptance testing."
+  - "Decisions listed as open in this document are not covered by the signature until they are resolved and recorded in a later version."
+  - "A change, addition or removal requested after sign-off is a change request: it is assessed for its effect on scope, timeline and cost, and proceeds once both parties agree."
+  - "The client will provide in good time what the project depends on: details of the external systems, access to the environments, test data and contacts for technical support."

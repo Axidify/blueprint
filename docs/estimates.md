@@ -67,7 +67,10 @@ assumption) rather than editing the Excel file: it is rewritten every time.
   then covers the priced lines only, and says so.
 - **Other work.** Items from the `Other work` table, as a share of the building-block subtotal or fixed
   mandays; or a figure the lead developer gives for the project.
-- **Totals.** The low ends added up and the high ends added up. There is no single "most likely" figure.
+- **Totals.** The low ends added up and the high ends added up. There is no single "most likely" figure,
+  and no narrower "likely" range either. The two ends are the cases where every line lands low or every
+  line lands high; from five lines with a range, the estimate says so in words, so the total is not read as
+  if either end were as likely as the middle.
 - **Open questions.** A question that would add work if answered the costly way is listed; once the lead
   developer sizes it, it widens the high end only and is shown separately from the total.
 

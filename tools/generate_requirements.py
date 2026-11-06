@@ -439,6 +439,7 @@ class Writer:
         self.doc, self.f = doc, fmt
         self.c, self.s, self.fn = fmt["colors"], fmt["sizes"], fmt["fonts"]
         self.figures = 0
+        self.pictures = []  # the image file of every figure, in order: put back at full size in the PDF
         sec = doc.sections[0]
         self.text_width = (sec.page_width - sec.left_margin - sec.right_margin) / 360000  # cm
 
@@ -867,6 +868,7 @@ class Writer:
         cell = t.rows[0].cells[0]
         shade(cell._tc.get_or_add_tcPr(), self.c["ground"])
         cell.paragraphs[0].add_run().add_picture(str(image), width=Cm(width_cm - 0.7))
+        self.pictures.append(Path(image))
         cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
         cell.paragraphs[0].paragraph_format.space_after = Pt(0)
         cell.paragraphs[0].paragraph_format.keep_with_next = True
@@ -1672,9 +1674,11 @@ def build(project):
             print("   - " + x)
     done, why = finish_in_word(out)
     if done:
+        sharp = sharpen_pdf_pictures(pdf, w.pictures)
         placed = add_signature_fields(pdf, signers)
         print(f"  Table of contents updated, fonts embedded; PDF written to {pdf.name}"
-              f" with {placed} of {len(signers)} signing fields")
+              f" with {placed} of {len(signers)} signing fields"
+              + (f" and {sharp} of {len(w.pictures)} pictures at full size" if w.pictures else ""))
         return out
     try:
         strip_markers(out)
@@ -1700,6 +1704,47 @@ def strip_markers(docx_path):
         if t.text and re.fullmatch(r"BPSIG\d+", t.text):
             t.text = ""
     d.save(str(docx_path))
+
+
+def sharpen_pdf_pictures(pdf_path, pictures):
+    """Put the original pictures back into the PDF, in place of the reduced ones Word exported.
+
+    Word's PDF export brings every picture down to about 200 dots per inch, whatever the document holds, so
+    the small text of a screenshot went soft when zoomed. The figures are the wide pictures of the PDF, in
+    reading order; each is replaced by the file it was made from. Returns how many were replaced. When the
+    PDF's pictures cannot be matched one for one with the figures, nothing is changed."""
+    import pymupdf
+
+    doc = pymupdf.open(str(pdf_path))
+    wide = []  # (page, picture reference, width in pixels, shape) of each figure: logos and icons are narrower
+    for page in doc:
+        on_page = []
+        for image in page.get_images(full=True):
+            rects = page.get_image_rects(image[0])
+            if rects and rects[0].width > 8 / 2.54 * 72:
+                on_page.append((rects[0].y0, rects[0].x0, page.number, image[0], image[2], rects[0].width / rects[0].height))
+        wide += sorted(on_page)
+    replaced = 0
+    if len(wide) == len(pictures) and len({w[3] for w in wide}) == len(wide):
+        for (_, _, page_no, xref, pixels, shape), picture in zip(wide, pictures):
+            try:
+                original = pymupdf.Pixmap(str(picture))
+            except Exception:
+                continue
+            same_shape = abs(original.width / original.height - shape) < 0.03 * shape  # a wrong match would distort
+            if same_shape and original.width > pixels:
+                if original.alpha:  # a screenshot has nothing see-through: without it the PDF is smaller
+                    original = pymupdf.Pixmap(original, 0)
+                doc[page_no].replace_image(xref, pixmap=original)
+                replaced += 1
+    if replaced:
+        tmp = pdf_path.with_suffix(".sharp.pdf")
+        doc.save(str(tmp), garbage=3, deflate=True)
+        doc.close()
+        tmp.replace(pdf_path)
+    else:
+        doc.close()
+    return replaced
 
 
 def add_signature_fields(pdf_path, signers):

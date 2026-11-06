@@ -1134,3 +1134,34 @@ def test_weeks_needs_a_team(tmp_path, kb, run):
     with pytest.raises(SystemExit, match="--team and --days must be above 0"):
         run(kb, "weeks", tmp_path / "project", "--team", "0")
 
+
+# ====================================================================== how to read the total
+def test_an_estimate_with_many_lines_says_what_the_ends_of_its_total_mean(tmp_path, kb):
+    """The total adds every low end and every high end. No narrower figure is given (an estimate is never a
+    midpoint or a most-likely number); from five lines with a range, the estimate says what the ends mean."""
+    lines = [{"id": f"L{n:02d}", "item": f"Work {n}", "md": [2, 4]} for n in range(1, 6)]
+    est = {"project": "P", "platform": PLATFORM, "date": "2026-11-06", "basis": "spec v0.1", "basis_kind": "spec",
+           "assumptions": ["One developer."], "lines": lines}
+    res, errors = estimate.compute(est, tmp_path, kb)
+    assert errors == [] and res["total"] == (10, 20)
+    assert res["reading"].startswith("The total adds the low end of every line and the high end of every line. With 5 lines")
+    assert "expect the outcome inside the range" in res["reading"] and "not narrowed" in res["reading"]
+    fewer, _ = estimate.compute({**est, "lines": lines[:4]}, tmp_path, kb)
+    assert fewer["reading"] == "", "with a handful of lines the total needs no explaining"
+
+
+def test_the_note_on_reading_the_total_is_printed_and_in_the_excel_file(tmp_path, kb, run):
+    from openpyxl import load_workbook
+
+    folder = tmp_path / "project" / "estimates"
+    folder.mkdir(parents=True)
+    est = {"project": "P", "platform": PLATFORM, "date": "2026-11-06", "basis": "spec v0.1", "basis_kind": "spec",
+           "assumptions": ["One developer."], "lines": [{"id": f"L{n:02d}", "item": f"Work {n}", "md": [2, 4]} for n in range(1, 7)]}
+    path = folder / "2026-11-06 estimate from spec v0.1.json"
+    path.write_text(json.dumps(est), encoding="utf-8")
+    out = run(kb, "render", tmp_path / "project")
+    assert "With 6 lines that each have a range" in out
+    sheet = load_workbook(path.with_suffix(".xlsx"))["Uncertainty"]
+    notes = [row[2] for row in sheet.iter_rows(values_only=True) if row[0] == "How to read the total"]
+    assert len(notes) == 1 and notes[0].startswith("The total adds the low end of every line")
+

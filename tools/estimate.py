@@ -70,6 +70,7 @@ LEVELS = ("low", "medium", "high")
 # A single calibrated rate becomes a range by its confidence in the knowledge base: (low factor, high factor).
 SPREAD = {"high": (0.9, 1.1), "medium": (0.75, 1.25), "low": (0.75, 1.5)}
 MIN_PROJECTS = 3  # delivered projects on the platform before an estimate may be more than low-confidence
+READING_NOTE_FROM = 5  # lines with a range, from which the estimate explains what the ends of its total mean
 CLOSED = ("resolved", "wont-fix")
 
 
@@ -439,6 +440,15 @@ def compute(est, project, kdir):
     if not reasons:
         reasons.append("The rates are calibrated, the count comes from the spec and no high-severity question is open.")
 
+    # How to read the total. It adds every low end and every high end, so its two ends are the cases where
+    # every line lands low or every line lands high. No narrower figure is given (an estimate here is never a
+    # midpoint or a "most likely" number); with many lines the reader is told what the ends mean.
+    independent = [l for l in lines if l["priced"] and not l["pct"] and l["high"] > l["low"]]
+    reading = (f"The total adds the low end of every line and the high end of every line. With {len(independent)} lines that "
+               "each have a range, all of them landing low, or all of them landing high, is unlikely: expect the outcome "
+               "inside the range, not at either end. The range is not narrowed for that; watch the widest lines instead."
+               if len(independent) >= READING_NOTE_FROM else "")
+
     used = sorted({l["block"] for l in lines if l["kind"] == "block"})
     no_rate = [b for b in used if not (blocks.get(b) and blocks[b]["rate"])]
     return {
@@ -447,7 +457,7 @@ def compute(est, project, kdir):
         "total": (low, high), "risk": (risk_low, risk_high), "confidence": level, "reasons": reasons,
         "projects_logged": sorted(on_platform), "platform_known": bool(blocks), "platforms": platforms,
         "blocks": blocks, "blocks_used": used, "blocks_without_rate": no_rate, "register_flagged": flagged,
-        "uncalibrated_share": share, "unpriced": unpriced, "other_work": other_work,
+        "uncalibrated_share": share, "unpriced": unpriced, "other_work": other_work, "reading": reading,
     }, errors
 
 
@@ -588,6 +598,8 @@ def render_xlsx(est, res, out):
     u = wb.create_sheet("Uncertainty")
     rows = [["Confidence", "", res["confidence"].capitalize(), "", "", ""]]
     rows += [["Why", "", r, "", "", ""] for r in res["reasons"]]
+    if res["reading"]:
+        rows.append(["How to read the total", "", res["reading"], "", "", ""])
     rows += [["Open question, sized" if r["sized"] else "Open question, not sized", r["id"], r["item"],
               r["low"] if r["sized"] else "", r["high"] if r["sized"] else "", r.get("note", "")] for r in res["risks"]]
     rows += [["Line not priced", l["id"], l["item"], "", "", l["rate_from"]] for l in res["unpriced"]]
@@ -790,6 +802,8 @@ def cmd_render(a):
         print(f"  Building blocks: {rng(*res['build'])}")
         print(f"  Other work:      {rng(*res['other'])}")
         print(f"  Total{' of the priced lines' if unpriced else ''}: {rng(low, high)}")
+        if res["reading"]:
+            print(f"    {res['reading']}")
         if any(r["sized"] for r in res["risks"]):
             print(f"  With open questions answered the costly way: up to {num(high + res['risk'][1])} MD")
     if unpriced:

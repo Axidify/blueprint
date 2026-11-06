@@ -104,8 +104,9 @@ Called by `mockup.py screenshots`; you don't run it directly. Drives the install
   1200 or 1440 pixels wide instead, and the command says so; its text prints smaller.
 - **Height.** Each screenshot is cropped to its content, with no minimum: a list with one row is a short
   picture. The login card and an open dialog are centred with space around them.
-- **Sharpness.** Pictures have twice the pixels of the screen. The Word file keeps them whole; Word's PDF
-  export reduces every picture to about 200 dots per inch.
+- **Sharpness.** Pictures have twice the pixels of the screen. The Word file keeps them whole. Word's PDF
+  export reduces every picture to about 200 dots per inch, so the document generator puts the originals
+  back into the PDF afterwards.
 
 ### generate_requirements.py
 
@@ -127,6 +128,9 @@ writes a PDF.
   version) does not count as a change.
 - **The PDF always matches the Word file.** A PDF from an earlier run is removed before the new document
   is written. If the PDF or the document is open in another program, the run stops and says so.
+- **Pictures in the PDF are full size.** After Word has exported the PDF, each figure in it is replaced by
+  the file it was made from. If the pictures in the PDF cannot be matched one for one with the figures,
+  the PDF is left as Word made it; the last line of the run says how many were replaced.
 - **Notes** are printed for things worth knowing that do not hold a version back: a spec with no status
   rules, no integration details or no formulas for its figures, and screens no requirement refers to.
   Warnings do hold it back.

@@ -1423,3 +1423,87 @@ def test_a_roles_introduction_stays_with_the_list_under_it(wide):
     intro = next(b for b in blocks if hasattr(b, "text") and b.text.startswith("Books equipment and returns it."))
     assert intro.paragraph_format.keep_with_next is True
 
+
+# ====================================================================== pictures in the PDF
+def test_the_pdf_gets_its_pictures_back_at_full_size(tmp_path):
+    """Word's PDF export reduces every picture to about 200 dots per inch. After it, each figure in the PDF
+    is replaced by the file it was made from. On a hand-made PDF: two wide figures and a small logo."""
+    pymupdf = pytest.importorskip("pymupdf")
+    from PIL import Image
+
+    def picture(name, size, colour):
+        path = tmp_path / name
+        Image.new("RGBA", size, colour).save(path)
+        return path
+
+    originals = [picture("one.png", (2000, 1000), "#336699"), picture("two.png", (2000, 500), "#993333")]
+    reduced = [picture("one-small.png", (400, 200), "#336699"), picture("two-small.png", (400, 100), "#993333")]
+    logo = picture("logo.png", (300, 100), "#000000")
+    pdf = tmp_path / "doc.pdf"
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.insert_image(pymupdf.Rect(40, 40, 110, 63), filename=str(logo))            # 2.5 cm wide: not a figure
+    page.insert_image(pymupdf.Rect(90, 100, 498, 304), filename=str(reduced[0]))    # 14.4 cm wide
+    page = doc.new_page()
+    page.insert_image(pymupdf.Rect(90, 100, 498, 202), filename=str(reduced[1]))
+    doc.save(str(pdf))
+    doc.close()
+
+    assert generate_requirements.sharpen_pdf_pictures(pdf, originals) == 2
+    doc = pymupdf.open(str(pdf))
+    widths = [{img[2] for img in page.get_images(full=True)} for page in doc]
+    doc.close()
+    assert widths == [{300, 2000}, {2000}], "the figures are full size, the logo is as it was, no reduced picture is left"
+
+
+def test_pictures_that_cannot_be_matched_are_left_alone(tmp_path):
+    pymupdf = pytest.importorskip("pymupdf")
+    from PIL import Image
+
+    small, big, other = tmp_path / "small.png", tmp_path / "big.png", tmp_path / "other-shape.png"
+    Image.new("RGB", (400, 200), "#336699").save(small)
+    Image.new("RGB", (2000, 1000), "#336699").save(big)
+    Image.new("RGB", (2000, 2000), "#336699").save(other)
+    pdf = tmp_path / "doc.pdf"
+    doc = pymupdf.open()
+    doc.new_page().insert_image(pymupdf.Rect(90, 100, 498, 304), filename=str(small))
+    doc.save(str(pdf))
+    doc.close()
+    before = pdf.read_bytes()
+    assert generate_requirements.sharpen_pdf_pictures(pdf, [big, big]) == 0, "two figures expected, one in the PDF"
+    assert generate_requirements.sharpen_pdf_pictures(pdf, [other]) == 0, "a picture of another shape would be the wrong one"
+    assert generate_requirements.sharpen_pdf_pictures(pdf, [small]) == 0, "nothing to gain from a picture that is no larger"
+    assert pdf.read_bytes() == before
+
+
+def test_every_figure_is_remembered_for_the_pdf(example):
+    assert "8 figures" in example.log  # each of them a file the PDF step can put back
+
+
+# ====================================================================== the standard wording
+BOILERPLATE = yaml.safe_load((support.ROOT / "templates" / "document-boilerplate.yaml").read_text(encoding="utf-8"))
+
+
+def test_the_default_wording_is_short_and_says_each_thing_once(example):
+    """It ran to twelve paragraphs that said twice that screens may be refined and that the client
+    acknowledges the document, and never said the signed document is the basis for acceptance."""
+    assert [len(BOILERPLATE[k]) for k in ("disclaimer", "confidentiality", "concept", "signoff")] == [1, 1, 1, 4]
+    words = sum(len(p.split()) for k in ("disclaimer", "confidentiality", "concept", "signoff") for p in BOILERPLATE[k])
+    assert words < 240
+    everything = " ".join(p for k in ("disclaimer", "confidentiality", "concept", "signoff") for p in BOILERPLATE[k])
+    assert everything.count("refined") == 1 and "basis for development and for acceptance testing" in everything
+    assert "change request" in everything
+    signoff = support.paragraphs(chapter(example.doc, TITLES["signoff"]))
+    assert signoff[0] == ("By signing, the client confirms that this document, the Leave Request System – Requirements Specification, "
+                          "describes the requirements agreed for the system. It is the basis for development and for acceptance testing.")
+
+
+def test_a_company_wording_file_without_the_newer_entries_still_works(temp_workspace, tmp_path):
+    """A company's own wording file replaces the default as a whole. One written before the scope chapter
+    and the decisions-made list existed has no intro for them: the built-in sentence is used."""
+    old = {k: v for k, v in BOILERPLATE.items() if k not in ("scope_intro", "decisions_made_intro")}
+    (temp_workspace / "branding").mkdir()
+    (temp_workspace / "branding" / "document-boilerplate.yaml").write_text(yaml.safe_dump(old, allow_unicode=True), encoding="utf-8")
+    result = support.generate(support.make_project(tmp_path / "old-wording"))
+    assert support.paragraphs(chapter(result.doc, TITLES["scope"]))[0].startswith("What this version of Leave Request System covers")
+
