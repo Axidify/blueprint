@@ -153,8 +153,8 @@ def test_internal_items_never_reach_the_client_sheet(workbook):
 
 def test_client_sheet_is_what_the_ba_sends(workbook):
     client = sheet_rows(workbook["For client"])
-    assert client[0] == ["ID", "Severity", "Reference", "Observation", "Question for client", "Our recommendation",
-                         "Client response", "Status", "Raised"]
+    assert client[0] == ["ID", "Severity", "Document", "Where", "Observation", "Question for client",
+                         "Our recommendation", "Client response", "Status", "Raised"]
     first = dict(zip(client[0], client[1]))
     assert first["Severity"] == "High"
     assert first["Question for client"] == "May two people book the same equipment for overlapping dates?"
@@ -572,3 +572,32 @@ def test_new_commands_show_the_usage_when_misused(project, monkeypatch, args):
         register.main()
     assert "register.py add" in str(stop.value)
 
+
+# ---------------------------------------------------------------- readable references
+@pytest.mark.parametrize("source, document, where", [
+    ("SRS v1.0 Appendix A item 4 (p82); Figure 5 (p30); Figure 8 T&Cs (p36)",
+     "SRS v1.0", "Appendix A item 4 · page 82\nFigure 5 · page 30\nFigure 8 T&Cs · page 36"),
+    ("SRS v1.0 §2.1/§2.2 Loan Request Form; FR-LR-001",
+     "SRS v1.0", "Section 2.1, Section 2.2 Loan Request Form\nFR-LR-001"),
+    ("SRS v1.0 §1.5.1 row 2 (p9-10); 4.3.1 (p31)",
+     "SRS v1.0", "Section 1.5.1 row 2 · pages 9–10\nSection 4.3.1 · page 31"),
+    ("SRS v1.0 Figure 8 (4.6 T&Cs, p36)", "SRS v1.0", "Figure 8 (4.6 T&Cs) · page 36"),
+    ("URS draft v0.3 section 4 (pp. 12-14)", "URS draft v0.3", "Section 4 · pages 12–14"),
+    ("Mock-up v0.1 FB-001, New Loan Request, Estimated Repair Days",
+     "Mock-up v0.1", "comment FB-001, New Loan Request, Estimated Repair Days"),
+    ("v1.0 §3.2 FR-REQ-003.1", "v1.0", "Section 3.2 FR-REQ-003.1"),
+    ("Figure 2", "", "Figure 2"),
+    ("Word draft, heading 'Approvals'", "", "Word draft, heading 'Approvals'"),
+])
+def test_a_reference_reads_as_the_document_and_each_place_on_its_own_line(source, document, where):
+    """The Excel file shows where an item was found as the document, said once, and each place on a line of
+    its own in plain words; a note in a style the rules do not know is shown as it is."""
+    assert register.readable_reference(source) == (document, where)
+
+
+def test_a_long_quote_in_a_reference_is_shortened_and_the_columns_replace_the_old_one(workbook):
+    _, where = register.readable_reference("SRS v1.0 §2.1 'Customer Information to be retrieved from 3 In 1'; Figure 5 (p30)")
+    assert where.split("\n")[0] == "Section 2.1 'Customer Information to be ret…'"
+    for name in ("For client", "Internal fixes", "All items"):
+        header = sheet_rows(workbook[name])[0]
+        assert "Reference" not in header and header.index("Where") == header.index("Document") + 1

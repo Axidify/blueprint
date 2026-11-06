@@ -15,6 +15,11 @@ client. The skills keep both up to date.
 
 Open items come first, then by severity. The Status column has a drop-down.
 
+Where each item was found shows in two columns: **Document** (the document and its version, such as
+"SRS v1.0", said once) and **Where** (each place on a line of its own, in plain words: "Section 2.1",
+"Figure 5 · page 30", "comment FB-001"). They are written from the item's `source`, which
+`register.json` keeps as it was noted; a note in a style Blueprint does not recognise is shown as it is.
+
 Internal fixes never appear on the client sheet.
 
 ## Statuses
@@ -71,7 +76,7 @@ the Excel file afterwards.
 | `severity` | `high`, `medium`, `low` |
 | `category` | A gap pattern ID such as `GP-02`, or a short label such as `consistency`, `hygiene`, `scope`, `generator` |
 | `stage` | `sow`, `workshop-1`, `mockup`, `workshop-2`, `requirements-draft`, `requirements-final` (found in a document the client already signed: a possible change request), `development`, `uat` |
-| `source` | Where it was found: section, requirement ID, page or figure |
+| `source` | Where it was found: the document and version, then each place (section, requirement ID, page or figure) separated by `;`, e.g. `SRS v1.0 §2.1 (p12); Figure 5 (p30)` |
 | `finding` | What is wrong or missing, stated as fact |
 | `question` | For client items: the question in plain business language |
 | `recommendation` | Optional: your suggested answer or fix |

@@ -93,6 +93,40 @@ def text(value):
     return "" if value is None else str(value).strip()
 
 
+# ---------------------------------------------------------------- readable references
+# An item's `source` is the reviewer's note of where something was found, in shorthand: "SRS v1.0 §2.1/§2.2
+# Loan Request Form; 4.3.1 (p31); Figure 5 (p30)". The Excel file shows it as the document, said once, and
+# each place on a line of its own in plain words: "Section 2.1, Section 2.2 Loan Request Form", "Section
+# 4.3.1 · page 31". register.json keeps the note as written; a note in a style these rules do not know is
+# shown as it is.
+DOC_NAME = re.compile(r"^((?:[A-Za-z][\w&\- ]{0,30}?\s)?v\d+(?:\.\d+)*)(?=[\s,;:]|$)")
+
+
+def readable_place(part):
+    p = part.strip().strip(",")
+    p = re.sub(r"\(\s*pp?\.?\s*(\d+)\s*[-–]\s*(\d+)\s*\)", r"· pages \1–\2", p)
+    p = re.sub(r"\(\s*pp?\.?\s*(\d+)\s*\)", r"· page \1", p)
+    p = re.sub(r"\bpp?\.?\s?(\d+)\s*[-–]\s*(\d+)\b", r"pages \1–\2", p)
+    p = re.sub(r"\bp\.?\s?(\d+)\b", r"page \1", p)
+    p = re.sub(r"\(([^()]*?),\s*page (\d+)\)", r"(\1) · page \2", p)
+    p = re.sub(r"§\s*", "Section ", p)
+    p = re.sub(r"\bsection\b", "Section", p)
+    p = re.sub(r"\s*/\s*(?=Section )", ", ", p)
+    p = re.sub(r"^(\d+(?:\.\d+)+[a-z]?)\b", r"Section \1", p)
+    p = re.sub(r"(?<!comment )\b(FB-\d+)\b", r"comment \1", p)
+    p = re.sub(r"'([^']{30})[^']{8,}'", r"'\1…'", p)
+    return re.sub(r"\s{2,}", " ", p).strip()
+
+
+def readable_reference(source):
+    """(document, places on separate lines) for the Excel file, from an item's `source` note."""
+    src = text(source)
+    m = DOC_NAME.match(src)
+    doc, rest = (m.group(1).strip(), src[m.end():]) if m else ("", src)
+    places = [readable_place(x) for x in re.split(r"\s*;\s*", rest) if x.strip(" ,")]
+    return doc, "\n".join(places)
+
+
 def excel_edits(project, reg, path=None):
     """What was typed into register.xlsx (or the returned copy at `path`) since it was written:
     ({(id, field): value}, conflicts).
@@ -476,20 +510,22 @@ def render(project, reg, overwrite=False, returned=None):
             dv.add(f"{get_column_letter(col)}2:{get_column_letter(col)}{len(rows) + 1}")
 
     cap = lambda k: (lambda it: (it.get(k) or "").capitalize())
+    doc_of = lambda it: readable_reference(it.get("source"))[0]
+    where_of = lambda it: readable_reference(it.get("source"))[1]
     client_cols = [
-        ("ID", 8, "id"), ("Severity", 10, cap("severity")), ("Reference", 26, "source"),
+        ("ID", 8, "id"), ("Severity", 10, cap("severity")), ("Document", 12, doc_of), ("Where", 34, where_of),
         ("Observation", 55, "finding"), ("Question for client", 55, "question"),
         ("Our recommendation", 40, "recommendation"), ("Client response", 45, "answer"),
         ("Status", 12, "status"), ("Raised", 12, "raised"),
     ]
     internal_cols = [
         ("ID", 8, "id"), ("Severity", 10, cap("severity")), ("Type", 13, "type"), ("Category", 12, "category"),
-        ("Reference", 26, "source"), ("Finding", 60, "finding"), ("Fix / recommendation", 50, "recommendation"),
-        ("Effort impact", 12, "effort_impact"), ("Status", 12, "status"), ("Raised", 12, "raised"),
+        ("Document", 12, doc_of), ("Where", 34, where_of), ("Finding", 60, "finding"),
+        ("Fix / recommendation", 50, "recommendation"), ("Effort impact", 12, "effort_impact"), ("Status", 12, "status"),
+        ("Raised", 12, "raised"),
     ]
-    all_cols = internal_cols[:5] + [("Audience", 11, "audience"), ("Stage", 12, "stage")] + internal_cols[5:6] + [
-        ("Question for client", 50, "question")] + internal_cols[6:] + [("Answer / decision", 40, "answer"),
-                                                                         ("Resolved in", 16, "resolved_in")]
+    finding_at = next(i for i, c in enumerate(internal_cols) if c[0] == "Finding")
+    all_cols = internal_cols[:finding_at] + [("Audience", 11, "audience"), ("Stage", 12, "stage")] +         internal_cols[finding_at:finding_at + 1] + [("Question for client", 50, "question")] +         internal_cols[finding_at + 1:] + [("Answer / decision", 40, "answer"), ("Resolved in", 16, "resolved_in")]
 
     wb = Workbook()
     ws = wb.active

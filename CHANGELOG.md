@@ -202,6 +202,10 @@ See [docs/maintaining.md](docs/maintaining.md).
 - **Versions kept at a live session read "v1.4 as presented 6 Nov 19:00"** on the page that lists every
   mock-up, which also explains in plain words how to let the room comment.
 - **In a live session each comment is finished with its own note.**
+- **Where a register item was found is easy to read.** The register's Excel file replaces the Reference
+  column with **Document** ("SRS v1.0", said once) and **Where**: each place on a line of its own, in plain
+  words ("Section 2.1", "Figure 5 · page 30", "comment FB-001") instead of the reviewer's shorthand
+  ("§2.1/§2.2", "(p30)"). `register.json` keeps the note as written.
 - **The estimate's Excel file is easier to read and prints properly.** It opens on a one-page **Overview**
   that says the answer in one sentence (the likely effort, or that the build is not priced yet), with each
   figure explained on its own row, the confidence, and what to do next. The **Lines** sheet groups the
