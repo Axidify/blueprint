@@ -1,12 +1,13 @@
 # Blueprint
 
+![Tests](https://github.com/Axidify/blueprint/actions/workflows/tests.yml/badge.svg)
 ![Docs and changelog](https://github.com/Axidify/blueprint/actions/workflows/docs.yml/badge.svg)
 
 Blueprint helps a delivery team get requirements right before anything is built. It reviews requirement
 documents for gaps, builds clickable mock-ups to present to clients, collects their feedback, generates
 the requirements document with screenshots, and learns from every project's change requests.
 
-You use it by talking to Claude Code. There are no commands to learn.
+You use it by talking to Claude Code. There are no commands to learn. It runs on Windows and on a Mac.
 
 https://github.com/user-attachments/assets/94a044d1-73c5-4213-94d9-ca1990de57b6
 
@@ -15,10 +16,12 @@ https://github.com/user-attachments/assets/94a044d1-73c5-4213-94d9-ca1990de57b6
 ## Get started (5 minutes)
 
 1. **Install** [Claude Code](https://claude.com/claude-code), [Python 3.12](https://www.python.org/downloads/)
-   (tick "Add python.exe to PATH") and [Node.js LTS](https://nodejs.org/). Microsoft Edge is needed for
-   screenshots; Microsoft Word is optional (it updates the table of contents and makes PDFs).
-2. **Clone** this repository and **double-click `setup.cmd`**. It installs everything else and checks your
-   machine. Run it again any time something looks wrong.
+   (on Windows tick "Add python.exe to PATH") and [Node.js LTS](https://nodejs.org/). Microsoft Edge or
+   Google Chrome is needed for screenshots; Microsoft Word is optional (on Windows it updates the table of
+   contents and makes PDFs).
+2. **Clone** this repository and **double-click `setup.cmd`** (on a Mac: `setup.command`, or run
+   `./setup.sh`). It installs everything else and checks your machine. Run it again any time something
+   looks wrong.
 3. **Open the folder in Claude Code** and type **`/start`**.
 
 ## What you can ask for
@@ -31,9 +34,11 @@ Type it in your own words, for example:
 - "Apply the feedback from today's session"
 - "Generate the requirements document"
 - "Estimate the mandays for this project"
+- "Make our documents look like our house style" (colours, fonts, table headers, chapter order)
 - "Process my inbox"
 
-To present a mock-up in a meeting, double-click **`present.cmd`** and pick the project. Press **Feedback**
+To present a mock-up in a meeting, double-click **`present.cmd`** (on a Mac: **`present.command`**) and pick
+the project. Press **Feedback**
 in the bottom-right corner, click anything on the screen and type a comment. Comments are saved
 automatically.
 
@@ -56,7 +61,8 @@ folder (OneDrive or SharePoint) and set its path in `.blueprint-local.json`:
 { "workspace_dir": "C:\\Users\\you\\OneDrive - YourCo\\Blueprint Workspace" }
 ```
 
-then run `setup.cmd` again.
+then run `setup.cmd` again (on a Mac: `./setup.sh`, with a path such as
+`"/Users/you/Library/CloudStorage/OneDrive-YourCo/Blueprint Workspace"`).
 
 The workspace is never committed to git: it holds client documents.
 
@@ -65,7 +71,8 @@ The workspace is never committed to git: it holds client documents.
 Full documentation is in **[docs/](docs/README.md)**: [getting started](docs/getting-started.md),
 [workflow](docs/workflow.md), [skills](docs/skills.md), [the register](docs/register.md),
 [workspace and company profile](docs/workspace.md), [spec format](docs/spec-format.md),
-[tools](docs/tools.md), [troubleshooting](docs/troubleshooting.md). What changed in each version is in the
+[document format](docs/document-format.md), [estimates](docs/estimates.md), [tools](docs/tools.md),
+[troubleshooting](docs/troubleshooting.md). What changed in each version is in the
 **[changelog](CHANGELOG.md)**.
 
 ## For maintainers

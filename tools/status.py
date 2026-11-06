@@ -5,6 +5,7 @@ Usage:
     python -I tools/status.py --brief    short version (used by the start-up hook)
 """
 import json
+import os
 import sys
 from collections import Counter
 from pathlib import Path
@@ -49,7 +50,8 @@ def next_step(s):
     if s.get("feedback_unprocessed"):
         return f"{s['feedback_unprocessed']} mock-up comments not processed yet: say 'apply the feedback'"
     if s.get("spec_version") and not s.get("latest_doc"):
-        return "mock-up exists: present it (present.cmd) or say 'generate the requirements document'"
+        present = "present.cmd" if os.name == "nt" else "./present.sh"
+        return f"mock-up exists: present it ({present}) or say 'generate the requirements document'"
     if not s.get("spec_version") and s.get("docs"):
         return "documents in docs/: say 'review the requirements document' or 'build a mock-up'"
     if s.get("client_open"):

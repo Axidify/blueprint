@@ -35,7 +35,20 @@
       "Bash(python -I tools/check_docs.py *)",
       "Bash(python -I tools/check_docs.py)",
       "PowerShell(python -I tools/check_docs.py *)",
-      "PowerShell(python -I tools/check_docs.py)"
+      "PowerShell(python -I tools/check_docs.py)",
+      "Bash(.venv/bin/python -I tools/extract.py *)",
+      "Bash(.venv/bin/python -I tools/register.py *)",
+      "Bash(.venv/bin/python -I tools/mockup.py *)",
+      "Bash(.venv/bin/python -I tools/generate_requirements.py *)",
+      "Bash(.venv/bin/python -I tools/status.py *)",
+      "Bash(.venv/bin/python -I tools/status.py)",
+      "Bash(.venv/bin/python -I tools/doctor.py)",
+      "Bash(.venv/bin/python -I tools/new_project.py *)",
+      "Bash(.venv/bin/python -I tools/project.py *)",
+      "Bash(.venv/bin/python -I tools/document_format.py *)",
+      "Bash(.venv/bin/python -I tools/estimate.py *)",
+      "Bash(.venv/bin/python -I tools/check_docs.py *)",
+      "Bash(.venv/bin/python -I tools/check_docs.py)"
     ]
   },
   "hooks": {
@@ -44,7 +57,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python -I -c \"import os,sys,runpy;f=os.path.join(os.environ.get('CLAUDE_PROJECT_DIR') or os.getcwd(),'tools','status.py');sys.argv=[f,'--brief'];runpy.run_path(f,run_name='__main__') if os.path.exists(f) else sys.exit(0)\"",
+            "command": "node -e \"const p=require('path'),fs=require('fs'),cp=require('child_process');const r=process.env.CLAUDE_PROJECT_DIR||process.cwd();const f=p.join(r,'tools','status.py');if(!fs.existsSync(f))process.exit(0);const w=process.platform==='win32';const v=p.join(r,'.venv',w?'Scripts':'bin',w?'python.exe':'python');const py=process.env.BLUEPRINT_PYTHON||(fs.existsSync(v)?v:(w?'python':'python3'));const x=cp.spawnSync(py,['-I',f,'--brief'],{stdio:'inherit'});process.exit(x.status===null?1:x.status)\"",
             "timeout": 30,
             "statusMessage": "Loading Blueprint status"
           }
@@ -58,7 +71,7 @@
           {
             "type": "command",
             "if": "Bash(git commit*)",
-            "command": "python -I -c \"import os,sys,runpy;f=os.path.join(os.environ.get('CLAUDE_PROJECT_DIR') or os.getcwd(),'tools','check_docs.py');sys.argv=[f,'--hook'];runpy.run_path(f,run_name='__main__') if os.path.exists(f) else sys.exit(0)\"",
+            "command": "node -e \"const p=require('path'),fs=require('fs'),cp=require('child_process');const r=process.env.CLAUDE_PROJECT_DIR||process.cwd();const f=p.join(r,'tools','check_docs.py');if(!fs.existsSync(f))process.exit(0);const w=process.platform==='win32';const v=p.join(r,'.venv',w?'Scripts':'bin',w?'python.exe':'python');const py=process.env.BLUEPRINT_PYTHON||(fs.existsSync(v)?v:(w?'python':'python3'));const x=cp.spawnSync(py,['-I',f,'--hook'],{stdio:'inherit'});process.exit(x.status===null?1:x.status)\"",
             "timeout": 60,
             "statusMessage": "Checking docs and changelog"
           }
@@ -70,7 +83,7 @@
           {
             "type": "command",
             "if": "PowerShell(git commit*)",
-            "command": "python -I -c \"import os,sys,runpy;f=os.path.join(os.environ.get('CLAUDE_PROJECT_DIR') or os.getcwd(),'tools','check_docs.py');sys.argv=[f,'--hook'];runpy.run_path(f,run_name='__main__') if os.path.exists(f) else sys.exit(0)\"",
+            "command": "node -e \"const p=require('path'),fs=require('fs'),cp=require('child_process');const r=process.env.CLAUDE_PROJECT_DIR||process.cwd();const f=p.join(r,'tools','check_docs.py');if(!fs.existsSync(f))process.exit(0);const w=process.platform==='win32';const v=p.join(r,'.venv',w?'Scripts':'bin',w?'python.exe':'python');const py=process.env.BLUEPRINT_PYTHON||(fs.existsSync(v)?v:(w?'python':'python3'));const x=cp.spawnSync(py,['-I',f,'--hook'],{stdio:'inherit'});process.exit(x.status===null?1:x.status)\"",
             "timeout": 60,
             "statusMessage": "Checking docs and changelog"
           }

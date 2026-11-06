@@ -12,6 +12,13 @@ See [docs/maintaining.md](docs/maintaining.md).
 ## [Unreleased]
 
 ### Added
+- **Blueprint runs on a Mac.** Run `./setup.sh` (or double-click `setup.command`) to set up, and
+  `./present.sh <project>` (or `present.command`) to present a mock-up. Setup keeps Blueprint's Python
+  packages in a folder of its own (`.venv`), installs the fonts for your user and links the workspace, as
+  on Windows. Screenshots use Microsoft Edge, or Google Chrome when Edge is not installed (on Windows
+  too). The machine check knows where things are on a Mac. One step stays manual there: Word for Mac
+  cannot be driven by Blueprint, so you update the table of contents and save the PDF yourself, and the
+  PDF's signing fields are added on Windows only. Linux works the same way as a Mac.
 - **Status rules in the document.** Each status in the spec can now say who may edit, cancel or delete a
   record while it is in that status, and which statuses it can move to (`edit`, `cancel`, `delete`,
   `next`). The document prints them as a "Status rules" table under the statuses. A rule you have not
@@ -24,6 +31,16 @@ See [docs/maintaining.md](docs/maintaining.md).
   in the document under "Decisions made", with the answer and where it was agreed. Until now a question
   vanished from the document once it was answered, so the client's answers were on record only in the
   register. Internal items and unanswered ones still never reach the document.
+
+### Changed
+- **Windows: Node.js is now needed for Blueprint's checks in Claude Code**, not only for screenshots. The
+  status shown when a session starts and the check before a commit are started through Node, so the same
+  settings work on Windows and on a Mac. Setup already asks for Node.js; run `setup.cmd` if the machine
+  check says it is missing.
+
+### Fixed
+- One of the estimate tests failed with the newest version of the test runner, so the test run on GitHub
+  had been red since 0.6.0. The test is corrected; nothing in the estimate tool changed.
 
 ## [0.7.0] - 2026-11-06
 

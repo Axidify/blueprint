@@ -17,7 +17,7 @@ Blueprint is split in two:
 | `inbox/` | Files waiting to be sorted |
 
 `projects/`, `knowledge/` and `inbox/` also appear in the app folder: they are links into the workspace,
-made by `setup.cmd`, so you can work with them as if they were ordinary folders.
+made by `setup.cmd` (`setup.sh` on a Mac), so you can work with them as if they were ordinary folders.
 
 The workspace is `workspace/` inside the app folder unless you point it elsewhere (see below). On first
 setup it is created from `templates/`: a placeholder company profile and a starter knowledge base.

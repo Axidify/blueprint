@@ -674,8 +674,11 @@ def test_starter_knowledge_base_sets_no_figures():
 def test_sample_is_priced_where_the_knowledge_base_has_rates(rated):
     res = work_out(rated, sample())
     priced = {l["id"]: (l["low"], l["high"]) for l in res["lines"] if l["priced"]}
-    assert priced == pytest.approx({"L01": (3, 5), "L02": (2, 4), "L03": (2, 4), "L04": (3, 6), "L08": (2, 4),
-                                    "L11": (1.5, 3), "L13": (2.7, 7.8)})
+    expected = {"L01": (3, 5), "L02": (2, 4), "L03": (2, 4), "L04": (3, 6), "L08": (2, 4), "L11": (1.5, 3), "L13": (2.7, 7.8)}
+    # Line by line: newer pytest versions refuse approx() on a dictionary whose values are pairs.
+    assert sorted(priced) == sorted(expected)
+    for line, pair in expected.items():
+        assert priced[line] == pytest.approx(pair), line
     assert [l["id"] for l in res["unpriced"]] == ["L05", "L06", "L07", "L09", "L10", "L12"]
     assert res["build"] == (13.5, 26) and res["total"] == pytest.approx((16.2, 33.8))
     assert res["confidence"] == "low" and len(res["reasons"]) == 2, "no delivered project, and lines not priced"

@@ -80,7 +80,9 @@ Planned: `prep-workshop`, `price-cr`, a Figma connection.
 
 ## Tools
 
-Run Python scripts with `python -I tools/<script>.py`: `doctor.py` (machine check), `status.py`
+Run Python scripts with `python -I tools/<script>.py` (on macOS and Linux: `.venv/bin/python -I
+tools/<script>.py`, the environment `setup.sh` makes; wherever these instructions and the skills write
+`python`, use that, and `./setup.sh` and `./present.sh` for `setup.cmd` and `present.cmd`): `doctor.py` (machine check), `status.py`
 (projects and next steps), `new_project.py`, `extract.py` (documents to text and images), `register.py`
 (register validation and Excel), `mockup.py` (build, serve, screenshot, feedback), `generate_requirements.py`,
 `document_format.py` (show, learn, preview the document format), `project.py` (issue, file, archive, check),

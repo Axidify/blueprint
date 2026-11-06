@@ -11,7 +11,7 @@ paths unless they need one.
 ## 1. Check the machine
 
 Run `python -I tools/doctor.py`. If anything required is MISSING, explain the fix in one or two plain
-sentences (usually "double-click setup.cmd") and stop there.
+sentences (usually "double-click setup.cmd", or on a Mac "run ./setup.sh") and stop there.
 
 If the company profile is still the placeholder ("Your Company"), ask for the company name and short name
 and write them into `workspace/company.yaml`. Mention that a logo (`workspace/branding/logo.png`), a Word

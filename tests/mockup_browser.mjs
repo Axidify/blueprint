@@ -5,11 +5,17 @@
 import { chromium } from "playwright-core";
 
 const base = process.argv[2];
-let browser;
-try {
-  browser = await chromium.launch({ channel: "msedge", headless: true });
-} catch (e) {
-  console.error(String(e));
+let browser, failure;
+for (const channel of ["msedge", "chrome"]) {  // as tools/screenshot.mjs: Edge, or Chrome where there is no Edge
+  try {
+    browser = await chromium.launch({ channel, headless: true });
+    break;
+  } catch (e) {
+    failure = failure || e;
+  }
+}
+if (!browser) {
+  console.error(String(failure));
   process.exit(77);
 }
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });

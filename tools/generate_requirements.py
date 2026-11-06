@@ -1621,7 +1621,11 @@ def build(project):
         strip_markers(out)
     except PermissionError:
         print(f"  {out.name} is still held open by Word: close Word before opening or regenerating it.")
-    if why == NO_WORD:
+    if why == NO_WORD and sys.platform == "darwin":
+        # Word for Mac cannot be driven the way Word for Windows can, so the last step is by hand there.
+        print("  Word not available to Blueprint on a Mac: open the file in Word, click the table of contents and choose "
+              "Update Table, then File > Save As and pick PDF. (The PDF's signing fields are added on Windows only.)")
+    elif why == NO_WORD:
         print("  Word not available: open the file and update the table of contents (right-click > Update Field).")
     else:
         print(f"  The Word step FAILED, so there is no PDF and the table of contents is not updated: {why}")

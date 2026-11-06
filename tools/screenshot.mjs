@@ -1,4 +1,5 @@
-// Capture mock-up screenshots with the installed Microsoft Edge (no browser download needed).
+// Capture mock-up screenshots with the installed Microsoft Edge, or Google Chrome where there is no Edge
+// (no browser download needed).
 // Usage: node tools/screenshot.mjs <mockup index.html> <shots.json> <output dir>
 // Called by: python -I tools/mockup.py screenshots <project_dir>
 import { chromium } from "playwright-core";
@@ -17,11 +18,19 @@ const base = pathToFileURL(index).href;
 const WIDTHS = [1000, 1200, 1440];
 const SCALE = 2;
 
-let browser;
-try {
-  browser = await chromium.launch({ channel: "msedge", headless: true });
-} catch (e) {
-  console.error(`Microsoft Edge could not be started, so no screenshots were taken.\n${String(e).split("\n")[0]}`);
+// Edge is on every Windows machine; on a Mac or Linux it is often Chrome that is installed. Both draw the same.
+let browser, failure;
+for (const channel of ["msedge", "chrome"]) {
+  try {
+    browser = await chromium.launch({ channel, headless: true });
+    break;
+  } catch (e) {
+    failure = failure || e;
+  }
+}
+if (!browser) {
+  console.error("Neither Microsoft Edge nor Google Chrome could be started, so no screenshots were taken. Install one of them."
+    + `\n${String(failure).split("\n")[0]}`);
   process.exit(77);
 }
 const page = await browser.newPage({ viewport: { width: WIDTHS[0], height: 900 }, deviceScaleFactor: SCALE });

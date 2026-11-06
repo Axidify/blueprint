@@ -9,7 +9,8 @@ app folder, always with `python -I` (it keeps Python from loading stray files).
 python -I tools/doctor.py
 ```
 Checks Python and its packages, Node and the screenshot tool, Edge, Word (optional), the workspace, the
-company profile and the workspace links. Prints the fix for anything missing. `setup.cmd` runs it at the end.
+company profile and the workspace links. Prints the fix for anything missing. `setup.cmd` runs it at the end, as does `setup.sh` on
+macOS and Linux; it knows where the browser, Word and the fonts are on each system.
 
 ### status.py
 
@@ -56,7 +57,7 @@ python -I tools/mockup.py feedback    projects/<slug>
 ```
 Builds the mock-up from the spec (self-contained: `mockup/index.html` opens without a server), serves it
 with feedback capture, captures screenshots with Edge, or lists saved feedback by screen.
-`present.cmd` runs `serve`. See [Spec format](spec-format.md).
+`present.cmd` runs `serve` (`present.sh` on macOS and Linux). See [Spec format](spec-format.md).
 
 `screenshots` also notes which screens the pictures show (`mockup/screenshots/taken-from.json`), so the
 document generator can warn when the spec's screens have changed since.
@@ -69,7 +70,7 @@ in the Feedback panel.
 ### screenshot.mjs
 
 Called by `mockup.py screenshots`; you don't run it directly. Drives the installed Microsoft Edge through
-`playwright-core`.
+`playwright-core`, or Google Chrome where there is no Edge (common on a Mac).
 
 - **Width.** A screenshot is printed about 14 cm wide in the requirements document, so the narrower the
   window it is taken in, the larger the screen's text on paper. Each screen is taken 1000 pixels wide

@@ -1,0 +1,63 @@
+name: Other systems
+
+# The tests on macOS and Windows and on the oldest supported Python, and the whole path on a Mac: setup,
+# screenshots, a generated document and the mock-up server.
+# Not run on every push (tests.yml covers Linux there). It runs for each release tag, when started by hand
+# from the Actions tab, and for a branch whose name starts with "ci/".
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+    branches: ["ci/**"]
+
+jobs:
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: macos-latest, python: "3.12"}
+          - {os: windows-latest, python: "3.12"}
+          - {os: ubuntu-latest, python: "3.10"}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - name: Install Python packages
+        run: python -m pip install -r requirements-dev.txt
+      - name: Run the tests
+        run: python -m pytest
+
+  mac-end-to-end:
+    # Nothing faked: what a person on a Mac does, from setup to a generated document.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Set up Blueprint (setup.sh ends with the machine check)
+        run: ./setup.sh
+      - name: Take the sample project's screenshots
+        run: |
+          .venv/bin/python -I tools/mockup.py screenshots examples/leave-request
+          test "$(ls examples/leave-request/mockup/screenshots/*.png | wc -l)" -ge 8
+      - name: Generate the sample project's requirements document
+        run: |
+          .venv/bin/python -I tools/generate_requirements.py examples/leave-request | tee generate.log
+          grep -q "Word not available to Blueprint on a Mac" generate.log
+          if grep -q "WARNING" generate.log; then echo "the sample generated with warnings"; exit 1; fi
+          ls -l examples/leave-request/output/*.docx
+      - name: Present the mock-up and save a comment
+        run: |
+          ./present.sh leave-request --port 8765 > present.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://localhost:8765/ > /dev/null && break; sleep 1; done
+          curl -sf http://localhost:8765/ | grep -q 'id="app"'
+          curl -sf -X POST -H "Content-Type: application/json" -d '{"screen": "approvals", "text": "From the Mac check"}' http://localhost:8765/api/feedback
+          grep -q "From the Mac check" projects/leave-request/feedback/feedback.json
+        env:
+          BROWSER: "true"   # the server opens a browser tab; on a build machine nothing should open

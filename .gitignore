@@ -22,3 +22,6 @@ examples/*/mockup/
 examples/*/feedback/
 examples/*/output/
 examples/*/estimates/*.xlsx
+
+# Blueprint's own Python environment on macOS and Linux (made by setup.sh)
+.venv/

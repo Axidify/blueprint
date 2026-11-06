@@ -5,12 +5,13 @@
 | | Needed for | Get it |
 |---|---|---|
 | Claude Code (desktop app or command line) | Everything: you use Blueprint by talking to it | https://claude.com/claude-code |
-| Python 3.10 or newer (3.12 recommended) | All tools | https://www.python.org/downloads/ (tick "Add python.exe to PATH") |
-| Node.js LTS | Mock-up screenshots | https://nodejs.org/ |
-| Microsoft Edge | Mock-up screenshots | Already on most Windows machines |
-| Microsoft Word | Optional: updates the requirements document table of contents and makes PDFs | |
+| Python 3.10 or newer (3.12 recommended) | All tools | https://www.python.org/downloads/ (on Windows tick "Add python.exe to PATH") |
+| Node.js LTS | Mock-up screenshots, and Blueprint's checks in Claude Code | https://nodejs.org/ |
+| Microsoft Edge or Google Chrome | Mock-up screenshots | Edge is already on Windows machines; on a Mac either will do |
+| Microsoft Word | Optional. On Windows it updates the requirements document's table of contents and makes the PDF | |
 
-Blueprint is built and tested on Windows.
+Blueprint is built on Windows and also runs on macOS and Linux (see [On a Mac](#on-a-mac)). It is tested
+on all three.
 
 ## Set up
 
@@ -24,6 +25,24 @@ Blueprint is built and tested on Windows.
 3. If you are the first person in your company to use Blueprint, open `workspace/company.yaml` and put in
    your company name. If your team already has a shared workspace, see
    [Workspace and company profile](workspace.md#sharing-a-workspace-with-your-team) instead.
+
+## On a Mac
+
+Everything works as on Windows, with three differences.
+
+- **Scripts.** Where these guides say `setup.cmd` and `present.cmd`, use `./setup.sh` and
+  `./present.sh <project>` in Terminal, or double-click `setup.command` and `present.command` in Finder.
+  The first time, macOS may ask you to confirm opening a file from the internet: right-click it and
+  choose Open.
+- **Python.** Setup puts Blueprint's Python packages in a folder of its own, `.venv`, and leaves the
+  Python that came with your Mac alone. Blueprint runs its tools with it, so you never type it yourself;
+  if you do run a tool by hand, write `.venv/bin/python` where the guides write `python`.
+- **The table of contents and the PDF.** Word for Mac cannot be driven by Blueprint. After generating,
+  open the document in Word, click the table of contents and choose **Update Table**, then
+  **File > Save As** and pick PDF. The signing fields in the PDF are added on Windows only; on a Mac the
+  sign-off pages are signed by hand, or the PDF is made on a Windows machine.
+
+Linux works the same way as a Mac (without Word).
 
 ## First session
 

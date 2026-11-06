@@ -9,7 +9,12 @@ python -I tools/doctor.py
 | Problem | Fix |
 |---|---|
 | `python` is not recognised | Install Python 3.12 from python.org and tick "Add python.exe to PATH", then open a new terminal and run `setup.cmd` |
-| A Python package is MISSING | Run `setup.cmd` again |
+| A Python package is MISSING | Run `setup.cmd` again (on a Mac: `./setup.sh`) |
+| On a Mac: "permission denied" or "cannot be opened" when starting `setup.sh`, `setup.command` or the present scripts | In Terminal, in the Blueprint folder, run `chmod +x setup.sh setup.command present.sh present.command`. If macOS blocks a double-clicked `.command` file, right-click it and choose Open |
+| On a Mac: `python` is not found | Blueprint uses its own Python in `.venv`. Run `./setup.sh` once; to run a tool by hand, write `.venv/bin/python` where the guides write `python` |
+| On a Mac: no PDF, and the table of contents is empty | Word for Mac cannot be driven by Blueprint. Open the document in Word, click the table of contents, choose Update Table, then File > Save As and pick PDF |
+| Blueprint's status does not appear when a session starts, or the check before a commit does not run | Both are started through Node.js. Install Node.js LTS and run setup again |
+| Screenshots say neither Microsoft Edge nor Google Chrome could be started | Install one of them. Edge is used when both are there |
 | Screenshots fail, or "playwright-core" is missing | Install Node.js LTS, then run `setup.cmd` again. Screenshots also need Microsoft Edge |
 | `projects/`, `knowledge/` or `inbox/` is missing or not linked | Run `setup.cmd` again. This happens after moving or renaming the app folder, or changing `workspace_dir` |
 | "projects is a real folder with files in it" | Move the files into the workspace's `projects/` folder, delete the empty folder, run `setup.cmd` |
