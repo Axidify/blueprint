@@ -11,6 +11,14 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+### Changed
+- **The workbooks follow the design language:** the questions and fixes register, the UAT workbook and the CR
+  log now look like the estimate workbook. A quiet grey header row in place of white on navy, hairlines
+  instead of gridlines, cells middle-aligned (in the estimate workbook too), severity, status and test results as a dot and a coloured word that follows the word
+  when it is changed in Excel, and the cells to fill in (the client's response, the testers' results, the
+  rates the lead developer gives) as pale Cobalt fields. They print landscape, one page wide, with page
+  numbers. Only the look changed: the client's answers and the testers' results are read back as before.
+
 ## [1.1.0] - 2026-11-07
 
 ### Added

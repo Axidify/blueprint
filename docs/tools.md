@@ -509,6 +509,13 @@ copy and refuses any other folder, or a folder the tour did not make. Nothing re
 Shared helper, not run directly: finds the workspace, reads the company profile, and picks branding files
 from the workspace or the neutral templates.
 
+### sheets.py
+
+Shared helper, not run directly: the look of every Excel workbook Blueprint writes (the register, the
+estimate, the UAT workbook, the CR log), following [the design language](design-language.md#spreadsheets).
+It sets fonts, the header row, hairlines, status as a dot and a coloured word, the cells to fill in and the
+print set-up; the tools still decide the sheets, columns and values.
+
 ### layout.py
 
 ```bash
