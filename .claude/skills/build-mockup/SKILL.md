@@ -68,6 +68,11 @@ so every decision put into the spec shows up in both. Format: `docs/spec-format.
    decided, do not invent it: add a register item (`type: question`, `stage: workshop-1` or `mockup`) with
    `python -I tools/register.py add projects/<slug> --file <items.json>` (`--check` first: it names likely
    duplicates) so it goes on the BA's list, and show a sensible placeholder on the screen.
+   When there is a scope of work, list its items in the spec's `sow` (each module or feature it sells, with
+   its ref as the SOW numbers it; project activities such as workshops or testing stay on the timeline;
+   never mandays) and name on each requirement group the item it specifies (`sow: "3.2"`). An item sold that
+   the brief or notes say nothing about is not left out: give it a register question (`stage: workshop-1`),
+   so the next workshop asks how it must work.
 6. **Build everything; label custom work.** Whatever the client should see is in the mock-up. What the spec
    cannot describe (a behaviour, a layout, an interaction, an integration, faked with sample data) is built
    in the project's own mock-up code, `_blueprint/spec/mockup.js` and `mockup.css` beside it ("The project's own mock-up

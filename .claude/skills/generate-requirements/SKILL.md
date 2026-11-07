@@ -28,6 +28,10 @@ activities. An issued version is locked.
 - Every status has its rules (`edit`, `cancel`, `delete`, `next`) or a register question.
 - `scope` (`in_scope`, `out_of_scope`, `assumptions`) from the scope of work and the workshops, with what the
   client might assume is included under `out_of_scope`. If missing, draft it and show the user first.
+- `sow`: the scope of work's items, each named by the requirement groups that specify it (`sow:` on the
+  group), so the document's scope chapter shows where each item is specified. An item no requirement covers
+  holds the version back at sign-off: write its requirements, or, once the client agrees to leave it out of
+  this version, mark it `deferred` with what was agreed. A group that names no item may be a change request.
 - `timeline`: if missing, offer to draft it: one activity per SOW item (`ref`), client activities
   (`client: true`), milestones (kick-off, sign-off, development complete, UAT sign-off, go-live, end of
   warranty) with what the client must do. Durations come from the latest estimate (`estimate.py weeks`;

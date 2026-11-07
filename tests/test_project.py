@@ -487,6 +487,36 @@ def test_ready_points_at_what_to_check_before_it_goes_out(projects, run, capsys)
     assert "Not ready" not in out, "none of these stops the issue"
 
 
+def sow(spec, deferred=None):
+    """The scope of work sold a leave application, its approval and a leave balance report; the spec specifies the
+    first two."""
+    spec["sow"] = {"source": "1 Client documents/2026-01-05 Scope of work.pdf", "items": [
+        {"ref": "1", "item": "Leave application"}, {"ref": "2", "item": "Approval"},
+        {"ref": "3", "item": "Leave balance report", **({"deferred": deferred} if deferred else {})}]}
+    spec["requirements"][0]["sow"] = "1"
+    spec["requirements"][1]["sow"] = ["2"]
+
+
+def test_ready_stops_when_something_the_scope_of_work_sold_is_not_specified(projects, run, capsys):
+    """An end-to-end test signed off a requirements document that covered six of the fourteen modules sold."""
+    p = new_project(projects)
+    with_items(p, [], sow)
+    with pytest.raises(SystemExit):
+        run("ready", "leave-request")
+    out = capsys.readouterr().out
+    assert 'Scope of work item 3 "Leave balance report" has no requirement.' in out
+    assert "FR-APP-003 names no scope of work item" in out, "a requirement nothing sold may be a change request"
+    with_items(p, [], lambda spec: sow(spec, deferred="Phase 2, agreed in workshop 2"))
+    out = run("ready", "leave-request")
+    assert "Scope of work item" not in out, "an item left out with the client's agreement is accounted for"
+
+
+def test_ready_asks_for_the_scope_of_work_when_the_spec_has_none(projects, run):
+    p = new_project(projects)
+    with_items(p, [])
+    assert "The spec lists no scope of work items (sow)" in run("ready", "leave-request")
+
+
 def test_a_list_of_choices_keeps_an_or_inside_it():
     assert project_tool.answer_list("TEST ANSWER: Vehicle problem, Road or weather, Other (with remarks).") == \
         {"vehicle problem", "road or weather", "other"}

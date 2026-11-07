@@ -87,7 +87,9 @@ normal. When a scope of work with mandays is in `1 Client documents`, copy its l
 that does not add up is worth saying), and give each estimate line the `sow_ref` that pays for it (a line no
 SOW line pays for shows as "Not in the scope of work"). Report the largest differences both ways, and say
 plainly when the cause is a count that grew (one lookup that became four endpoints) rather than negotiation:
-grown scope is worth raising before sign-off. The estimate, not the SOW, is the basis for planning.
+grown scope is worth raising before sign-off. If the spec has no `sow` yet, copy the same lines' `ref` and
+`item` into the spec's (never the mandays) and name them on the requirement groups, so sign-off checks
+each is specified. The estimate, not the SOW, is the basis for planning.
 
 ## 6. Write, render and the timeline
 

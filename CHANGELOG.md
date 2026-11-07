@@ -11,6 +11,16 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+### Added
+- **Everything the scope of work sold is checked at sign-off.** The spec can list the scope of work's items
+  (`sow`), and each requirement group names the item it specifies. The requirements document's scope chapter
+  shows each item and where it is specified, so the client can see nothing they bought is missing. Sign-off
+  readiness stops on an item with no requirement, unless the client agreed to leave it out of this version
+  (`deferred`), and points at requirements no item asked for, as possible change requests. The generator
+  warns about uncovered items, the workshop preparation lists them as something to settle, and building the
+  mock-up and estimating write the items into the spec. An end-to-end test had signed off a document that
+  specified six of the fourteen modules sold, and nothing noticed.
+
 ## [1.5.0] - 2026-11-07
 
 ### Added

@@ -839,6 +839,8 @@ def readiness(p):
                     out.append(("check", f"{where}, field '{f.get('label') or f.get('id')}': its choices differ from {it['id']}'s answer "
                                          f"(it {' and '.join(parts)}). Make them match, or record why they differ."))
 
+    out += sow_readiness(p, spec)
+
     # "The agreed time" with no time agreed: a requirement that waits on something must say what, through a register item.
     for g in spec.get("requirements") or []:
         for n, item in enumerate(g.get("items") or [], 1):
@@ -865,6 +867,47 @@ def readiness(p):
             out.append(("check", "Nobody signs for the client in the spec's signoff."))
         if own_names and not any(n and n in orgs for n in own_names):
             out.append(("check", "Nobody signs for your side in the spec's signoff."))
+    return out
+
+
+def sow_readiness(p, spec):
+    """Whether everything the scope of work sold is specified: a stop for an item with no requirement and nothing
+    agreed about leaving it out, a check for a requirement that no item of the scope of work asked for."""
+    import generate_requirements as gen
+
+    out = []
+    items = gen.sow_items(spec)
+    if not items:
+        # The scope of work may only be in an estimate, with its lines; or nowhere in the project yet.
+        lines = []
+        src = layout.estimates_source(p)
+        for f in sorted(src.glob("*.json")) if src.exists() else []:
+            lines = ((_json(f) or {}).get("sow") or {}).get("lines") or lines
+        if lines:
+            out.append(("check", f"The scope of work's {len(lines)} lines are in the estimate but not in the spec, so nothing "
+                                 "checks that each is specified. Copy their ref and item (never the mandays) to the spec's sow, "
+                                 "and name them on the requirement groups (sow: …)."))
+        else:
+            out.append(("check", "The spec lists no scope of work items (sow), so nothing checks that everything sold is "
+                                 "specified. Add them from the scope of work, if there is one."))
+        return out
+    cover = gen.sow_coverage(spec)
+    known = {str(x["ref"]).strip() for x in items if x.get("ref") is not None}
+    for x in items:
+        ref = str(x.get("ref")).strip()
+        if not cover.get(ref) and not x.get("deferred"):
+            out.append(("stop", f"Scope of work item {ref} \"{short_text(x.get('item'), 70)}\" has no requirement. Write its "
+                                "requirements and name it on them (sow: \"" + ref + "\"), or, if the client agrees to leave it out "
+                                "of this version, say so on the item (deferred: …)."))
+    for ref in sorted(set(cover) - known):
+        out.append(("stop", f"{', '.join(cover[ref])} name{'s' if len(cover[ref]) == 1 else ''} scope of work item {ref}, "
+                            "which the spec's sow does not have."))
+    loose = [str(g.get("id")) for g in spec.get("requirements") or []
+             if isinstance(g, dict) and not gen.sow_refs(g) and not any(gen.sow_refs(i) for i in g.get("items") or [])]
+    if loose:
+        out.append(("check", f"{', '.join(loose)} name{'s' if len(loose) == 1 else ''} no scope of work item: link "
+                             f"{'it' if len(loose) == 1 else 'each'} to the item it specifies (sow: …), or, if the scope of "
+                             "work did not sell it, it may be a change request."))
     return out
 
 

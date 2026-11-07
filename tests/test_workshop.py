@@ -135,6 +135,15 @@ def test_each_thing_a_spec_leaves_open_is_named_with_its_gap_pattern(change, top
     assert len(found) == 1 and detail in found[0][1] and found[0][2] == pattern
 
 
+def test_what_the_scope_of_work_sold_and_the_spec_does_not_specify_is_named():
+    spec = support.load_spec(support.EXAMPLE)
+    spec["sow"] = {"items": [{"ref": "1", "item": "Leave application"}, {"ref": "2", "item": "Leave balance report"},
+                             {"ref": "3", "item": "Mobile app", "deferred": "Phase 2"}]}
+    spec["requirements"][0]["sow"] = "1"
+    assert [g for g in workshop.spec_gaps(spec) if g[0] == "Scope of work"] == [
+        ("Scope of work", "sold but not specified yet: 2 Leave balance report", "")]
+
+
 def test_notification_wording_still_to_confirm_and_screens_without_a_requirement_are_named():
     gaps = workshop.spec_gaps(support.load_spec(support.WIDE))
     assert ("Notifications", "the wording is to be confirmed for: Booking approved or rejected", "GP-14") in gaps
