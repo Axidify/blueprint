@@ -1107,6 +1107,13 @@
   // A comment worked through (applied, or noted for follow-up) is history: it steps back from the page, to a Done
   // part of the panel, so the marks on the page are only those still open. Show on the screen brings its marks back, faded.
   const isDone = (c) => c.state === "applied" || c.state === "noted";
+  // Where a comment's marks sit, in pixels. A pin overlaps the top-right corner of what it is about (in from the
+  // right, up from the top); pins on the same thing sit side by side, this far apart. A box's pin sits on its
+  // top-right corner. A box drawn round several things leaves this much room round them.
+  const PIN = { inFromRight: 12, upFromTop: 8, apart: 18, boxInFromRight: 12, boxUpFromTop: 10 };
+  const BOX_PADDING = 6;
+  // A drag shorter than this (width plus height) is a click that wobbled, not a box.
+  const CLICK_WOBBLE = 14;
   // Where a comment is on the page now: whether what it is about is on show, hidden or gone, why it has no mark,
   // and where its box goes. Reads the page only; the comments themselves are feedback's.
   const place = {
@@ -1125,9 +1132,10 @@
       }
       return found.some((el) => place.shown(el)) ? "shown" : "hidden";
     },
-    away(c) {
+    // `where` is place.of(c) when the caller has it already.
+    away(c, where) {
       if (isDone(c)) return null;  // history: the Done part of the panel says what became of it
-      const text = AWAY[place.of(c)];
+      const text = AWAY[where === undefined ? place.of(c) : where];
       return text ? text.replaceAll("{role}", (byId(S.roles, c.role) || {}).name || c.role) : null;
     },
     // A thing on show, or null. A hidden one (in a section folded away, a closed tab) says it is at the top-left
@@ -1149,7 +1157,8 @@
         const rects = parts.map((el) => el.getBoundingClientRect());
         const left = Math.min(...rects.map((r) => r.left)), top = Math.min(...rects.map((r) => r.top));
         const right = Math.max(...rects.map((r) => r.right)), bottom = Math.max(...rects.map((r) => r.bottom));
-        return { x: left + window.scrollX - 6, y: top + window.scrollY - 6, w: right - left + 12, h: bottom - top + 12 };
+        return { x: left + window.scrollX - BOX_PADDING, y: top + window.scrollY - BOX_PADDING,
+          w: right - left + 2 * BOX_PADDING, h: bottom - top + 2 * BOX_PADDING };
       }
       // A box for something new stays beside the thing it was drawn next to, at the same distance.
       const near = b.near ? [...document.querySelectorAll(`#app [data-el="${CSS.escape(b.near)}"]`)][b.nearAt || 0] : null;
@@ -1376,10 +1385,11 @@
       } catch (e) { return { ok: false, status: 0, body: {} }; }
     },
     // The cards' notes follow the page too: a section folded or unfolded marks a comment away or back.
-    markAway() {
+    // `placeOf` gives a comment's place (place.of), worked out once per redraw by renderPins.
+    markAway(placeOf = (c) => place.of(c)) {
       document.querySelectorAll("#fb-panel .fb-pick").forEach((card) => {
         const c = this.byKey(card.dataset.fb);
-        const text = c ? place.away(c) : null;
+        const text = c ? place.away(c, placeOf(c)) : null;
         let line = card.querySelector(".fb-away");
         if (!text) { if (line) line.remove(); return; }
         if (!line) {
@@ -1392,12 +1402,20 @@
       });
     },
     renderPins() {
-      this.markAway();
+      // Each comment's place is looked up on the page once per redraw (redraws run on every resize), then read
+      // by the cards' notes and the pins.
+      const at = new Map();
+      const placeOf = (c) => {
+        const key = this.keyOf(c);
+        if (!at.has(key)) at.set(key, place.of(c));
+        return at.get(key);
+      };
+      this.markAway(placeOf);
       document.querySelectorAll(".fb-pin, .fb-box:not(.drawing)").forEach((p) => p.remove());
       if (document.body.classList.contains("clean")) return;
       const onSame = {};  // several comments on one thing: their pins sit side by side, not on top of each other
       this.forScreen().forEach((c) => {
-        if (place.of(c) !== "shown") return;  // its card in the panel says why there is no pin
+        if (placeOf(c) !== "shown") return;  // its card in the panel says why there is no pin
         if (isDone(c) && !this.showDone) return;
         const target = c.element ? place.shown(document.querySelector(`[data-el="${CSS.escape(c.element)}"]`)) : null;
         const rect_ = c.box ? place.box(c) : null;
@@ -1428,16 +1446,16 @@
           frame.title = pin.title;
           Object.assign(frame.style, { left: `${b.x}px`, top: `${b.y}px`, width: `${b.w}px`, height: `${b.h}px` });
           document.body.appendChild(frame);
-          pin.style.left = `${b.x + b.w - 12}px`;
-          pin.style.top = `${b.y - 10}px`;
+          pin.style.left = `${b.x + b.w - PIN.boxInFromRight}px`;
+          pin.style.top = `${b.y - PIN.boxUpFromTop}px`;
           document.body.appendChild(pin);
           return;
         }
         const rect = target ? target.getBoundingClientRect() : { right: c.x - window.scrollX, top: c.y - window.scrollY };
         const spot = target ? c.element : `${c.x},${c.y}`;
         onSame[spot] = (onSame[spot] || 0) + 1;
-        pin.style.left = `${rect.right + window.scrollX - 12 - (onSame[spot] - 1) * 18}px`;
-        pin.style.top = `${rect.top + window.scrollY - 8}px`;
+        pin.style.left = `${rect.right + window.scrollX - PIN.inFromRight - (onSame[spot] - 1) * PIN.apart}px`;
+        pin.style.top = `${rect.top + window.scrollY - PIN.upFromTop}px`;
         document.body.appendChild(pin);
       });
     },
@@ -1698,7 +1716,7 @@
   document.addEventListener("mousemove", (e) => {
     if (!drawing) return;
     const w = Math.abs(e.pageX - drawing.x), h = Math.abs(e.pageY - drawing.y);
-    if (!drawing.el && w + h < 14) return;  // a click that wobbled is still a click
+    if (!drawing.el && w + h < CLICK_WOBBLE) return;  // a click that wobbled is still a click
     e.preventDefault();
     if (!drawing.el) {
       drawing.el = document.createElement("div");
