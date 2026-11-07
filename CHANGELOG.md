@@ -20,6 +20,9 @@ See [docs/maintaining.md](docs/maintaining.md).
   until it is written or a register item tracks it (`tbc: R-…` on the row or section, which the document
   prints as the decision it waits on). A section can say which required one it stands for with `covers`.
   A company changes the list in its own document format. The made-up sample now has every one of them.
+- **The requirements standard lists the new sections.** The starter knowledge base's
+  `requirements-standard.md` now asks for Data migration, Reports, Audit trail, and Training and handover, with
+  what each must include, so `review-requirements` checks a client's document for them too.
 
 ### Fixed
 - **Two figures with one caption: advice that works.** The generator's warning now suggests a caption for the
