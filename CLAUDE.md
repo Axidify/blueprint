@@ -145,7 +145,8 @@ tools/<script>.py`, the environment `setup.sh` makes; wherever these instruction
 `overview.py` (each project's overview page and mock-up shortcut), `review_doc.py` (a review as a Word file),
 `uat.py` (UAT draft from the spec, checks, workbook and document, results of a filled-in workbook),
 `change_request.py` (scope check against the signed version, CR log, sizing, client CR note),
-`tour.py` (the tour's scratch copy), `layout.py` (where each part of a project folder is, in either layout), `sheets.py` (the look of every workbook), `check_docs.py`.
+`tour.py` (the tour's scratch copy), `layout.py` (where each part of a project folder is, in either layout),
+`workspace.py` (where the workspace is, the company profile and branding files), `sheets.py` (the look of every workbook), `check_docs.py`.
 
 ## Documentation and changelog
 
