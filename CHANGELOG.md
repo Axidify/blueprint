@@ -11,6 +11,8 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-07
+
 ### Added
 - **Ready for sign-off.** `project.py ready <slug>` says whether a version can go to the client for signature,
   and issuing runs it first. It holds the issue back when a client question still reads "Blocks sign-off", when
@@ -1046,7 +1048,8 @@ First release.
 - One-step setup (`setup.cmd`) with a machine check, `present.cmd` for sessions, shared Claude Code
   permissions and a start-up status greeting.
 
-[Unreleased]: https://github.com/Axidify/blueprint/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/Axidify/blueprint/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/Axidify/blueprint/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/Axidify/blueprint/compare/v1.3.3...v1.4.0
 [1.3.3]: https://github.com/Axidify/blueprint/compare/v1.3.2...v1.3.3
 [1.3.2]: https://github.com/Axidify/blueprint/compare/v1.3.1...v1.3.2

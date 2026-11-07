@@ -38,6 +38,8 @@ Type it in your own words, for example:
 - "Build a mock-up from the brief"
 - "Apply the feedback from today's session"
 - "Generate the requirements document"
+- "Is it ready for sign-off?" (what would still stop the client signing: open questions marked "Blocks
+  sign-off", decisions not yet written in one line, a document older than the latest changes)
 - "Estimate the mandays for this project"
 - "Make our documents look like our house style" (colours, fonts, table headers, chapter order)
 - "Make the mock-up look like the client's intranet" (their logo, colours, font; or learnt from screenshots
