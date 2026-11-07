@@ -650,3 +650,13 @@ def test_the_file_for_the_client_holds_the_client_items_alone_in_every_sheet(ren
     assert "Send this one to the client" in capsys.readouterr().out
     reg = json.loads((rendered / "register.json").read_text(encoding="utf-8"))
     assert next(it for it in reg["items"] if it["id"] == OPEN_CLIENT)["answer"] == "Answered by the client"
+
+
+
+def test_render_warns_when_a_client_item_speaks_of_effort(tmp_path, monkeypatch, capsys):
+    reg = copy.deepcopy(GOOD)
+    item = next(it for it in reg["items"] if it["audience"] == "client")
+    item["recommendation"] = "Drop it: saves 4 mandays"
+    project = write_register(tmp_path / "words", reg)
+    run(monkeypatch, "render", project)
+    assert f"Check {item['id']} before sending: its recommendation says 'mandays'" in capsys.readouterr().out

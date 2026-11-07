@@ -63,7 +63,9 @@ Send the Excel file (or just its *Rates needed* sheet) to the lead developer. Th
 figure per unit for each building block (one figure is fine), and send it back. Drop it in the project or
 the inbox and tell Blueprint "save these rates": it reads them with `estimate.py rates-from`, shows you what
 it would write in `knowledge/building-blocks.md`, saves them only after you agree, and renders the estimate
-again, now priced. The rates are shared by everyone using the workspace, so the next estimate on that
+again, now priced. If they filled in the sheet in the shared folder, take the rates in before rendering
+again: `render` stops rather than write over a sheet with rates typed in (`--force` keeps that file beside
+the new one). The rates are shared by everyone using the workspace, so the next estimate on that
 platform is priced too.
 
 ## How the figures are worked out

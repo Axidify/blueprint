@@ -119,7 +119,8 @@ python -I tools/mockup.py screenshots projects/<slug>
 python -I tools/mockup.py feedback    projects/<slug>
 python -I tools/mockup.py look        projects/<slug> [--try key=value ...]
 ```
-`look` prints the look of the client's screens (theme, colour, data colours, text size, font, corners, side menu, top bar,
+`serve` on a project whose mock-up is already open does not start a second server: it opens the running one
+and says where it is. `look` prints the look of the client's screens (theme, colour, data colours, text size, font, corners, side menu, top bar,
 logo and the project's own CSS), says when the current version was issued, and notes white words that are
 hard to read on the project's colour (below 4.5 to 1), a font the mock-up does not carry, an accent or data colour in `desk` that
 is close to a status colour or is violet or indigo, and a look that is custom work on a Joget platform.
@@ -293,8 +294,9 @@ python -I tools/workshop.py render projects/<slug> ["<agenda.json>"]
 ```
 `gaps` lists what a workshop has to settle: the open client questions, what the spec does not say yet and
 the gap patterns with their evidence. `check` checks an agenda file in `_blueprint/workshops/`:
-every reference is an open client question, every screen exists, the sections fit the time, and no open
-high-severity question is left out without a reason. `render` checks it and writes two Word documents into
+every reference is an open client question, every screen exists, the sections fit the time, no open
+high-severity question is left out without a reason, and nothing the client's agenda prints (the goal, the
+questions and options, what to bring, parked items) uses the team's words (mandays, rates, building blocks). `render` checks it and writes two Word documents into
 `3 Workshops/`: the agenda for the client, and the facilitator notes for the BA, which add why each question
 matters, your recommendation and what was left for later. The notes are internal; neither document holds
 mandays or cost. The file format is at the top of the script. Used by the `prep-workshop` skill.
@@ -352,7 +354,7 @@ starter knowledge in `templates/` only when given `--knowledge`.
 ```bash
 python -I tools/estimate.py blocks    "Joget DX"
 python -I tools/estimate.py inventory projects/<slug>
-python -I tools/estimate.py render    projects/<slug> ["<estimate.json>"]
+python -I tools/estimate.py render    projects/<slug> ["<estimate.json>"] [--force]
 python -I tools/estimate.py weeks     projects/<slug> --team 2 ["<estimate.json>"]
 python -I tools/estimate.py rates-from "<estimate.xlsx>" [--json]
 ```
@@ -362,7 +364,9 @@ forms, lists, integrations and open register items. `render` checks an estimate 
 ranges, the confidence level and the comparison with the scope of work, and writes the Excel file into
 `Internal – estimates and change requests/`; lines with no rate or share are listed as not priced and left out of the total. While a building
 block has no rate, it gives no total at all: it says the build is not priced and shows what is priced so
-far, and lists the scope-of-work lines that cannot be compared yet. `weeks` turns the
+far, and lists the scope-of-work lines that cannot be compared yet. When rates were typed into the *Rates
+needed* sheet of the Excel file it would replace, `render` stops (take them in with `rates-from` first);
+`--force` writes it anyway and keeps that file beside it (`… - rates kept <date> <time>.xlsx`). `weeks` turns the
 estimate into working weeks for a team size (`--days` sets the working days a week, default 5), for
 drafting the project timeline. `rates-from` reads the figures a lead developer filled in on the
 *Rates needed* sheet of an estimate's Excel file and prints them as rows for `knowledge/building-blocks.md`
@@ -399,7 +403,7 @@ figure. The file format is at the top of the script. Used by the `change-request
 ### project.py
 
 ```bash
-python -I tools/project.py issue   <slug> [--to "the client"] [--date 2026-11-12] [--note "..."]
+python -I tools/project.py issue   <slug> [--to "the client"] [--date 2026-11-12] [--note "..."] [--without-pdf]
 python -I tools/project.py issued  <slug>
 python -I tools/project.py file    <slug> "<file>" --kind "client comments" [--responds-to 1.3] [--date 2026-11-12] [--copy]
 python -I tools/project.py archive <slug>
@@ -412,8 +416,13 @@ python -I tools/project.py migrate <slug> | --all [--dry-run] [--undo]
 ```
 Project housekeeping. `issue` records that the current document version went to the client and locks it (its
 files become read-only and the generator refuses to overwrite it, so the next change needs a new version).
-`file` moves a document into `1 Client documents/` with a dated, descriptive name such as
-`2026-11-12 client comments on v1.3.docx`. `archive` moves a delivered project to `projects/_archive/`,
+It takes that version's Word file and PDF by their exact names, and needs the PDF: without one (the Word step
+did not finish) it stops, and `--without-pdf` issues the Word file alone. A version written without quotes in
+the spec is refused (YAML reads `1.10` as 1.1), here and by the generator. The record of what was issued is
+written in one step, and a copy OneDrive made when two people issued at once (`issued-<computer>.json`) counts
+too. `file` moves a document into `1 Client documents/` with a dated, descriptive name such as
+`2026-11-12 client comments on v1.3.docx`. A file open in another program is not filed (it is never left in
+both places), and `--date` must be a date. `archive` moves a delivered project to `projects/_archive/`,
 out of the status list; `restore` brings it back. `archive` refuses when an archived project already has
 that name, and moves nothing. Both move the folder in one step or not at all: when a file in it is open
 (in Excel or Word, or OneDrive is syncing) they stop, move nothing and say to close it. `find` lists earlier work on the same or a similar system name (words like

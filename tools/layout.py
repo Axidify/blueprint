@@ -563,15 +563,18 @@ def _run(p, moves, done):
             done.append((src, dst))
     except OSError as e:
         failed = (src, dst)
+        stuck = []
         for s, d in reversed(done):
             try:
                 os.rename(p / d, p / s)
             except OSError:
-                pass
+                stuck.append(f"{d} (should be back at {s})")
         _tidy(p)
         what = "a file in it is open in another program, or read-only and locked" if isinstance(e, PermissionError) else str(e)
-        raise RuntimeError(f"{failed[0]} could not be moved to {failed[1]} ({what}). Everything moved so far was put back; "
-                           "close what holds it and try again.") from e
+        back = ("Everything moved so far was put back; close what holds it and try again." if not stuck else
+                "These could NOT be put back, so the project is half moved: " + "; ".join(stuck)
+                + ". Close what holds them and move them back by hand (or ask Claude), then try again.")
+        raise RuntimeError(f"{failed[0]} could not be moved to {failed[1]} ({what}). {back}") from e
 
 
 def _tidy(p):

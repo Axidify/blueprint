@@ -345,3 +345,14 @@ def test_a_missing_or_unreadable_agenda_is_explained(project, run, content, said
     with pytest.raises(SystemExit) as stop:
         run("check", project)
     assert said in str(stop.value.code)
+
+
+
+def test_the_agendas_own_words_are_checked_for_the_teams(project):
+    """Only a ref was checked: a question pasted without one, or effort in the goal, reached the client's agenda."""
+    agenda = json.loads(json.dumps(AGENDA))
+    agenda["goal"] = "Settle the approval rules: 6 mandays at stake."
+    agenda["sections"][1]["items"].append({"question": "Is BB-07 the right building block?"})
+    errors = workshop.check(agenda, project)
+    assert any(e.startswith("goal: 'mandays'") for e in errors), errors
+    assert any("section 2, item 2: 'BB-07'" in e for e in errors), errors

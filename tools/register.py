@@ -95,6 +95,8 @@ DUPLICATE = 0.5  # similarity from which add names an existing item as a likely 
 SEV_ORDER = {"high": 0, "medium": 1, "low": 2}
 RENDERED = "_rendered"  # a hidden sheet: the status and answer of every item as the file was written
 EDITABLE = {"Status": "status", "Client response": "answer", "Answer / decision": "answer"}  # column -> field
+# The team's words: never in what a client item says (render warns before the client's file is sent).
+INTERNAL_WORDS = re.compile(r"\b(man-?days?|day rates?|rate card|building blocks?|BB-\d+|effort impact|internal fix(es)?)\b", re.I)
 
 
 def text(value):
@@ -236,6 +238,24 @@ def save(project, reg):
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
         raise
+
+
+def register_bytes(project):
+    """register.json as it is now (None when there is none), for put_back after a step that failed half-way."""
+    path = layout.register_json(project)
+    return path.read_bytes() if path.exists() else None
+
+
+def put_back(project, before):
+    """Put register.json back as register_bytes found it, in one step."""
+    path = layout.register_json(project)
+    if before is None:
+        path.unlink(missing_ok=True)
+        return
+    fd, tmp = tempfile.mkstemp(prefix=".register-", suffix=".tmp", dir=path.parent)
+    with os.fdopen(fd, "wb") as f:
+        f.write(before)
+    os.replace(tmp, path)
 
 
 def validate(reg):
@@ -576,6 +596,17 @@ def render(project, reg, overwrite=False, returned=None):
         wb.save(out)
     except PermissionError:
         sys.exit(f"Cannot write {out}: close it in Excel and run this again.")
+
+    # A client item's own words reach the client as they are: effort, rates and building blocks never should.
+    for it in items:
+        if it["audience"] != "client":
+            continue
+        for key in ("finding", "question", "recommendation"):
+            m = INTERNAL_WORDS.search(str(it.get(key) or ""))
+            if m:
+                print(f"  Check {it['id']} before sending: its {key} says '{m.group(0)}', and it goes to the client. "
+                      f"Reword it with register.py update {it['id']} --set {key}=\"...\" and render again.")
+                break
 
     # The file to send: the client's items and nothing else, in no sheet, hidden or not. Its hidden note holds
     # only those items, so a copy the client sends back is taken in with --from like the BA's file.

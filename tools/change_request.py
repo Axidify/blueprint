@@ -105,7 +105,7 @@ KNOWN = set(REQUIRED) | {"source", "stage", "basis_version", "cited", "reasoning
                          "severity", "recommendation", "effort_impact", "gap_pattern", "gap_note", "lines", "assumptions",
                          "confidence", "confidence_reason", "register", "sold_md", "sold_by", "price", "decided_on", "notes"}
 UPDATABLE = ("status", "sold_md", "sold_by", "price", "weeks", "verdict", "gap_pattern", "gap_note", "decided_on", "notes")
-CLIENT_TEXT = ("title", "why", "changes", "question")  # written by us for the client: no internal wording in them
+CLIENT_TEXT = ("title", "request", "why", "changes", "question")  # printed in the client's note: no internal wording in them
 INTERNAL_WORDS = re.compile(r"\b(BB-\d+|OW-\d+|GP-\d+|mandays?|man-days?|MD|confidence level|day rate|building blocks?)\b", re.I)
 INTERNAL_MARK = "Internal: not for the client"
 LOG = Path("changes") / "crs.json"  # as people read it; where it is: layout.cr_log()
@@ -696,7 +696,10 @@ def write_note(project, log, cr):
 
     out = layout.cr_notes_dir(project) / f"{cr['id']} {project_tool.safe_name(cr['title'])} - change request note.docx"
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.parent.mkdir(parents=True, exist_ok=True)
+    if out.exists():  # written before (perhaps already sent): said, so a changed note is sent again on purpose
+        import datetime as dt
+        print(f"Replacing the note written on {dt.date.fromtimestamp(out.stat().st_mtime).isoformat()}: "
+              "if that one went to the client already, send this one as the updated note.")
     try:
         doc.save(str(out))
     except PermissionError:
@@ -863,10 +866,16 @@ def cmd_ask(a):
     if a.check:
         print(f"Checked, nothing written: {a.id}'s question would be added to the register as {rid}.")
     else:
+        # Both files or neither: the register item without the CR's link to it would be added again next time.
+        before = register.register_bytes(a.project)
         reg.setdefault("items", []).extend(new)
         register.save(a.project, reg)
         cr["register"] = [rid]
-        save_log(a.project, log)
+        try:
+            save_log(a.project, log)
+        except BaseException:
+            register.put_back(a.project, before)
+            raise
         print(f"Added {a.id}'s question to the register as {rid}, and linked it to {a.id}.")
     print(f"  {rid}  client {item['severity']:<6} {register.short(new[0], 80)}")
     if dupes:

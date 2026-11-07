@@ -895,7 +895,7 @@ def check(scripts, project):
     spec = load_yaml(spec_path)
     m = Model(spec)
     reqs = requirement_ids(spec)
-    internal_ids = {str(it.get("id")) for it in read_register(project) if it.get("audience") == "internal"}
+    internal_ids = {str(it.get("id")) for it in read_register(project) if it.get("audience") != "client"}  # only client items are the client's
     seen = set()
     for n, c in enumerate(scripts.get("cases") or [], 1):
         if not isinstance(c, dict):
@@ -1340,6 +1340,13 @@ def main():
 
     out = layout.uat_output(project) if path.parent.resolve() == layout.uat_source(project).resolve() else path.parent
     out.mkdir(parents=True, exist_ok=True)
+    for name in (path.with_suffix(".xlsx").name, path.with_suffix(".docx").name):
+        target = out / name
+        try:  # both files or neither: one open in Excel or Word stops it before anything is written
+            if target.exists():
+                open(target, "r+b").close()
+        except PermissionError:
+            sys.exit(f"Cannot write {name}: close it in Excel or Word and run this again. Nothing was written.")
     keep_results(out / path.with_suffix(".xlsx").name, "--force" in flags)
     xlsx = render_xlsx(scripts, spec, out / path.with_suffix(".xlsx").name)
     docx = render_docx(scripts, spec, out / path.with_suffix(".docx").name)

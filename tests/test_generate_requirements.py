@@ -603,7 +603,7 @@ def test_issued_version_refuses_to_regenerate(temp_workspace, monkeypatch, capsy
     project = support.make_project(temp_workspace / "projects" / "leave-request")
     first = support.generate(project)
     before = first.path.read_bytes()
-    monkeypatch.setattr(sys, "argv", ["project.py", "issue", "leave-request", "--date", "2026-11-10"])
+    monkeypatch.setattr(sys, "argv", ["project.py", "issue", "leave-request", "--date", "2026-11-10", "--without-pdf"])  # no Word here
     project_tool.main()
     assert "Issued v0.1 to SAMPLE on 2026-11-10" in capsys.readouterr().out
 
@@ -1989,3 +1989,17 @@ def test_nothing_of_the_word_template_but_its_look_reaches_a_generated_document(
         source = (support.ROOT / "tools" / f"{tool}.py").read_text(encoding="utf-8")
         assert 'Document(str(workspace.asset("document-template.docx")))' not in source, tool
         assert "template_document()" in source, tool
+
+
+
+def test_effort_rates_or_money_in_the_timelines_own_words_are_refused():
+    """Only `mandays` on an activity was checked: a summary card such as "45–60 mandays" or a price in an
+    assumption went into the document as it was."""
+    spec = support.load_spec(support.EXAMPLE)
+    for change in ({"summary": [{"value": "45 – 60 mandays", "label": "Estimated effort"}]},
+                   {"assumptions": ["Billed at RM 1,500 a day"]}, {"intro": "Total cost $40,000"}):
+        timeline = {**with_mandays(), **change}
+        errors = generate_requirements.document_errors(support.changed(spec, timeline=timeline))
+        assert any("does not go into the requirements document" in e for e in errors), change
+    weeks = {**with_mandays(), "summary": [{"value": "27 – 32 weeks", "label": "Kick-off to go-live"}]}
+    assert generate_requirements.document_errors(support.changed(spec, timeline=weeks)) == []

@@ -1115,13 +1115,17 @@ SAVING = threading.Lock()  # one comment at a time: each takes the next number
 @contextlib.contextmanager
 def feedback_lock(fb_file):
     """One program at a time writes a project's feedback file: the server saving a comment, or the assistant
-    marking one in a live session. A lock left by a program that stopped is taken over after ten seconds."""
+    marking one in a live session. A lock left by a program that stopped is taken over after ten seconds, so
+    the wait is never longer than that. Only the lock this program made is removed afterwards: one that was still
+    another program's when the wait ran out is left to it."""
     lock = Path(fb_file).with_name(".feedback.lock")
     lock.parent.mkdir(parents=True, exist_ok=True)
-    give_up = time.time() + 5
+    give_up = time.time() + 12  # past the ten seconds after which a lock counts as left behind
+    held = False
     while True:
         try:
             os.close(os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+            held = True
             break
         except FileExistsError:
             try:
@@ -1131,15 +1135,16 @@ def feedback_lock(fb_file):
             except OSError:
                 pass
             if time.time() > give_up:
-                break  # better to save the comment than to lose it waiting
+                break  # better to save the comment than to lose it waiting (the file is still written in one step)
             time.sleep(0.05)
     try:
         yield
     finally:
-        try:
-            lock.unlink()
-        except OSError:
-            pass
+        if held:
+            try:
+                lock.unlink()
+            except OSError:
+                pass
 
 
 # What a mock-up is told about a comment. Everyone with the room's link can read this, so the internal part
@@ -1442,6 +1447,16 @@ def lan_addresses():
 
 
 def serve(project, port, lan, version=None):
+    running = layout.server_running(project)
+    if running:
+        # Two servers on one project would each keep their own mark and their own idea of where comments go.
+        url = f"http://localhost:{running['port']}/"
+        try:
+            webbrowser.open(url)
+        except Exception:
+            pass
+        sys.exit(f"This project's mock-up is already open at {url} (started {running.get('started', '')}): use that one. "
+                 "To start it again, close its window first.")
     if not version:
         build(project)
     mock = layout.mockup_dir(project).resolve()

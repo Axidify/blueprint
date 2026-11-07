@@ -2894,6 +2894,7 @@ def test_a_box_for_something_new_keeps_its_place_when_the_layout_changes(tmp_pat
         pytest.skip(f"Microsoft Edge could not be started: {run.stderr.strip()[:200]}")
     assert run.returncode == 0, run.stderr
     seen = json.loads(run.stdout.strip().splitlines()[-1])
+    assert "failed" not in seen, seen.get("failed")  # each scenario runs on a page of its own and names where it stopped
     assert seen["errors"] == [] and seen["title"].startswith("Something new")
     for state in ("panelOpen", "panelClosed", "narrower"):
         assert abs(seen[state]["offCentre"]) <= 2 and abs(seen[state]["gapUnderCard"] - 14) <= 2, (state, seen[state])
@@ -2965,3 +2966,32 @@ def test_undo_refuses_when_the_copy_kept_before_the_change_is_missing(session, c
         mockup.live_undo(session)
     assert spec_file.exists() and b"label: Staff" in spec_file.read_bytes(), "nothing was changed"
     assert mockup.live_session(session)["changes"], "the change is still on the list"
+
+
+
+def test_a_lock_still_held_by_another_program_is_never_removed(tmp_path, monkeypatch):
+    """After waiting, the lock was taken anyway and then deleted: the other program's lock went with it."""
+    fb = tmp_path / "feedback" / "feedback.json"
+    fb.parent.mkdir(parents=True)
+    lock = fb.parent / ".feedback.lock"
+    lock.write_text("", encoding="utf-8")   # the other program, still working: its lock stays fresh
+    now = [lock.stat().st_mtime]
+
+    def wait(seconds):
+        now[0] += 1
+        os.utime(lock, (now[0] - 1, now[0] - 1))
+
+    monkeypatch.setattr(mockup.time, "time", lambda: now[0])
+    monkeypatch.setattr(mockup.time, "sleep", wait)
+    with mockup.feedback_lock(fb):
+        pass
+    assert now[0] - lock.stat().st_mtime < 10 and lock.exists(), "left to the program that holds it"
+
+
+def test_a_second_server_on_one_project_points_to_the_first(tmp_path, monkeypatch):
+    project = tmp_path / "leave-request"
+    support.write_spec(project, sample())
+    monkeypatch.setattr(mockup.layout, "server_running", lambda p: {"port": 8765, "pid": 1, "started": "2026-11-07T10:00:00"})
+    monkeypatch.setattr(mockup.webbrowser, "open", lambda url: None)
+    with pytest.raises(SystemExit, match="already open at http://localhost:8765/"):
+        mockup.serve(project, 8766, False)

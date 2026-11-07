@@ -153,7 +153,9 @@ Projects longer than 40 weeks show one column per 2 or more weeks. Durations com
 SOW's mandays, which are a commercial figure and often lower than the likely effort:
 `python -I tools/estimate.py weeks projects/<slug> --team 2` gives the working weeks per SOW item for a team
 size. State the team size and the other assumptions behind the weeks. The mandays shown are the SOW's, one
-per item (`mandays`); the estimate's mandays, rates and cost never go into the spec.
+per item (`mandays`); the estimate's mandays, rates and cost never go into the spec. The timeline's own
+words (the intro, the summary figures, stage and activity names, milestones and assumptions) may not speak of
+mandays, rates, cost or prices either: the generator refuses them, because they are printed as they are.
 
 ## Screens
 

@@ -129,7 +129,7 @@ def old_project(projects, slug="leave-request"):
 
 
 def issue(p, run):
-    run(project_tool, "issue", p.name, "--date", "2026-11-10")
+    run(project_tool, "issue", p.name, "--date", "2026-11-10", "--without-pdf")  # the PDF needs Word, not here
 
 
 def tree(folder):
@@ -476,3 +476,21 @@ def test_status_shows_an_old_project_with_the_offer_to_migrate(projects, temp_wo
     assert "(old-one): " in out and "old folder layout" in out.split("(old-one)")[1].split("\n- ")[0]
     assert "migrate the folders" in out
     assert "old folder layout" not in out.split("(new-one)")[1].split("\n- ")[0]
+
+
+
+def test_a_failed_move_says_what_could_not_be_put_back(projects, monkeypatch):
+    """It said "Everything moved so far was put back" even when putting back failed."""
+    p = old_project(projects)
+    real = layout._move
+
+    def failing(project, src, dst):
+        if src == "output":
+            raise PermissionError("locked")
+        real(project, src, dst)
+
+    monkeypatch.setattr(layout, "_move", failing)
+    monkeypatch.setattr(layout.os, "rename", lambda a, b: (_ for _ in ()).throw(PermissionError("still open"))
+                        if os.path.basename(b) == "docs" else os.replace(a, b))
+    with pytest.raises(RuntimeError, match="could NOT be put back"):
+        layout.migrate(p)

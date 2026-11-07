@@ -329,6 +329,22 @@ def document_errors(spec):
     for key in ("rate", "rates", "cost", "price", "amount"):
         if isinstance(timeline, dict) and key in timeline:
             errors.append(f"timeline: '{key}' does not go into the requirements document (rates and cost stay internal)")
+    # The timeline's own words are printed as they are: effort, rates or money in them would reach the client.
+    # Only the scope of work's mandays go in, as `mandays` on each activity.
+    if isinstance(timeline, dict):
+        texts = [("intro", timeline.get("intro")), ("unit", timeline.get("unit"))]
+        texts += [(f"summary {k}", f"{s.get('value', '')} {s.get('label', '')}") for k, s in enumerate(timeline.get("summary") or [], 1) if isinstance(s, dict)]
+        texts += [("assumption", a) for a in timeline.get("assumptions") or []]
+        for st in stages if isinstance(stages, list) else []:
+            if isinstance(st, dict):
+                texts.append((f"stage '{st.get('name', '?')}'", st.get("name")))
+                texts += [(f"timeline item '{it.get('name', '?')}'", " ".join(str(it.get(x) or "") for x in ("name", "title", "client_action")))
+                          for it in st.get("items") or [] if isinstance(it, dict)]
+        for where, text in texts:
+            m = MONEY_WORDS.search(str(text or ""))
+            if m:
+                errors.append(f"timeline {where}: '{m.group(0)}' does not go into the requirements document: effort, rates "
+                              "and cost stay internal (the scope of work's mandays go on each activity as `mandays`)")
     return errors
 
 
@@ -476,6 +492,11 @@ def add_field(paragraph, instr):
             t.text = "1"
             run._r.append(t)
     return run
+
+
+# Effort, rates and money in words: never in the timeline's own text (its mandays go in `mandays` only).
+MONEY_WORDS = re.compile(r"\b(man-?days?|mandays?|person-?days?|day rates?|rates?|costs?|costing|prices?|pricing|budget|"
+                         r"quotation|RM|MYR|USD|SGD)\b|[$€£]\s?\d", re.I)
 
 
 # Parts of a Word file that carry the template's own words, never wanted in a generated document.
@@ -1429,6 +1450,7 @@ def build(project):
     import mockup  # the spec check, and whether the screenshots still show the spec
     import project as project_tool  # issued versions are locked
 
+    project_tool.version_of(spec.get("project") or {})  # 1.10 written without quotes would be named and locked as 1.1
     issued = project_tool.is_issued(project, spec["project"].get("version", ""))
     if issued:
         sys.exit(f"v{issued['version']} was issued to {issued['to']} on {issued['date']} and is locked. "

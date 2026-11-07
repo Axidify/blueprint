@@ -53,6 +53,8 @@ CLOSED = ("resolved", "wont-fix")
 SEVERITY = {"high": 0, "medium": 1, "low": 2}
 INTERNAL_FIELDS = ("why", "recommendation", "gap_pattern", "effort_impact")
 INTERNAL_MARK = "Internal: not for the client"
+# Words that are the team's, never the client's: the agenda's own text is checked for them.
+INTERNAL_WORDS = re.compile(r"\b(man-?days?|day rates?|rate card|building blocks?|BB-\d+|effort impact|platform[_ ]fit|internal fix(es)?)\b", re.I)
 
 
 # ---------------------------------------------------------------- reading the project
@@ -218,6 +220,28 @@ def check(agenda, project):
                     errors.append(f"{where}: {ref} is an internal item: it is your team's to fix, not a question for the client")
                 elif known and known.get("status") in CLOSED:
                     errors.append(f"{where}: {ref} is already {known['status']}")
+    # Everything the client's agenda prints, checked for the team's words (a question pasted without a ref
+    # skips the register's audience check above).
+    printed = [("goal", agenda.get("goal")), ("workshop", agenda.get("workshop"))]
+    printed += [("bring", b) for b in agenda.get("bring") or []] + [("after", a) for a in agenda.get("after") or []]
+    printed += [(f"attendee {k}", " ".join(str(a.get(x) or "") for x in ("role", "name", "needed_for")))
+                for k, a in enumerate(agenda.get("attendees") or [], 1) if isinstance(a, dict)]
+    for n, section in enumerate(agenda.get("sections") or [], 1):
+        if not isinstance(section, dict):
+            continue
+        printed.append((f"section {n} title", section.get("title")))
+        for k, item in enumerate(section.get("items") or [], 1):
+            if isinstance(item, dict):
+                printed += [(f"section {n}, item {k}", item.get("question"))]
+                printed += [(f"section {n}, item {k}, options", o) for o in item.get("options") or []]
+    for k, item in enumerate(agenda.get("parked") or [], 1):
+        if isinstance(item, dict):
+            printed += [(f"parked item {k}", item.get("question")), (f"parked item {k}, reason", item.get("reason"))]
+    for where, text in printed:
+        m = INTERNAL_WORDS.search(str(text or ""))
+        if m:
+            errors.append(f"{where}: '{m.group(0)}' is your team's word and the agenda goes to the client: reword it "
+                          "(effort, rates and building blocks belong in the facilitator notes' why, if anywhere)")
     if duration and total > duration:
         errors.append(f"the sections add up to {total:g} minutes, the workshop is {duration:g}: move items to parked or shorten sections")
     parked = {}

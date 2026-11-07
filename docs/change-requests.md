@@ -85,7 +85,7 @@ register question; its verdict then becomes In scope or New.
 |---|---|
 | `id` | `CR-001`, `CR-002` …, given by `add` |
 | `raised`, `asked_by`, `source`, `stage` | When and by whom it was asked, where it came from (a defect list row), `development` or `uat` |
-| `title`, `request` | For the client: a short name, and what was asked |
+| `title`, `request` | For the client: a short name, and what was asked (both printed in the client note, so the check refuses effort, rates and building blocks in them) |
 | `verdict` | `in-scope`, `ambiguous` or `new` |
 | `basis_version`, `cited` | The signed version it was checked against, and what it says: `{ref, section, quote}`. In scope and New need at least one |
 | `reasoning`, `notes` | Internal |

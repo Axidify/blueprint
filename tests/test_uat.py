@@ -337,3 +337,35 @@ def test_render_never_writes_over_the_testers_results(rendered, project, run):
     kept = [f for f in book.parent.glob("* - results kept *.xlsx")]
     assert len(kept) == 1 and uat.filled_in(kept[0]) == 1 and kept[0].name in out
     assert uat.filled_in(book) == 0, "a fresh workbook beside the kept one"
+
+
+
+def test_render_stops_before_writing_anything_when_a_file_is_open(rendered, project, run, monkeypatch):
+    """The workbook was written, then the document: with the document open in Word, only half was replaced."""
+    path, _, _ = rendered
+    book, doc = path.with_suffix(".xlsx"), path.with_suffix(".docx")
+    before = book.read_bytes()
+    real_open = open
+
+    def word_has_it(file, *args, **kwargs):
+        if str(file) == str(doc) and args and "+" in args[0]:
+            raise PermissionError(13, "in use")
+        return real_open(file, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.open", word_has_it)
+    with pytest.raises(SystemExit, match="Nothing was written"):
+        run("render", project)
+    assert book.read_bytes() == before
+
+
+def test_an_item_whose_audience_is_not_client_counts_as_internal(project, run):
+    """Only an exact "internal" was taken as internal: a missing or misspelt audience let its id into the scripts."""
+    register = {"project": "Leave Request System", "items": [
+        {"id": "R-009", "type": "fix", "severity": "low", "status": "open", "finding": "x"}]}
+    (project / "register.json").write_text(json.dumps(register), encoding="utf-8")
+    path, scripts, _ = drafted(project, run)
+    scripts["cases"][0]["requirements"] = list(scripts["cases"][0].get("requirements") or []) + ["R-009"]
+    scripts["cases"][0]["steps"][0]["expected"] += " (see R-009)"
+    path.write_text(json.dumps(scripts), encoding="utf-8")
+    errors, _ = uat.check(scripts, project)
+    assert any("R-009" in e for e in errors), errors

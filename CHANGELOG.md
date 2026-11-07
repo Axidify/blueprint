@@ -44,6 +44,34 @@ See [docs/maintaining.md](docs/maintaining.md).
   it keeps the filled-in workbook beside the new one ("… - results kept <date> <time>.xlsx").
 - **Undo in a live session no longer deletes the spec** when the copy kept before the change is missing; it
   stops and changes nothing.
+- **Issuing a version takes exactly that version, with its PDF.** Issuing v1 also locked v1.0 and v1.1, and
+  Word's hidden `~$` file when the document was open. A version whose PDF was never made (the Word step did not
+  finish) was locked for good: `issue` now stops and says to generate it again (`--without-pdf` issues the Word
+  file alone). A version written without quotes in the spec (`version: 1.10`, which YAML reads as 1.1) is
+  refused with how to write it, by `issue` and by the generator.
+- **An issued version stays locked when two people issue at once.** The record of what was issued is written
+  in one step, and a copy OneDrive or SharePoint keeps under another name (`issued-<computer>.json`) counts too.
+- **Filing a document that is open no longer leaves it in two places.** It used to be copied into the project,
+  then could not be removed from the inbox, with a raw error. Now nothing is filed and the message says to close
+  it. A `--date` that is not a date is refused, and a colon in `--responds-to` no longer makes a hidden file.
+- **No effort, rates or prices in the timeline's own words.** The summary figures, the intro, the activity and
+  milestone names and the assumptions were printed in the requirements document as they were, so "45–60
+  mandays" or a price could reach the client. The generator now refuses them; only the scope of work's
+  `mandays` on each activity go in.
+- **The workshop agenda and the client's register items are checked for the team's words.** The agenda check
+  now reads everything the client's agenda prints (a question added without a register reference skipped it).
+  Rendering the register warns about a client item that speaks of mandays, rates or building blocks. The
+  client's request is checked in the change request note too.
+- **Rendering an estimate again keeps the rates typed into its Rates needed sheet.** It stops and says to take
+  them in first (`estimate.py rates-from`); `--force` keeps the filled-in file beside the new one.
+- **One mock-up server per project.** Starting the mock-up of a project that is already open now opens the
+  running one instead of a second server, which lost track of where comments go. A program saving comments
+  never removes another program's lock on the comments file.
+- **Smaller fixes.** Asking the client about an Ambiguous change request writes the register and the CR log
+  together or not at all. UAT counts every register item that is not for the client as internal. `uat.py
+  render` writes the workbook and the document both or neither (one open in Excel or Word stops it first).
+  A folder move that could not be undone fully now says which parts are left half moved, instead of "put
+  back". Writing a change request note that exists already says it replaced the earlier one.
 - **Edit and Delete in the Feedback panel always act on the comment they sit on.** A card, its buttons and its
   pin now name their comment instead of counting its place in the list, so a comment saved or taken back in
   another browser at the same moment can never shift them onto a neighbour. (The mock-up's comment code was
