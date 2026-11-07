@@ -33,7 +33,8 @@ must say it is low-confidence.
 
 ## All platforms
 
-Blocks that count whatever the platform: a mobile app, working offline, and planning logic. An estimate on
+Blocks that count whatever the platform: a mobile app, working offline, planning logic and a second
+language. An estimate on
 any platform can use them; a platform's own table may repeat an ID to give it a rate of its own there,
 which then wins. The rates are TBD until the lead developer sets them: work like this varies most with the
 team's experience of the mobile technology, so no starting figure is given.
@@ -53,6 +54,7 @@ team's experience of the mobile technology, so no starting figure is given.
 | BB-41 | Planning board, per board | Calendar or timeline view, drag to assign, capacity shown, filters | TBD | – |
 | BB-42 | Scheduling rule, per rule | Time slots, capacity limits, availability, cut-off times, what happens when it is broken | TBD | – |
 | BB-43 | Automatic grouping or assignment, per method | Route or area grouping, suggested assignment, inputs (addresses, distances), overriding it | TBD | – |
+| BB-44 | Second language, per language added | Screens, notifications and documents translated, who translates, switching language, data entered in two languages | TBD | – |
 
 ### What each block counts
 
@@ -117,6 +119,18 @@ rate settle; the `estimate` skill turns them into workshop questions.
   data), the planner changing the result, and testing it on real data. Route optimisation with a map
   service is usually several units or a figure from the lead developer. *Ask:* Must the system propose the
   plan, or does a person build it? By area, by a fixed list or by distance? Does it need a map service?
+
+**Languages**
+
+- **BB-44 Second language** – one per language added beyond the first, for the whole system (web and app
+  together); a mobile app and a web portal built separately are one each. Includes making every label,
+  message, e-mail and push notification translatable, the language switch (or the language taken from the
+  user's profile or phone), dates and numbers in that language's format, and checking every screen in it.
+  The translating itself is listed as an assumption (who does it, by when), not counted here; generated
+  documents and master data in two languages (names of items, reasons) add to it. Do not count a second
+  language as extra screens. *Ask:* Which parts must be in the second language: the app, the web portal,
+  notifications, generated documents? Who provides and checks the translations? Is any data entered or
+  shown in both languages? Is any language written right to left?
 
 ## Other work
 

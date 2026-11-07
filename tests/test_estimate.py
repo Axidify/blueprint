@@ -826,10 +826,10 @@ def test_starter_all_platforms_blocks_say_what_they_count():
     """Mobile app, offline working and planning: in the starter, with no rate, each explained with its questions."""
     blocks, _ = estimate.read_blocks("A platform of its own", STARTER)
     shared = {k: b for k, b in blocks.items() if b["section"] == estimate.ALL_PLATFORMS}
-    assert len(shared) >= 13 and all(b["rate"] is None and b["confidence"] is None for b in shared.values())
+    assert len(shared) >= 14 and all(b["rate"] is None and b["confidence"] is None for b in shared.values())
     names = " ".join(b["name"] for b in shared.values()).lower()
     for kind in ("mobile app screen", "mobile app foundation", "camera", "scan", "signature", "offline", "conflict",
-                 "planning board", "scheduling rule", "grouping"):
+                 "planning board", "scheduling rule", "grouping", "second language"):
         assert kind in names, kind
     joget, _ = estimate.read_blocks("Joget DX", STARTER)
     assert not set(shared) & {k for k, b in joget.items() if b["section"] == "Joget DX"}, "IDs clash with the Joget table"
@@ -935,7 +935,8 @@ def app_spec():
                                     {"id": "where", "label": "Current location", "type": "text"}]}]
     spec["requirements"].append({"id": "FR-PLN-001", "title": "Plan the day", "items": [
         "System shall group the tasks into routes by area.", "System shall warn when a time slot is over capacity.",
-        "System shall send the changes made offline when the phone is back online."]})
+        "System shall send the changes made offline when the phone is back online.",
+        "System shall show the app in English or Bahasa Malaysia, as the driver chooses."]})
     spec["nfr"].append({"area": "Offline", "requirement": "The app works for a full shift with no connection."})
     return spec
 
@@ -947,24 +948,26 @@ def test_app_inventory_finds_the_phone_offline_and_planning():
                                "scan": ["m-task"], "location": ["m-done-dialog"]}
     assert app["offline"] == ["m-tasks", "FR-PLN-001.3", "NFR Offline"]
     assert app["planning"] == ["FR-PLN-001.1", "FR-PLN-001.2"]
+    assert app["language"] == ["FR-PLN-001.4"]
 
 
 def test_app_inventory_of_a_web_only_spec_is_empty():
     app = estimate.app_inventory(support.load_spec(support.EXAMPLE))
-    assert app == {"mobile": [], "features": {}, "offline": [], "planning": []}
+    assert app == {"mobile": [], "features": {}, "offline": [], "planning": [], "language": []}
 
 
 def test_inventory_lists_the_phone_offline_and_planning(tmp_path, kb, run):
     project = support.make_project(tmp_path / "app", spec=app_spec())
     out = run(kb, "inventory", project).splitlines()
     for expected in (
-            "Mobile app, offline working and planning (the All platforms blocks):",
+            "Mobile app, offline working, planning and languages (the All platforms blocks):",
             "  Mobile app screens: 2 (m-tasks, m-task): one mobile app screen each, and one mobile app foundation per app",
             "    signature on the phone: m-done-dialog", "    scan on the phone: m-task",
             "  Offline working, mentioned in: m-tasks, FR-PLN-001.3, NFR Offline: one offline foundation per app, offline "
             "data per kind of record, a sync conflict rule per kind of record changed in two places"):
         assert expected in out
     assert any(l.startswith("  Planning or scheduling, mentioned in: FR-PLN-001.1, FR-PLN-001.2:") for l in out)
+    assert "  Languages, mentioned in: FR-PLN-001.4: one second language per language added, not extra screens" in out
     plain = run(kb, "inventory", support.make_project(tmp_path / "web")).splitlines()
     assert not any(l.startswith("Mobile app, offline") for l in plain), "nothing to say about a web-only spec"
 

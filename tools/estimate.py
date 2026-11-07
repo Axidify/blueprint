@@ -1144,12 +1144,14 @@ def cmd_blocks(a):
           + f"; on any platform: {len(everyone)}. Below {MIN_PROJECTS}, every estimate is low-confidence.")
 
 
-# What a spec says about a mobile app, offline working and planning, for the blocks of the All platforms
+# What a spec says about a mobile app, offline working, planning and languages, for the blocks of the All platforms
 # section. Mobile screens are the spec's `m-` screens; the rest is found in the words of the spec, so it is a
 # pointer to where to look, never a count on its own.
 OFFLINE_WORDS = re.compile(r"offline|without (?:a |any )?(?:signal|connection|network|internet)|no (?:signal|connection|network)"
                            r"|\bsync", re.I)
 # Not "route" alone: an approval is routed to a manager in nearly every spec.
+LANGUAGE_WORDS = re.compile(r"translat|bilingual|multilingual|second language|languages?\b|\bEnglish\b|\bMalay\b|\bBahasa\b"
+                            r"|\bChinese\b|\bMandarin\b|\bTamil\b|\bArabic\b|\bThai\b|\bVietnamese\b|\bIndonesian\b", re.I)
 PLANNING_WORDS = re.compile(r"schedul|time ?slot|capacity|\broutes\b|route (?:planning|optimi|grouping)"
                             r"|(?:delivery|driver|vehicle|trip) routes?\b|dispatch|planning board|\bplanner", re.I)
 SCAN_WORDS = re.compile(r"\bscan|barcode|\bQR\b", re.I)
@@ -1186,7 +1188,7 @@ def spec_texts(spec):
 
 
 def app_inventory(spec):
-    """Mobile screens, device features on them, and where offline working and planning are mentioned."""
+    """Mobile screens, device features on them, and where offline working, planning and languages are mentioned."""
     screens = spec.get("screens") or []
     dialogs = {d.get("id"): d for d in spec.get("dialogs") or []}
     mobile = [sc for sc in screens if str(sc.get("id", "")).startswith("m-")]
@@ -1210,7 +1212,7 @@ def app_inventory(spec):
     found = lambda rx: list(dict.fromkeys(where for where, t in texts if rx.search(t)))
     return {"mobile": [sc.get("id") for sc in mobile],
             "features": {k: list(dict.fromkeys(v)) for k, v in features.items() if v},
-            "offline": found(OFFLINE_WORDS), "planning": found(PLANNING_WORDS)}
+            "offline": found(OFFLINE_WORDS), "planning": found(PLANNING_WORDS), "language": found(LANGUAGE_WORDS)}
 
 
 def places(found, most=8):
@@ -1219,9 +1221,9 @@ def places(found, most=8):
 
 def print_app_inventory(spec):
     app = app_inventory(spec)
-    if not (app["mobile"] or app["offline"] or app["planning"]):
+    if not (app["mobile"] or app["offline"] or app["planning"] or app["language"]):
         return
-    print("Mobile app, offline working and planning (the All platforms blocks):")
+    print("Mobile app, offline working, planning and languages (the All platforms blocks):")
     if app["mobile"]:
         print(f"  Mobile app screens: {len(app['mobile'])} ({places(app['mobile'], 12)}): one mobile app screen each, "
               "and one mobile app foundation per app")
@@ -1233,6 +1235,9 @@ def print_app_inventory(spec):
     if app["planning"]:
         print(f"  Planning or scheduling, mentioned in: {places(app['planning'])}: check for a planning board, "
               "scheduling rules (slots, capacity) and automatic grouping or assignment")
+    if app["language"]:
+        print(f"  Languages, mentioned in: {places(app['language'])}: one second language per language added, "
+              "not extra screens")
 
 
 def cmd_inventory(a):

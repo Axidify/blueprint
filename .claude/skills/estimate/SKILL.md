@@ -43,12 +43,13 @@ One line per thing that gets built, with a block and a count; say in its `note` 
 - **Integrations**: one per endpoint or data exchange, not per system. AD or SSO sign-in is its own block.
 - **Notifications**: one per event (look in the requirements if `notifications` is empty).
 - **Exports, roles, master-data screens, audit trail, environment migrations**: one line each.
-- **Mobile app, offline working, planning**: the blocks of the `All platforms` table, on any platform; its
+- **Mobile app, offline working, planning, languages**: the blocks of the `All platforms` table, on any platform; its
   *What each block counts* says what one unit is and the questions that narrow it. `inventory` lists the
   `m-` screens, the signatures, photos, scans and locations on them, and where offline working and planning
   are mentioned: one mobile app screen per `m-` screen and one app foundation; for offline, one foundation,
   offline data per kind of record and a conflict rule per kind changed in two places; for planning, the
-  boards, the scheduling rules (slots, capacity) and any automatic grouping. If the workspace's
+  boards, the scheduling rules (slots, capacity) and any automatic grouping; a second language per language
+  added, never as extra screens. If the workspace's
   `building-blocks.md` has no `All platforms` table, say so and offer to add it from
   `templates/knowledge/building-blocks.md` (after the user agrees).
 - **Platform fit**: read the spec's `platform_fit` (run `platform_fit.py check` when there is none). Each

@@ -371,7 +371,7 @@ mobile app, offline working, planning logic), the shares set for other work, and
 projects they rest on. `inventory` lists what a project has to count from: documents, screens, forms,
 lists, integrations and open register items, and, when the spec has them, its mobile app screens (`m-`
 screens) with the signatures, photos, scans and locations on them, and where it mentions offline working
-or planning and scheduling. `render` checks an estimate file, works out the
+or planning and scheduling, or a second language. `render` checks an estimate file, works out the
 ranges, the confidence level and the comparison with the scope of work, and writes the Excel file into
 `Internal – estimates and change requests/`; lines with no rate or share are listed as not priced and left out of the total. While a building
 block has no rate, it gives no total at all: it says the build is not priced and shows what is priced so
