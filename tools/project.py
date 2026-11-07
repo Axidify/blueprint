@@ -1,7 +1,7 @@
 """Project folder housekeeping: issue versions, file client documents, archive, and check the layout.
 
 Usage:
-    python -I tools/project.py issue    <slug> [--to "<recipient>"] [--date YYYY-MM-DD] [--note "<text>"]
+    python -I tools/project.py issue    <slug> [--to "<recipient>"] [--date YYYY-MM-DD] [--note "<text>"] [--without-pdf]
     python -I tools/project.py issued   <slug>
     python -I tools/project.py file     <slug> "<file>" --kind "<what it is>" [--responds-to 1.3] [--date YYYY-MM-DD] [--copy]
     python -I tools/project.py archive  <slug>
@@ -14,10 +14,13 @@ Usage:
 
 issue    records that the current document version (the spec's project.version) went to the client, and makes
          its files read-only. The generator then refuses to overwrite that version: bump the version first.
+         It needs the version's PDF (--without-pdf issues the Word file alone), and refuses a version written
+         without quotes in the spec (1.10 would read as 1.1).
 issued   lists the versions issued so far.
 file     moves a document into the project's client documents ("1 Client documents", docs/ in a project
          not yet migrated) with a dated, descriptive name, e.g. "2026-11-12 client comments on v1.3.docx".
-         --copy keeps the original.
+         --copy keeps the original. A file open in another program is not filed (nothing is copied), and
+         --date must be a date (YYYY-MM-DD).
 archive  moves a delivered project to projects/_archive/ (out of the status list); restore brings it back.
 find     lists earlier work on the same or a similar system: active and archived projects, and delivered
          ones in the knowledge base (knowledge/actuals/ and the projects log). Run it before starting a project.
@@ -43,12 +46,14 @@ migrate  moves a project in the old folder layout (docs/, spec/, mockup/, output
 import argparse
 import datetime as dt
 import difflib
+import errno
 import json
 import os
 import re
 import shutil
 import stat
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -181,8 +186,58 @@ def issues_file(p):
 
 
 def load_issues(p):
+    """Every version issued, from issued.json and from any copy OneDrive or SharePoint made of it when two
+    people issued at about the same time (issued-<computer>.json): a version issued on either side stays locked."""
     f = issues_file(p)
-    return json.loads(f.read_text(encoding="utf-8")) if f.exists() else []
+    found, seen = [], set()
+    paths = ([f] if f.exists() else []) + (sorted(x for x in f.parent.glob("issued*.json") if x != f) if f.parent.is_dir() else [])
+    for path in paths:
+        try:
+            records = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            if path == f:
+                raise
+            continue  # a damaged sync copy: issued.json itself still counts
+        for record in records if isinstance(records, list) else []:
+            if isinstance(record, dict) and str(record.get("version")) not in seen:
+                seen.add(str(record.get("version")))
+                found.append(record)
+    return found
+
+
+def write_issues(p, issues):
+    """Write issued.json in one step (a file of its own beside it, then put in its place): a stop part-way never
+    leaves the record of what was issued half written."""
+    f = issues_file(p)
+    f.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=".issued-", suffix=".tmp", dir=f.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as out:
+            out.write(json.dumps(issues, indent=2, ensure_ascii=False))
+        os.replace(tmp, f)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+
+
+def version_of(P):
+    """The spec's version as text. A version written without quotes is read by YAML as a number, so 1.10 becomes
+    1.1 and would be named, locked and overwritten as v1.1: that is refused with how to write it."""
+    version = P.get("version")
+    if isinstance(version, float):
+        sys.exit(f"The spec's project.version is written without quotes, so it reads as the number {version}: "
+                 f"a version such as 1.10 would become 1.1. Write it in quotes, for example version: \"{version}\" "
+                 "(or \"1.10\" if that is what was meant), then run this again.")
+    return str(version or "")
+
+
+def issued_files(p, version):
+    """The generated requirements document of this version: its Word file and PDF, by their exact names (not a
+    version that only starts the same, nor Word's ~$ lock file or a leftover from the PDF step)."""
+    folder = layout.output_dir(p)
+    ends = (f" v{version}.docx", f" v{version}.pdf")
+    return sorted(f for f in folder.iterdir() if f.is_file() and f.name.endswith(ends) and not f.name.startswith("~$")) \
+        if folder.is_dir() else []
 
 
 def is_issued(p, version):
@@ -594,19 +649,23 @@ def drop_note(path):
 def cmd_issue(a):
     p = project_dir(a.slug)
     P = spec_project(p)
-    version = str(P.get("version") or "")
+    version = version_of(P)
     if not version:
         sys.exit("The project has no spec version to issue.")
     if is_issued(p, version):
         sys.exit(f"v{version} was already issued. Bump project.version in the spec for the next version.")
-    files = sorted(f for f in layout.output_dir(p).glob(f"* v{version}.*") if f.suffix in (".docx", ".pdf"))
+    files = issued_files(p, version)
     if not files:
         sys.exit(f"No generated requirements document for v{version} in {layout.shown(p, layout.output_dir(p))}/. Generate it first.")
+    if not any(f.suffix == ".pdf" for f in files) and not a.without_pdf:
+        sys.exit(f"v{version} has no PDF (the Word step did not finish), so its contents and page numbers may not be "
+                 "up to date. Generate it again where Word is available, then issue it. To issue the Word file alone, "
+                 "add --without-pdf. Nothing was issued.")
     issues = load_issues(p)
     record = {"version": version, "date": a.date or dt.date.today().isoformat(),
               "to": a.to or P.get("client_short") or P.get("client", ""), "files": [f.name for f in files], "note": a.note or ""}
     issues.append(record)
-    issues_file(p).write_text(json.dumps(issues, indent=2, ensure_ascii=False), encoding="utf-8")
+    write_issues(p, issues)
     snap = layout.snapshot(p, version)
     for f in files + ([snap] if snap.exists() else []):
         read_only(f)
@@ -632,9 +691,12 @@ def cmd_file(a):
     src = Path(a.file)
     if not src.exists():
         sys.exit(f"No such file: {src}")
-    date = a.date or dt.date.fromtimestamp(src.stat().st_mtime).isoformat()
+    try:
+        date = dt.date.fromisoformat(a.date).isoformat() if a.date else dt.date.fromtimestamp(src.stat().st_mtime).isoformat()
+    except ValueError:
+        sys.exit(f"--date {a.date} is not a date: write it as YYYY-MM-DD. Nothing was filed.")
     kind = safe_name(a.kind)
-    name = f"{date} {kind}" + (f" on v{a.responds_to.lstrip('v')}" if a.responds_to else "") + src.suffix.lower()
+    name = f"{date} {kind}" + (f" on v{safe_name(a.responds_to.lstrip('v'))}" if a.responds_to else "") + src.suffix.lower()
     docs = layout.docs_dir(p)
     dest = docs / name
     n = 2
@@ -642,7 +704,10 @@ def cmd_file(a):
         dest = docs / f"{Path(name).stem} ({n}){src.suffix.lower()}"
         n += 1
     dest.parent.mkdir(exist_ok=True)
-    (shutil.copy2 if a.copy else shutil.move)(str(src), str(dest))
+    if a.copy:
+        shutil.copy2(str(src), str(dest))
+    else:
+        move_file(src, dest)
     drop_note(src)  # a file left in the inbox with a note of why: filed now, so the note goes
     print(f"Filed {src.name} as {layout.shown(p, dest)}")
     try:  # the project's overview page follows what was just written; it never stops this command
@@ -651,13 +716,46 @@ def cmd_file(a):
         pass
 
 
+def move_file(src, dest):
+    """Move one file, never leaving it in both places. A rename moves it in one step; only to another drive is it
+    copied, and the copy is taken back if the original cannot then be removed."""
+    stop = (f"Nothing was filed: {src.name} is open in another program (or OneDrive is syncing it). "
+            "Close it, then run this again.")
+    try:
+        os.rename(src, dest)
+        return
+    except PermissionError:
+        sys.exit(stop)
+    except OSError as e:
+        if e.errno != errno.EXDEV and getattr(e, "winerror", None) != 17:  # 17: not the same drive
+            sys.exit(f"Nothing was filed: {src.name} could not be moved ({e.strerror or type(e).__name__}).")
+    shutil.copy2(str(src), str(dest))
+    try:
+        src.unlink()
+    except OSError:
+        dest.unlink(missing_ok=True)
+        sys.exit(stop)
+
+
+def move_whole(src, dest, done):
+    """Move a project folder in one step, or not at all. A rename never copies: when something in the folder is
+    open (the register in Excel, a document in Word, OneDrive syncing), Windows refuses it and nothing moves,
+    where a copy-then-delete would leave half the project in each place."""
+    try:
+        os.rename(src, dest)
+    except OSError as e:
+        sys.exit(f"Nothing was {done}: {src.name} could not be moved ({e.strerror or type(e).__name__}). Something in "
+                 "the folder is probably open: close its files in Excel and Word, let OneDrive finish syncing, "
+                 "then run this again.")
+
+
 def cmd_archive(a):
     p = project_dir(a.slug)
     if (ARCHIVE / a.slug).exists():
         sys.exit(f"An archived project called '{a.slug}' already exists (projects/_archive/{a.slug}), so nothing was "
                  f"moved. To keep both, rename this project's folder first (for example {a.slug}-phase-2), then archive it.")
     ARCHIVE.mkdir(exist_ok=True)
-    shutil.move(str(p), str(ARCHIVE / a.slug))
+    move_whole(p, ARCHIVE / a.slug, "archived")
     print(f"Archived {a.slug} to projects/_archive/. Restore with: python -I tools/project.py restore {a.slug}")
 
 
@@ -667,7 +765,7 @@ def cmd_restore(a):
         sys.exit(f"No archived project '{a.slug}'.")
     if (PROJECTS / a.slug).exists():
         sys.exit(f"projects/{a.slug} already exists.")
-    shutil.move(str(src), str(PROJECTS / a.slug))
+    move_whole(src, PROJECTS / a.slug, "restored")
     print(f"Restored {a.slug} to projects/.")
 
 
@@ -867,6 +965,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("issue"); s.add_argument("slug"); s.add_argument("--to"); s.add_argument("--date"); s.add_argument("--note")
+    s.add_argument("--without-pdf", action="store_true")
     s = sub.add_parser("issued"); s.add_argument("slug")
     s = sub.add_parser("file"); s.add_argument("slug"); s.add_argument("file"); s.add_argument("--kind", required=True)
     s.add_argument("--responds-to"); s.add_argument("--date"); s.add_argument("--copy", action="store_true")

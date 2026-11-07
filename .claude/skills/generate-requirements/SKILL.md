@@ -13,8 +13,9 @@ reads, writes and warns about: `python -I tools/generate_requirements.py --help`
 `docs/spec-format.md`.
 
 **Rules.** Fix the document in the spec and generate again, never by hand in the Word file (hand edits are
-lost). Never invent an exclusion, a priority, a signatory or an answer. Never copy mandays, rates or cost
-into the spec. An issued version is locked.
+lost). Never invent an exclusion, a priority, a signatory or an answer. Never copy rates, cost or the
+estimate's mandays into the spec: the only mandays in the document are the scope of work's, on the timeline's
+activities. An issued version is locked.
 
 ## 1. Make sure the spec is ready
 
@@ -33,7 +34,9 @@ into the spec. An issued version is locked.
   run the `estimate` skill first if there is none or it is older than the spec), not the SOW's mandays,
   unless the user asks, and then say the timeline rests on sold figures. Ask the lead developer the team
   size and state it in `assumptions`; weeks of effort are not the calendar (add review turnaround, client
-  activities, waiting). Only weeks reach the spec. Show the draft before generating.
+  activities, waiting). Put each SOW item's mandays on its activity (`mandays`), copied from the scope of
+  work in `1 Client documents` and re-added (the document shows their total); never the estimate's figures,
+  rates or cost. An item the SOW gives no mandays has none. Show the draft before generating.
 - Open client questions in the register become **Open Issues**; answered ones are listed under **Decisions
   made**: check each answer reads as the client gave it and `resolved_in` says where it was agreed.
 - `project` has the right version, dates, `status` and `history`; `signoff` lists everyone who signs

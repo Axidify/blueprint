@@ -104,7 +104,8 @@ so every decision put into the spec shows up in both. Format: `docs/spec-format.
   catch those later.
 - **Where and for whom:** the mock-up (in `_blueprint/mockup`) and its screenshots (in `4 Mock-up screenshots`), **for the
   client** to see in a session (opened with **Open the mock-up** on `Project overview.html`, or
-  `present.cmd`); the register's questions on its **For client** sheet; the custom-work findings
+  `present.cmd`); the register's questions in
+  `Questions for the client.xlsx` (the one register file to send); the custom-work findings
   **internal** (the room sees only the Custom development tags).
 - **Next step, in the words to say:** "present the mock-up" (the `present` skill explains the presenter's
   bar, acting the process out and how comments are saved), or first "prepare the workshop" for the agenda.

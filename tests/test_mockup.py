@@ -115,6 +115,12 @@ def mockup_spec():
                                                          {"id": "urgent", "label": "Urgent", "type": "checkbox"}]}],
         "buttons": [{"label": "Withdraw", "when": {"status": "Pending Approval"}, "set_status": "cancelled", "toast": "Withdrawn"},
                     {"label": "Resubmit", "when": {"status": "Rejected"}, "set_status": "pending"}]})
+    # A form opened on a record whose Save keeps what was typed in that record.
+    spec["screens"].append({
+        "id": "change-reason", "type": "form", "title": "Change Reason", "roles": ["employee"], "data": "applications",
+        "sections": [{"title": "Application", "fields": [{"id": "reason", "label": "Reason", "type": "textarea"},
+                                                         {"id": "note", "label": "Note to the manager", "type": "text"}]}],
+        "buttons": [{"label": "Save", "style": "primary", "toast": "Saved", "to": "my-applications"}]})
     # What the platform check found to be custom work, for the tags shown while presenting: one at a named part,
     # one (written before platform_fit named the parts) at the heading of its screen, and one that is only configuration.
     spec["platform_fit"] = PLATFORM_FIT
@@ -361,7 +367,7 @@ def test_screenshots_that_stop_at_a_screen_say_which_and_why(tmp_path, monkeypat
     assert stop.value.code == 1
     assert "Screenshots stopped at new-application-p1 (screen new-application, as employee): the mock-up drew nothing there" in err
     assert "The browser reported:\n  TypeError: f.notes.map is not a function" in err
-    assert "spec/mockup.js" in err and "#/new-application?role=employee&clean=1&page=1" in err
+    assert "spec/mockup.js" in err and "#/new-application?role=employee&clean=1&menu=0&page=1" in err
     assert not (project / "mockup" / "screenshots" / mockup.RECORD).exists(), "no note that the pictures show the spec"
 
 
@@ -1202,6 +1208,19 @@ def test_comments_wait_in_a_queue_until_they_are_listed(session, capsys):
     assert capsys.readouterr().out == "No comments waiting.\n"
 
 
+def test_a_comment_that_follows_an_applied_one_is_read_with_it(session, capsys):
+    """A layer on a change already made: "now smaller", or "put it back", is read against that change."""
+    mockup.live_mark(session, "FB-001", "applied", "Column renamed to Staff")
+    mockup.save_comment(session / "feedback" / "feedback.json", {"screen": "approvals", "element": "column:Employee", "role": "manager",
+                                                                 "text": "Put it back to Employee", "follows": ["FB-001"]})
+    capsys.readouterr()
+    mockup.live_list(session)
+    out = capsys.readouterr().out
+    assert '"Put it back to Employee"' in out
+    assert 'follows FB-001: "Call this column Staff"  (applied: Column renamed to Staff)' in out
+    assert mockup.for_the_room(comments(session))[-1]["follows"] == ["FB-001"], "the room sees the link too"
+
+
 @pytest.mark.parametrize("element, said", [
     ("region:side menu", "the side menu"), ("region:page background", "the page background"), ("row:LV-2026-011", "the row LV-2026-011"),
     ("cell:Status|LV-2026-011", "the Status cell of LV-2026-011"), ("column:Status", "the Status column"), ("field:reason", "the Reason field"),
@@ -1457,14 +1476,16 @@ def test_every_planned_screenshot_is_taken(pictures):
 
 
 def test_screens_are_taken_narrow_so_their_text_is_readable_in_the_document(pictures):
-    """1000 px wide at twice the pixels. At the old 1440 px the mock-up's text printed at about 4 pt."""
-    narrow = {name: size for name, size in pictures["sizes"].items() if name != "wide-list"}
-    assert {size[0] for size in narrow.values()} == {2000}, narrow
+    """800 px wide at twice the pixels, without the side menu (menu=0). At the old 1440 px the mock-up's text
+    printed at about 4 pt. The process flow keeps 1000 px: narrower, the words overflow its boxes."""
+    narrow = {name: size for name, size in pictures["sizes"].items() if name not in ("wide-list", "process-flow")}
+    assert {size[0] for size in narrow.values()} == {1600}, narrow
+    assert pictures["sizes"]["process-flow"][0] == 2000
 
 
 def test_a_screen_that_does_not_fit_is_taken_wider_and_says_so(pictures):
     assert pictures["sizes"]["wide-list"][0] in (2400, 2880)
-    assert "wide-list.png (taken" in pictures["log"] and "it does not fit in 1000" in pictures["log"]
+    assert "wide-list.png (taken" in pictures["log"] and "it does not fit in 800" in pictures["log"]
 
 
 def test_screenshots_are_cropped_to_the_content(pictures):
@@ -1502,12 +1523,12 @@ def desk_pictures(tmp_path_factory):
             "planned": [s["name"] for s in mockup.shot_list(mockup.load_spec(project))]}
 
 
-def test_the_desk_theme_draws_every_screen_type_at_1000_pixels(desk_pictures):
+def test_the_desk_theme_draws_every_screen_type_at_800_pixels(desk_pictures):
     """Login, dashboard, lists with filters and row actions, a form in steps, detail screens with their
-    progress and a related list, dialogs, the process flow: all taken, none wider than 1000 px."""
+    progress and a related list, dialogs: all taken 800 px wide without the side menu; the process flow at 1000."""
     sizes = desk_pictures["sizes"]
     assert sorted(sizes) == sorted(desk_pictures["planned"])
-    assert {name: size[0] for name, size in sizes.items() if size[0] != 2000} == {}, desk_pictures["log"]
+    assert {name: size[0] for name, size in sizes.items() if size[0] != (2000 if name == "process-flow" else 1600)} == {}, desk_pictures["log"]
     assert "(taken" not in desk_pictures["log"]
 
 
@@ -1668,9 +1689,11 @@ def test_the_presenters_chrome_is_dark_with_the_cobalt_accent_and_never_orange(b
     assert "200, 75, 11" not in css and "#c84b0b" not in css and "rgb(200, 75, 11)" not in css, "the burnt orange is gone"
 
 
-def test_the_open_feedback_panel_never_covers_the_last_column(browser):
+def test_opening_the_feedback_panel_never_moves_the_page(browser):
+    """The panel lies over the page. When the page made room for it, the pins and boxes drawn on the page could
+    be placed while it moved, and ended up beside what they were about."""
     room = browser["chrome"]["room"]
-    assert room["lastColumnRight"] <= room["panelLeft"] and not room["overflow"]
+    assert room["before"] == room["after"] and not room["overflow"], room
 
 
 def test_the_presenters_bar_folds_away_and_remembers_it(browser):
@@ -1740,6 +1763,14 @@ def test_a_form_shows_its_own_record_and_its_buttons_follow_the_record(browser):
     assert form_["statusAfter"] == "Cancelled", "the button moved the record the form was on"
 
 
+def test_save_on_a_form_opened_on_a_record_changes_that_record(browser):
+    """Edit User's Save showed its message, and the list still showed the old status."""
+    saved = browser["editSaved"]
+    assert saved["countAfter"] == saved["countBefore"], "no record added"
+    assert saved["record"] == {"reason": "Changed in the walk-through", "note": False}, "only the list's own fields are written"
+    assert saved["shown"] == "Changed in the walk-through", "every screen that shows the record shows the change"
+
+
 def test_a_checkbox_without_options_is_one_tick_box(browser):
     """It used to show only its label, with nothing to tick."""
     assert browser["formOnRecord"]["byDefault"]["ticks"] == 1 and browser["formOnRecord"]["ticked"]
@@ -1766,6 +1797,7 @@ def test_a_changed_spec_is_offered_as_an_update_and_never_reloads_by_itself(brow
     assert live["toasts"] == [], "something changed, so the panel says what instead of a message"
     assert "Title: Pending Approvals → Waiting For Me" in live["changes"], "What changed lists the renamed screen"
     assert not live["feedbackOn"], "feedback mode is off after an update: the presenter's next click does what it says"
+    assert live["wcMini"] == {"panel": False, "on": False} and live["wcBack"] == {"panel": True, "on": True}, "minimised, then back from the bar"
 
 
 def test_a_spec_with_a_mistake_never_shows_in_the_room(browser):
@@ -1980,6 +2012,7 @@ def test_a_projects_own_code_runs_after_every_screen_is_drawn(browser):
 
 def test_a_pin_opens_the_comment_it_stands_for(browser):
     assert browser["pinClick"] == {"on": True, "shown": 1}
+    assert browser["cardPick"] == {"picked": 1, "outlined": 1, "dialog": 0}, "a picked card shows its comment's place; it opens no comment box"
 
 
 def test_pins_on_the_same_thing_sit_side_by_side(browser):
@@ -2013,7 +2046,22 @@ def test_try_again_saves_the_kept_comment_once(browser):
     assert state["kept"] == [] and state["unsentPins"] == 0 and state["pins"] == 2
     assert "Saved to the project folder." in state["panel"] and "not saved" not in state["toggle"]
     assert [c["text"] for c in state["file"]] == ["saved while the server is up", "typed while the server is down", "from another laptop",
-                                                  "saved with the keyboard", "second thought"]  # the later Ctrl + Enter and edit checks
+                                                  "saved with the keyboard", "second thought", "typed after a failed load",
+                                                  "slow one", "right after"]  # the later checks
+
+
+def test_a_comment_typed_after_the_comments_failed_to_load_still_reaches_the_project(browser):
+    """One failed load used to switch the page to keeping comments in the browser for good, without a word."""
+    state = browser["failedLoad"]
+    assert "typed after a failed load" in state["room"], "saved to the project's feedback file"
+    assert state["local"] == [] and state["errorToasts"] == []
+
+
+def test_two_comments_saved_while_the_server_is_slow_are_each_saved_once(browser):
+    """A second send started while the first waited used to save the first comment twice and drop the second."""
+    state = browser["slowServer"]
+    assert state["room"].count("slow one") == 1 and state["room"].count("right after") == 1
+    assert state["kept"] == [], "nothing left waiting in the browser"
 
 
 def test_a_comment_saved_by_someone_else_appears_without_a_reload(browser):
@@ -2846,11 +2894,104 @@ def test_a_box_for_something_new_keeps_its_place_when_the_layout_changes(tmp_pat
         pytest.skip(f"Microsoft Edge could not be started: {run.stderr.strip()[:200]}")
     assert run.returncode == 0, run.stderr
     seen = json.loads(run.stdout.strip().splitlines()[-1])
+    assert "failed" not in seen, seen.get("failed")  # each scenario runs on a page of its own and names where it stopped
     assert seen["errors"] == [] and seen["title"].startswith("Something new")
     for state in ("panelOpen", "panelClosed", "narrower"):
         assert abs(seen[state]["offCentre"]) <= 2 and abs(seen[state]["gapUnderCard"] - 14) <= 2, (state, seen[state])
+    assert seen["mini"]["width"] == 0 and seen["mini"]["feedback"] and seen["mini"]["commentsButton"], "minimised: Feedback on, nothing over the page, Comments on the bar"
     assert seen["toolbarTitle"] == "Something new in the area above the list"
     for state in ("toolbarPanelOpen", "toolbarPanelClosed", "toolbarWide"):
         assert abs(seen[state]["gapLeftOfButton"] - 14) <= 2 and abs(seen[state]["offMiddle"]) <= 2, (state, seen[state])
     assert seen["markedWhileDrawing"] == [] and seen["markedOverEmptyPage"] == []
     assert seen["emptyTitle"] == "Something new here" and seen["emptyElement"] == ""
+    hidden, part = seen["hiddenPart"], seen["shownPart"]
+    assert abs(hidden["left"] - (part["left"] - 6)) <= 3 and abs(hidden["top"] - (part["top"] - 6)) <= 3, (hidden, part)
+    assert hidden["width"] <= part["width"] + 16, "a box round two things, one hidden, stays round the one on show"
+    gone = seen["allHidden"]
+    assert gone["boxesAfter"] == gone["boxesBefore"] - 1, "with all its things hidden, a box is not drawn"
+    assert any("folded away or hidden" in n for n in gone["note"]), gone
+    notes = dict(seen["away"]["notes"])
+    assert notes["role only"].startswith("Made while viewing as Line Manager"), notes
+    assert "built since" in seen["away"]["done"] and seen["away"]["doneHead"] and not seen["away"]["oldBox"], "done: in the Done part, no mark"
+    keys = seen["away"]["keys"]
+    assert len(keys) == len(set(keys)) and not any(k.isdigit() for k in keys), "a card names its comment, never its place in a list"
+    assert seen["shownDone"], "Show on the screen brings a done comment's mark back, faded"
+    assert seen["clickThrough"] not in ("box", ""), "a box never takes a click: the thing inside it does"
+    assert any("these two together" in x for x in seen["earlier"]), "the comment box shows the earlier comment on the same thing"
+
+
+# ---------------------------------------------------------------------- QC pass 1: leaks and lost work
+def test_the_built_mockup_carries_no_internal_notes_or_the_timeline(tmp_path, capsys):
+    """Only the platform check was held back: a requirement's internal note, the team's `_` notes and the
+    timeline's mandays were in spec.js, which anyone in the room can open."""
+    spec = sample()
+    spec["project"]["_note"] = "SECRET-RATE 900 a day"
+    spec["requirements"][0]["items"][0] = {"text": "Shown", "note": "SECRET-NOTE pad 3 mandays"}
+    spec["screens"][0]["_why"] = "SECRET-WHY"
+    spec["timeline"] = {"stages": [{"name": "Build", "items": [{"ref": "1", "name": "Build", "start": 1, "end": 4, "mandays": 23}]}]}
+    project = tmp_path / "leave-request"
+    support.write_spec(project, spec)
+    mockup.build(project)
+    capsys.readouterr()
+    for built in (project / "mockup" / "spec.js", project / "mockup" / "versions" / "v0.1" / "spec.js"):
+        text = built.read_text(encoding="utf-8")
+        assert "SECRET-" not in text and '"mandays"' not in text and '"timeline": {' not in text, built
+        assert '"text": "Shown"' in text and spec["screens"][0]["id"] in text, "the rest is still there"
+
+
+def test_a_feedback_write_that_fails_leaves_the_file_whole(tmp_path, monkeypatch):
+    """The file was written in place: a reader could catch it half written, and a program stopped part-way
+    left a broken file that stopped every later comment."""
+    fb = tmp_path / "feedback" / "feedback.json"
+    mockup.save_comment(fb, {"screen": "approvals", "text": "kept"})
+    before = fb.read_bytes()
+
+    def stopped(*args):
+        raise OSError("stopped part-way")
+
+    monkeypatch.setattr(mockup.os, "replace", stopped)
+    with pytest.raises(OSError):
+        mockup.save_comment(fb, {"screen": "approvals", "text": "lost"})
+    assert fb.read_bytes() == before and [c["text"] for c in mockup.read_feedback(fb)] == ["kept"]
+    assert sorted(p.name for p in fb.parent.iterdir() if not p.name.startswith(".feedback.lock")) == ["feedback.json"], "no half file left"
+
+
+def test_undo_refuses_when_the_copy_kept_before_the_change_is_missing(session, capsys):
+    """Every file then looked added by the change, and the spec itself was deleted."""
+    spec_file = session / "spec" / "app.yaml"
+    mockup.live_take(session, ["FB-001"])
+    spec_file.write_bytes(spec_file.read_bytes().replace(b"label: Employee", b"label: Staff"))
+    shutil.rmtree(session / "feedback" / "live" / mockup.live_session(session)["changes"][-1]["before"])
+    with pytest.raises(SystemExit, match="Cannot undo"):
+        mockup.live_undo(session)
+    assert spec_file.exists() and b"label: Staff" in spec_file.read_bytes(), "nothing was changed"
+    assert mockup.live_session(session)["changes"], "the change is still on the list"
+
+
+
+def test_a_lock_still_held_by_another_program_is_never_removed(tmp_path, monkeypatch):
+    """After waiting, the lock was taken anyway and then deleted: the other program's lock went with it."""
+    fb = tmp_path / "feedback" / "feedback.json"
+    fb.parent.mkdir(parents=True)
+    lock = fb.parent / ".feedback.lock"
+    lock.write_text("", encoding="utf-8")   # the other program, still working: its lock stays fresh
+    now = [lock.stat().st_mtime]
+
+    def wait(seconds):
+        now[0] += 1
+        os.utime(lock, (now[0] - 1, now[0] - 1))
+
+    monkeypatch.setattr(mockup.time, "time", lambda: now[0])
+    monkeypatch.setattr(mockup.time, "sleep", wait)
+    with mockup.feedback_lock(fb):
+        pass
+    assert now[0] - lock.stat().st_mtime < 10 and lock.exists(), "left to the program that holds it"
+
+
+def test_a_second_server_on_one_project_points_to_the_first(tmp_path, monkeypatch):
+    project = tmp_path / "leave-request"
+    support.write_spec(project, sample())
+    monkeypatch.setattr(mockup.layout, "server_running", lambda p: {"port": 8765, "pid": 1, "started": "2026-11-07T10:00:00"})
+    monkeypatch.setattr(mockup.webbrowser, "open", lambda url: None)
+    with pytest.raises(SystemExit, match="already open at http://localhost:8765/"):
+        mockup.serve(project, 8766, False)

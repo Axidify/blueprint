@@ -105,6 +105,9 @@ stops and lists them; `--overwrite` writes the file from `register.json` and dro
 their answers in **Client response** or a status changed), after the project's own file and by the same
 rules; the returned file is only read. An item that was also changed in `register.json` since the copy was
 written stops it, with both values. The `client-answers` skill uses it.
+Beside it, `render` writes `Questions for the client.xlsx`: the client's items alone, in no sheet, hidden or
+not, the only register file to send (the register's own file holds the internal fixes and a hidden record of
+every item). A copy of it that comes back filled in is taken in with `--from` like the register itself.
 See [The register](register.md).
 
 ### mockup.py
@@ -116,7 +119,8 @@ python -I tools/mockup.py screenshots projects/<slug>
 python -I tools/mockup.py feedback    projects/<slug>
 python -I tools/mockup.py look        projects/<slug> [--try key=value ...]
 ```
-`look` prints the look of the client's screens (theme, colour, data colours, text size, font, corners, side menu, top bar,
+`serve` on a project whose mock-up is already open does not start a second server: it opens the running one
+and says where it is. `look` prints the look of the client's screens (theme, colour, data colours, text size, font, corners, side menu, top bar,
 logo and the project's own CSS), says when the current version was issued, and notes white words that are
 hard to read on the project's colour (below 4.5 to 1), a font the mock-up does not carry, an accent or data colour in `desk` that
 is close to a status colour or is violet or indigo, and a look that is custom work on a Joget platform.
@@ -173,7 +177,8 @@ the old layout): every comment, one row each across all versions, with where it 
 outcome as a dot and a word, the note, the register item and the version it was worked into, filterable,
 with a summary by outcome and by version. The project overview writes it too when the comments changed. `undo` puts the spec and the project's own code
 back as they were before the last change, and makes its comments wait again (Received); it does not touch
-the register, so register items made for that change are put back with `register.py update` (it names them). `end` closes the session and says what to release. (`wait`,
+the register, so register items made for that change are put back with `register.py update` (it names them).
+When the copy kept before the change is missing, `undo` stops and changes nothing. `end` closes the session and says what to release. (`wait`,
 which returns as soon as a comment arrives, and `checkpoint`, which keeps the project without marking a
 comment, are there for working on each comment at once.) The mock-up is only ever sent a
 comment's text and one of four words (Received, Working on it, Applied, Noted for follow-up): notes,
@@ -217,10 +222,12 @@ Called by `mockup.py screenshots`; you don't run it directly. Drives the install
 used). When neither starts, it says so and quotes why the browser the system usually has (Edge on Windows,
 Chrome elsewhere) did not start.
 
-- **Width.** A screenshot is printed about 14 cm wide in the requirements document, so the narrower the
-  window it is taken in, the larger the screen's text on paper. Each screen is taken 1000 pixels wide
-  (text prints at about 6 pt). A screen that does not fit, for example a list with many columns, is taken
-  1200 or 1440 pixels wide instead, and the command says so; its text prints smaller.
+- **Width.** A screenshot is printed about 15 cm wide in the requirements document, so the narrower the
+  window it is taken in, the larger the screen's text on paper. Each screen is taken 800 pixels wide
+  without the side menu (text prints at about 7.5 pt; the access matrix lists each role's menu). A screen
+  that does not fit, for example a list with many columns, is taken 1000, 1200 or 1440 pixels wide instead,
+  and the command says so; its text prints smaller. The process flow is taken 1000 pixels wide, so the words
+  in its boxes fit.
 - **Height.** Each screenshot is cropped to its content, with no minimum: a list with one row is a short
   picture. The login card and an open dialog are centred with space around them.
 - **Sharpness.** Pictures have twice the pixels of the screen. The Word file keeps them whole. Word's PDF
@@ -287,8 +294,9 @@ python -I tools/workshop.py render projects/<slug> ["<agenda.json>"]
 ```
 `gaps` lists what a workshop has to settle: the open client questions, what the spec does not say yet and
 the gap patterns with their evidence. `check` checks an agenda file in `_blueprint/workshops/`:
-every reference is an open client question, every screen exists, the sections fit the time, and no open
-high-severity question is left out without a reason. `render` checks it and writes two Word documents into
+every reference is an open client question, every screen exists, the sections fit the time, no open
+high-severity question is left out without a reason, and nothing the client's agenda prints (the goal, the
+questions and options, what to bring, parked items) uses the team's words (mandays, rates, building blocks). `render` checks it and writes two Word documents into
 `3 Workshops/`: the agenda for the client, and the facilitator notes for the BA, which add why each question
 matters, your recommendation and what was left for later. The notes are internal; neither document holds
 mandays or cost. The file format is at the top of the script. Used by the `prep-workshop` skill.
@@ -298,7 +306,7 @@ mandays or cost. The file format is at the top of the script. Used by the `prep-
 ```bash
 python -I tools/uat.py draft   projects/<slug> [--current] [--date YYYY-MM-DD] [--force]
 python -I tools/uat.py check   projects/<slug> ["<scripts.json>"]
-python -I tools/uat.py render  projects/<slug> ["<scripts.json>"]
+python -I tools/uat.py render  projects/<slug> ["<scripts.json>"] [--force]
 python -I tools/uat.py results projects/<slug> ["<filled-in workbook.xlsx>"]
 ```
 `draft` writes `_blueprint/uat/<date> uat scripts v<version>.json` from the spec, the same way every
@@ -311,6 +319,9 @@ unique, every step has an expected result, roles and screens exist and nothing i
 rates, internal register items, platform findings), and lists the draft's `todo`s still open. `render`
 checks and writes, into `6 UAT/`, the workbook for the testers (one row per step, Pass/Fail chosen from a
 list, a summary of coverage and results) and the test scripts as a Word document in the company's format.
+When the testers have already typed results into that workbook (a Pass/Fail, an actual result, a tester, a
+date or a defect), `render` stops rather than write over them; `--force` writes it anyway and first keeps
+their workbook beside it as `<name> - results kept <date> <time>.xlsx`.
 `results` reads a filled-in workbook and lists the failed and blocked steps. The file format is at the top
 of the script. Used by the `uat-scripts` skill. See [UAT scripts](uat.md).
 
@@ -343,7 +354,7 @@ starter knowledge in `templates/` only when given `--knowledge`.
 ```bash
 python -I tools/estimate.py blocks    "Joget DX"
 python -I tools/estimate.py inventory projects/<slug>
-python -I tools/estimate.py render    projects/<slug> ["<estimate.json>"]
+python -I tools/estimate.py render    projects/<slug> ["<estimate.json>"] [--force]
 python -I tools/estimate.py weeks     projects/<slug> --team 2 ["<estimate.json>"]
 python -I tools/estimate.py rates-from "<estimate.xlsx>" [--json]
 ```
@@ -353,7 +364,9 @@ forms, lists, integrations and open register items. `render` checks an estimate 
 ranges, the confidence level and the comparison with the scope of work, and writes the Excel file into
 `Internal – estimates and change requests/`; lines with no rate or share are listed as not priced and left out of the total. While a building
 block has no rate, it gives no total at all: it says the build is not priced and shows what is priced so
-far, and lists the scope-of-work lines that cannot be compared yet. `weeks` turns the
+far, and lists the scope-of-work lines that cannot be compared yet. When rates were typed into the *Rates
+needed* sheet of the Excel file it would replace, `render` stops (take them in with `rates-from` first);
+`--force` writes it anyway and keeps that file beside it (`… - rates kept <date> <time>.xlsx`). `weeks` turns the
 estimate into working weeks for a team size (`--days` sets the working days a week, default 5), for
 drafting the project timeline. `rates-from` reads the figures a lead developer filled in on the
 *Rates needed* sheet of an estimate's Excel file and prints them as rows for `knowledge/building-blocks.md`
@@ -390,7 +403,7 @@ figure. The file format is at the top of the script. Used by the `change-request
 ### project.py
 
 ```bash
-python -I tools/project.py issue   <slug> [--to "the client"] [--date 2026-11-12] [--note "..."]
+python -I tools/project.py issue   <slug> [--to "the client"] [--date 2026-11-12] [--note "..."] [--without-pdf]
 python -I tools/project.py issued  <slug>
 python -I tools/project.py file    <slug> "<file>" --kind "client comments" [--responds-to 1.3] [--date 2026-11-12] [--copy]
 python -I tools/project.py archive <slug>
@@ -403,10 +416,16 @@ python -I tools/project.py migrate <slug> | --all [--dry-run] [--undo]
 ```
 Project housekeeping. `issue` records that the current document version went to the client and locks it (its
 files become read-only and the generator refuses to overwrite it, so the next change needs a new version).
-`file` moves a document into `1 Client documents/` with a dated, descriptive name such as
-`2026-11-12 client comments on v1.3.docx`. `archive` moves a delivered project to `projects/_archive/`,
+It takes that version's Word file and PDF by their exact names, and needs the PDF: without one (the Word step
+did not finish) it stops, and `--without-pdf` issues the Word file alone. A version written without quotes in
+the spec is refused (YAML reads `1.10` as 1.1), here and by the generator. The record of what was issued is
+written in one step, and a copy OneDrive made when two people issued at once (`issued-<computer>.json`) counts
+too. `file` moves a document into `1 Client documents/` with a dated, descriptive name such as
+`2026-11-12 client comments on v1.3.docx`. A file open in another program is not filed (it is never left in
+both places), and `--date` must be a date. `archive` moves a delivered project to `projects/_archive/`,
 out of the status list; `restore` brings it back. `archive` refuses when an archived project already has
-that name, and moves nothing. `find` lists earlier work on the same or a similar system name (words like
+that name, and moves nothing. Both move the folder in one step or not at all: when a file in it is open
+(in Excel or Word, or OneDrive is syncing) they stop, move nothing and say to close it. `find` lists earlier work on the same or a similar system name (words like
 "system" and "phase 2" are ignored): active and archived projects, and systems delivered before, from
 `knowledge/actuals/` and the projects log; `new-project` and `process-inbox` run it so a new document for a
 system you already built is not treated as brand new. `check` reports projects missing parts of the
@@ -464,8 +483,8 @@ to Claude and a button that opens the document it needs), four figures (client q
 block sign-off, internal fixes, the mock-up, the requirements document), and then a card per stage in the
 order of the process: client documents, review, workshops, mock-up, requirements document and the
 estimate for the lead developer. Each document is a row that opens the real file, with a line about what
-it is and who it is for (From the client, For the client, Client sheet only, Show the client, Can be
-shared, Internal); a stage with nothing yet says how to get there. Estimates, facilitator notes, reviews
+it is and who it is for (From the client, For the client, Show the client, Can be shared, Internal; the
+register is Internal and `Questions for the client.xlsx` For the client); a stage with nothing yet says how to get there. Estimates, facilitator notes, reviews
 and change notes are marked Internal, and the page never shows mandays, rates or cost. It is rewritten only
 when something on it changed. For a project with a mock-up it also writes the **Open the mock-up**
 shortcuts (`Open the mock-up.cmd` for Windows, `Open the mock-up.command` for a Mac): they find Blueprint on

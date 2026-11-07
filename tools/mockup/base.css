@@ -20,6 +20,7 @@ h3 { margin: 0 0 12px; font-size: calc(15px * var(--ts)); font-weight: 600; }
 
 .layout { display: flex; min-height: calc(100vh - 54px); }
 .sidebar { width: 230px; flex-shrink: 0; background: var(--sidebar-bg); padding: 12px 0; }
+body.no-menu .sidebar { display: none; }  /* the requirements document's pictures (menu=0) */
 .menu-item { display: block; padding: 11px 22px; color: var(--sidebar-text); font-size: calc(13.5px * var(--ts)); border-left: 3px solid transparent; }
 .menu-item:hover { background: var(--sidebar-hover); }
 .menu-item.active { background: var(--sidebar-active); color: var(--sidebar-active-text); border-left-color: var(--primary); font-weight: 600; }
@@ -162,9 +163,9 @@ body.fb-active #fb-toggle { background: var(--fb-ink); color: #1d1d1f; }
 .fb-live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--fb-done); }
 #fb-update { font: inherit; font-weight: 600; height: 34px; padding: 0 14px; background: var(--fb-ink); color: #1d1d1f; border: 0; border-radius: 999px; cursor: pointer; animation: fb-rise .2s var(--ease); }
 #fb-update:hover { background: #e5e5ea; }
-#fb-changes-btn { font: inherit; font-weight: 500; height: 34px; padding: 0 14px; background: var(--fb-raised); color: var(--fb-ink); border: 0; border-radius: 999px; cursor: pointer; }
-#fb-changes-btn:hover, #fb-changes-btn.on { background: #48484a; }
-.fb-live[hidden], #fb-update[hidden], #fb-changes-btn[hidden] { display: none; }
+#fb-changes-btn, #fb-list { font: inherit; font-weight: 500; height: 34px; padding: 0 14px; background: var(--fb-raised); color: var(--fb-ink); border: 0; border-radius: 999px; cursor: pointer; }
+#fb-changes-btn:hover, #fb-changes-btn.on, #fb-list:hover { background: #48484a; }
+.fb-live[hidden], #fb-update[hidden], #fb-changes-btn[hidden], #fb-list[hidden] { display: none; }
 .fb-tools :focus-visible, .fb-dialog :focus-visible { outline: 3px solid var(--fb-halo); outline-offset: 1px; }
 /* Folded away: one small button, and what must not be missed (Update ready, a comment not saved). */
 .fb-tools.folded .fb-bar { gap: 6px; }
@@ -174,12 +175,17 @@ body.fb-active #fb-toggle { background: var(--fb-ink); color: #1d1d1f; }
 #fb-panel { width: 340px; max-width: calc(100vw - 32px); max-height: min(60vh, 520px); overflow: auto; background: var(--fb-card); color: var(--fb-ink); border-radius: 16px; padding: 16px 16px 14px;
   box-shadow: var(--fb-ring), 0 10px 30px rgba(0, 0, 0, .5); font-size: 13px; line-height: 1.45; animation: fb-rise .2s var(--ease); color-scheme: dark; }
 /* While it is open on a wide screen the page makes room for it, so it never covers the last columns or buttons. */
-@media (min-width: 1100px) { body.fb-panel-open:not(.clean) #app { margin-right: 372px; } }
+/* An open panel lies over the page and never moves it: what is drawn on the page (pins, boxes) stays where it was put. */
 .fb-panel-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 15px; font-weight: 600; letter-spacing: -.01em; margin-bottom: 6px; }
 .fb-count { color: var(--fb-sub); font-size: 13px; font-weight: 400; }
 .fb-item { display: flex; gap: 10px; padding: 10px 0; border-top: 1px solid var(--fb-hair); border-radius: 9px; }
 .fb-panel-head + .fb-item { border-top: 0; }
 .fb-item.flash { animation: fb-flash 1.4s var(--ease); }
+/* A comment card is picked like a change in What changed: tinted while picked, and the thing it is about outlined. */
+.fb-item.fb-pick { cursor: pointer; padding: 10px 8px; margin: 0 -8px; }
+.fb-item.fb-pick:hover { background: var(--fb-raised); }
+.fb-item.fb-pick.on { background: var(--fb-tint); }
+.fb-item.fb-pick:focus-visible { outline: 3px solid var(--fb-halo); outline-offset: 1px; }
 .fb-num { flex: 0 0 22px; height: 22px; border-radius: 50%; background: var(--fb-mark); color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
 .fb-num.unsent { background: var(--fb-red-solid); }
 .fb-body { min-width: 0; }
@@ -247,6 +253,17 @@ input.fb-field { height: 36px; }
 .fb-act.destroy { color: var(--fb-red-text); }
 .fb-locked { display: flex; align-items: flex-start; gap: 6px; margin-top: 6px; color: var(--fb-sub); font-size: 12px; }
 .fb-locked svg { flex: 0 0 13px; margin-top: 2px; }
+.fb-done-head { display: flex; justify-content: space-between; align-items: baseline; margin: 14px 0 2px; padding-top: 10px; border-top: 1px solid var(--fb-hair); font-size: 13px; font-weight: 600; }
+.fb-item.fb-done .fb-text { color: var(--fb-sub); }
+.fb-item.fb-done .fb-num { background: var(--fb-neutral); }
+.fb-earlier { margin: 2px 0 10px; padding: 8px 10px; border-radius: 9px; background: var(--fb-raised); }
+.fb-earlier .fb-label { margin-top: 0; }
+.fb-earlier-item { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; margin-top: 6px; }
+.fb-earlier-item .fb-num { flex: 0 0 auto; }
+.fb-earlier-st { color: var(--fb-sub); }
+.fb-away { margin-top: 4px; color: var(--fb-sub); font-size: 12px; font-style: normal; }
+.fb-panel-head .fb-wc-x { margin: -4px -6px -4px 0; }
+.fb-panel-head .fb-wc-x + .fb-wc-x { margin-left: 2px; }
 .fb-btn.destroy { background: var(--fb-red-solid); border: 1px solid var(--fb-red-solid); color: #fff; }
 .fb-btn.destroy:hover { background: #b80012; border-color: #b80012; }
 .fb-ask-body { margin: -6px 0 18px; color: var(--fb-sub); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
@@ -262,7 +279,10 @@ body.clean .fb-tools, body.clean .fb-pin, body.clean .fb-hide, body.clean .cw-ta
 
 /* Motion shows what changed and nothing more. None in a screenshot, and none for people who ask for less. */
 /* Something new, drawn on the screen in feedback mode: a dashed box where it should go, with its number. */
-.fb-box { position: absolute; z-index: 64; border: 2px dashed var(--fb-mark); background: rgba(42, 111, 214, .08); border-radius: 8px; cursor: pointer; box-sizing: border-box; }
+/* A box marks; it never takes a click: what is inside it can still be clicked or boxed. Its pin opens the comment. */
+.fb-box { position: absolute; z-index: 64; border: 2px dashed var(--fb-mark); background: rgba(42, 111, 214, .08); border-radius: 8px; pointer-events: none; box-sizing: border-box; }
+.fb-box.done { border-color: var(--fb-neutral); background: transparent; opacity: .6; }
+.fb-pin.done { background: var(--fb-neutral); opacity: .75; }
 .fb-box.drawing { pointer-events: none; background: rgba(42, 111, 214, .12); }
 .fb-box.unsent { border-color: var(--fb-red-solid); background: rgba(255, 69, 58, .08); }
 body.fb-active #app { -webkit-user-select: none; user-select: none; }  /* dragging draws a box, it does not select text */

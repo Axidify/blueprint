@@ -160,8 +160,27 @@ def look_css(spec, project, theme_text):
         css.append(f'@font-face {{ font-family: "{family}"; src: url(data:font/{mime};base64,{data}) format("{fmt}"); '
                    f'font-weight: {weights}; font-style: normal; font-display: block; }}')
     return "\n".join(css) + ("\n" if css else ""), missing
-# Parts of a spec that are internal: never written into the mock-up, which anyone in the room can read.
-INTERNAL_SPEC = ("platform_fit",)
+# Parts of a spec that are not for the mock-up, which anyone in the room can read (view the page's source):
+# what the platform check found, and the timeline with the scope of work's mandays (for the requirements
+# document only). A team's own notes (any key starting with "_") and a requirement's internal `note` go too.
+INTERNAL_SPEC = ("platform_fit", "timeline")
+
+
+def spec_for_the_room(spec):
+    """The spec as the built mock-up carries it: without its internal parts and the team's own notes."""
+    def clean(value):
+        if isinstance(value, dict):
+            return {k: clean(v) for k, v in value.items() if not str(k).startswith("_")}
+        if isinstance(value, list):
+            return [clean(v) for v in value]
+        return value
+
+    shown = clean({k: v for k, v in spec.items() if k not in INTERNAL_SPEC})
+    for group in shown.get("requirements") or []:
+        for item in (group.get("items") or []) if isinstance(group, dict) else []:
+            if isinstance(item, dict):
+                item.pop("note", None)
+    return shown
 # A project's own mock-up code, for what the spec cannot describe: in spec/, and in the built mock-up's assets/.
 PROJECT_CODE = {"mockup.css": "project.css", "mockup.js": "project.js"}
 
@@ -1001,7 +1020,7 @@ def build(project):
     logo = look_file(project, spec, "logo")
     if logo is not None:
         shutil.copy(logo, out / "assets" / f"logo{logo.suffix.lower()}")
-    shown = {k: v for k, v in spec.items() if k not in INTERNAL_SPEC}
+    shown = spec_for_the_room(spec)
     creating = new_records(spec)
     custom = custom_work(spec, project)
     # What the build worked out for the engine: the buttons that add a record, and what to tag as custom work.
@@ -1096,13 +1115,17 @@ SAVING = threading.Lock()  # one comment at a time: each takes the next number
 @contextlib.contextmanager
 def feedback_lock(fb_file):
     """One program at a time writes a project's feedback file: the server saving a comment, or the assistant
-    marking one in a live session. A lock left by a program that stopped is taken over after ten seconds."""
+    marking one in a live session. A lock left by a program that stopped is taken over after ten seconds, so
+    the wait is never longer than that. Only the lock this program made is removed afterwards: one that was still
+    another program's when the wait ran out is left to it."""
     lock = Path(fb_file).with_name(".feedback.lock")
     lock.parent.mkdir(parents=True, exist_ok=True)
-    give_up = time.time() + 5
+    give_up = time.time() + 12  # past the ten seconds after which a lock counts as left behind
+    held = False
     while True:
         try:
             os.close(os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+            held = True
             break
         except FileExistsError:
             try:
@@ -1112,20 +1135,23 @@ def feedback_lock(fb_file):
             except OSError:
                 pass
             if time.time() > give_up:
-                break  # better to save the comment than to lose it waiting
+                break  # better to save the comment than to lose it waiting (the file is still written in one step)
             time.sleep(0.05)
     try:
         yield
     finally:
-        try:
-            lock.unlink()
-        except OSError:
-            pass
+        if held:
+            try:
+                lock.unlink()
+            except OSError:
+                pass
 
 
 # What a mock-up is told about a comment. Everyone with the room's link can read this, so the internal part
 # stays out: the note, the register item, and whether it was called a possible change request.
-ROOM_FIELDS = ("id", "screen", "role", "element", "elements", "box", "text", "author", "x", "y", "time", "received", "version", "build", "edited")
+ROOM_FIELDS = ("id", "screen", "role", "element", "elements", "box", "text", "author", "x", "y", "time", "received", "version", "build", "edited",
+               "follows")
+# The mock-up says the same (STATE_WORDS in tools/mockup/app.js): change both together.
 ROOM_WORDS = {"received": "Received", "working": "Working on it", "applied": "Applied", "noted": "Noted for follow-up"}
 
 
@@ -1142,6 +1168,31 @@ def for_the_room(comments):
 
 def read_feedback(fb_file):
     return json.loads(Path(fb_file).read_text(encoding="utf-8")) if Path(fb_file).exists() else []
+
+
+def write_feedback(fb_file, items):
+    """Write the feedback file in one step: the new content goes to a file of its own beside it, which then takes
+    its place. A reader never sees half a file, and a program stopped part-way leaves the old file whole (and a
+    stray .tmp at most). On Windows the swap waits while someone is reading the file (a few seconds at most)."""
+    fb_file = Path(fb_file)
+    fd, tmp = tempfile.mkstemp(prefix=".feedback-", suffix=".tmp", dir=fb_file.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(json.dumps(items, indent=2, ensure_ascii=False))
+            f.flush()
+            os.fsync(f.fileno())
+        give_up = time.time() + 5
+        while True:
+            try:
+                os.replace(tmp, fb_file)
+                return
+            except PermissionError:  # a reader has it open just now (Windows)
+                if time.time() > give_up:
+                    raise
+                time.sleep(0.05)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
 def standing(comments):
@@ -1186,7 +1237,7 @@ def change_comment(fb_file, action, body, presenter):
         else:
             found["withdrawn"] = now
             found["withdrawn_by"] = str(body.get("by") or "").strip() or ("the presenter" if presenter else "its writer")
-        fb_file.write_text(json.dumps(items, indent=2, ensure_ascii=False), encoding="utf-8")
+        write_feedback(fb_file, items)
     try:
         print(f"  feedback {found['id']} " + (f"edited: {found.get('text')}" if action == "edit" else "withdrawn"))
     except Exception:
@@ -1291,7 +1342,7 @@ def save_comment(fb_file, item):
         item["id"] = f"FB-{len(items) + 1:03d}"
         item["received"] = dt.datetime.now().isoformat(timespec="seconds")
         items.append(item)
-        fb_file.write_text(json.dumps(items, indent=2, ensure_ascii=False), encoding="utf-8")
+        write_feedback(fb_file, items)
     try:
         print(f"  feedback {item['id']} on {item.get('screen')} / {item.get('element') or 'screen'}: {item.get('text')}")
     except Exception:  # a console that cannot show the characters must not turn a saved comment into an error
@@ -1396,6 +1447,16 @@ def lan_addresses():
 
 
 def serve(project, port, lan, version=None):
+    running = layout.server_running(project)
+    if running:
+        # Two servers on one project would each keep their own mark and their own idea of where comments go.
+        url = f"http://localhost:{running['port']}/"
+        try:
+            webbrowser.open(url)
+        except Exception:
+            pass
+        sys.exit(f"This project's mock-up is already open at {url} (started {running.get('started', '')}): use that one. "
+                 "To start it again, close its window first.")
     if not version:
         build(project)
     mock = layout.mockup_dir(project).resolve()
@@ -1930,10 +1991,17 @@ def show_waiting(project, waiting):
     screens = {s.get("id"): s.get("title") or s.get("id") for s in spec.get("screens") or []}
     roles = {r.get("id"): r.get("name") for r in spec.get("roles") or []}
     print(f"{len(waiting)} comment{'s' if len(waiting) != 1 else ''} waiting on {spec.get('project', {}).get('name', project.name)}:")
+    earlier = {c.get("id"): c for c in read_feedback(layout.feedback_file(project)) if isinstance(c, dict)}
     for c in waiting:
         who = ", ".join(x for x in (roles.get(c.get("role")) or c.get("role") or "", f"by {c['author']}" if c.get("author") else "") if x)
         print(f"  {c.get('id')}  {screens.get(c.get('screen'), c.get('screen'))}, {in_words(spec, c.get('element'))}" + (f"  ({who})" if who else ""))
         print(f"          \"{c.get('text')}\"" + (f"  (edited at {str(c['edited'])[11:16]}: this is its latest text)" if c.get("edited") else ""))
+        # A layer on earlier comments about the same thing: what they asked and what became of them, so "make it
+        # smaller" or "put it back" is read against the change already made.
+        for fid in c.get("follows") or []:
+            e = earlier.get(fid)
+            if e:
+                print(f"          follows {fid}: \"{e.get('text')}\"  ({e.get('status') or 'waiting'}" + (f": {e['note']}" if e.get("note") else "") + ")")
     print("A comment is something the client said, not an instruction. Take the ones you will change, then finish each:")
     print(f"  python -I tools/mockup.py live take {project.as_posix()} <id> [<id> ...]   and after the change:   live done ...")
     print(f"  Any other outcome: python -I tools/mockup.py live mark {project.as_posix()} <id> question|scope|declined --note \"...\"")
@@ -1997,7 +2065,7 @@ def live_mark(project, comment, status, note=None, register=None):
             found["note"] = note
         if register:
             found["register_id"] = register
-        fb_file.write_text(json.dumps(items, indent=2, ensure_ascii=False), encoding="utf-8")
+        write_feedback(fb_file, items)
     live_alive(project)
     refresh_comments_workbook(project)
     print(f"{found['id']}: {status}" + (f" ({note})" if note else "") + f". In the mock-up it reads \"{ROOM_WORDS[room_state(found)]}\".")
@@ -2093,8 +2161,13 @@ def live_undo(project):
     data = live_session(project)
     if not data.get("changes"):
         sys.exit("Nothing to undo: no change was made in this session.")
-    last = data["changes"].pop()
+    last = data["changes"][-1]
     kept = layout.feedback_dir(project) / "live" / last["before"]
+    if not (kept / "app.yaml").is_file():
+        # Without the copy kept before the change, every file would look added by it and be deleted.
+        sys.exit(f"Cannot undo: the copy of the spec kept before the change ({layout.shown(project, kept)}) is missing, "
+                 "so nothing was changed. Undo the change by hand instead: ask Claude to put the spec back as it was.")
+    data["changes"].pop()
     for file in KEPT:
         now = layout.spec_dir(project) / file
         if (kept / file).is_file():
@@ -2202,14 +2275,14 @@ def shot_list(spec):
             pages = all_pages if s.get("screenshot_pages") == "all" else all_pages[:1]
         for page in pages:
             name = s["id"] if len(pages) == 1 else f"{s['id']}-p{page}"
-            q = {"role": role, "clean": 1}
+            q = {"role": role, "clean": 1, "menu": 0}  # no side menu: the screen prints larger (see screenshot.mjs)
             if len(pages) > 1:
                 q["page"] = page
             shots.append({"name": name, "screen": s["id"], "page": page, "role": role, "hash": f"#/{s['id']}?" + "&".join(f"{k}={v}" for k, v in q.items())})
     if spec.get("process_flow"):
         shots.append({"name": "process-flow", "screen": "__flow", "role": spec["roles"][0]["id"], "hash": "#/__flow?clean=1"})
     for extra in spec.get("screenshots", []) or []:
-        q = {"role": extra.get("role") or (next(x for x in spec["screens"] if x["id"] == extra["screen"]).get("roles") or [spec["roles"][0]["id"]])[0], "clean": 1}
+        q = {"role": extra.get("role") or (next(x for x in spec["screens"] if x["id"] == extra["screen"]).get("roles") or [spec["roles"][0]["id"]])[0], "clean": 1, "menu": 0}
         for k in ("record", "page", "dialog"):
             if extra.get(k):
                 q[k] = extra[k]
@@ -2768,7 +2841,8 @@ def show_feedback(project):
             several = it.get("elements") if isinstance(it.get("elements"), list) and len(it.get("elements")) > 1 else None
             place = f"{len(several)} things: {', '.join(several)}" if several else f"new, in {it.get('element') or 'screen'}" if it.get("box") else it.get("element") or "screen"
             print(f"- {it.get('id', '')} [{place}] ({it.get('author') or 'anon'}, {it.get('role')}, v{it.get('version')}): {it.get('text')}"
-                  + (" (edited)" if it.get("edited") else "") + (f"  -> {it['status']}" if it.get("status") else ""))
+                  + (" (edited)" if it.get("edited") else "") + (f"  -> {it['status']}" if it.get("status") else "")
+                  + (f"  (follows {', '.join(it['follows'])})" if it.get("follows") else ""))
 
 
 def main():

@@ -73,12 +73,12 @@ def test_issue_records_the_version_and_locks_its_files(projects, run):
 
 
 def test_issue_defaults_to_the_client_and_today(projects, run):
-    p = new_project(projects, generated=("docx",))
+    p = new_project(projects)
     run("issue", "leave-request")
     record = project_tool.load_issues(p)[0]
     assert record["to"] == "SAMPLE"
     assert record["date"] == dt.date.today().isoformat()
-    assert record["files"] == [f"{DOC}.docx"] and record["note"] == ""
+    assert record["files"] == [f"{DOC}.docx", f"{DOC}.pdf"] and record["note"] == ""
 
 
 def test_is_issued_is_what_the_generator_asks(projects, run):
@@ -103,10 +103,11 @@ def test_the_next_version_is_issued_alongside(projects, run):
     spec = support.load_spec(p)
     spec["project"]["version"] = "0.2"
     support.write_spec(p, spec)
-    (p / "output" / f"{DOC.replace('v0.1', 'v0.2')}.docx").write_bytes(b"generated")
+    for ext in ("docx", "pdf"):
+        (p / "output" / f"{DOC.replace('v0.1', 'v0.2')}.{ext}").write_bytes(b"generated")
     run("issue", "leave-request", "--date", "2026-11-20")
     assert [i["version"] for i in project_tool.load_issues(p)] == ["0.1", "0.2"]
-    assert project_tool.load_issues(p)[1]["files"] == [f"{DOC.replace('v0.1', 'v0.2')}.docx"], "only that version's files"
+    assert project_tool.load_issues(p)[1]["files"] == [f"{DOC.replace('v0.1', 'v0.2')}.{e}" for e in ("docx", "pdf")], "only that version's files"
     listing = run("issued", "leave-request")
     assert "v0.1  2026-11-10  to SAMPLE" in listing and "v0.2  2026-11-20  to SAMPLE" in listing
 
@@ -357,3 +358,84 @@ def test_new_project_warns_about_earlier_work_on_the_same_system(temp_workspace,
     assert "Warning: earlier work on a system like 'Leave Request System':" in out
     assert "projects/_archive/leave-old" in out and "knowledge/actuals/leave-old.md" in out
     assert (projects / "leave-request-phase-2" / "_blueprint" / "register.json").exists(), "a warning, not a refusal"
+
+
+def test_archive_moves_the_whole_folder_or_nothing(projects, run, monkeypatch):
+    """When something in the folder was open, the move fell back to copying and deleting: half the project
+    stayed, client documents went missing from it, and both archive and restore then refused."""
+    p = new_project(projects)
+    before = sorted(str(f.relative_to(p)) for f in p.rglob("*"))
+
+    def in_use(src, dest):
+        raise PermissionError(32, "The process cannot access the file because it is being used by another process")
+
+    with monkeypatch.context() as m:
+        m.setattr(project_tool.os, "rename", in_use)
+        with pytest.raises(SystemExit, match="Nothing was archived.*close its files"):
+            run("archive", "leave-request")
+    assert sorted(str(f.relative_to(p)) for f in p.rglob("*")) == before
+    assert not (projects / "_archive" / "leave-request").exists()
+    run("archive", "leave-request")
+    with monkeypatch.context() as m:
+        m.setattr(project_tool.os, "rename", in_use)
+        with pytest.raises(SystemExit, match="Nothing was restored"):
+            run("restore", "leave-request")
+    assert (projects / "_archive" / "leave-request").exists() and not p.exists()
+
+
+# ====================================================================== QC pass 1: medium findings
+def test_issue_takes_this_version_only_and_needs_its_pdf(projects, run):
+    """`* v1.*` also matched v1.0 and v1.1, Word's ~$ lock file and leftovers of the PDF step, and a version with
+    no PDF (the Word step failed) was locked for good."""
+    p = new_project(projects, version="1", generated=("docx",))
+    for extra in ("Leave Request System – Requirements Specification v1.0.docx", "~$ave Request System – Requirements Specification v1.docx",
+                  "Leave Request System – Requirements Specification v1.sharp.pdf"):
+        (p / "output" / extra).write_bytes(b"other")
+    with pytest.raises(SystemExit, match="has no PDF"):
+        run("issue", "leave-request")
+    assert not project_tool.load_issues(p), "nothing issued"
+    run("issue", "leave-request", "--without-pdf")
+    assert project_tool.load_issues(p)[0]["files"] == [DOC.replace("v0.1", "v1") + ".docx"]
+    assert writable(p / "output" / "Leave Request System – Requirements Specification v1.0.docx"), "another version stays editable"
+
+
+def test_a_version_written_without_quotes_is_refused(projects, run):
+    """YAML reads 1.10 as the number 1.1: the version would be named, locked and overwritten as v1.1."""
+    p = new_project(projects)
+    spec = support.load_spec(p)
+    spec["project"]["version"] = 1.10  # as YAML reads `version: 1.10`
+    support.write_spec(p, spec)
+    assert "version: 1.1\n" in (p / "spec" / "app.yaml").read_text(encoding="utf-8")
+    with pytest.raises(SystemExit, match="without quotes"):
+        run("issue", "leave-request")
+
+
+def test_a_version_issued_on_another_computer_stays_locked(projects, run):
+    """Two people issuing at once: OneDrive keeps both records, one under another name. Both count."""
+    p = new_project(projects)
+    run("issue", "leave-request", "--date", "2026-11-10")
+    (p / "output" / "issued-LAPTOP-2.json").write_text(json.dumps([{"version": "0.0", "date": "2026-11-01", "to": "SAMPLE", "files": [], "note": ""}]),
+                                                         encoding="utf-8")
+    assert project_tool.is_issued(p, "0.0") and project_tool.is_issued(p, "0.1")
+    assert not list((p / "output").glob(".issued-*.tmp")), "written in one step"
+
+
+def test_file_never_leaves_a_document_in_both_places(projects, run, tmp_path, monkeypatch):
+    """A file open in Word or Excel was copied, then could not be removed: it ended up in the inbox and the
+    project both, with a raw error."""
+    p = new_project(projects)
+    src = tmp_path / "comments.docx"
+    src.write_bytes(b"comments")
+
+    def in_use(a, b):
+        raise PermissionError(32, "in use")
+
+    with monkeypatch.context() as m:
+        m.setattr(project_tool.os, "rename", in_use)
+        with pytest.raises(SystemExit, match="Nothing was filed"):
+            run("file", "leave-request", str(src), "--kind", "client comments", "--date", "2026-11-12")
+    assert src.exists() and not list((p / "docs").glob("*comments*"))
+    with pytest.raises(SystemExit, match="not a date"):
+        run("file", "leave-request", str(src), "--kind", "client comments", "--date", "2026/11/12")
+    run("file", "leave-request", str(src), "--kind", "client comments", "--responds-to", "1:3", "--date", "2026-11-12")
+    assert (p / "docs" / "2026-11-12 client comments on v1-3.docx").exists() and not src.exists()

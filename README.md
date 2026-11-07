@@ -60,7 +60,8 @@ appears; press it and **What changed** lists each change, so you can go through 
 |---|---|
 | `inbox/` | Drop files here: briefs, requirements drafts, notes, feedback exports. Then say "process my inbox". |
 | `projects/<name>/` | One folder per client project. Open its `Project overview.html` first. |
-| `projects/<name>/Questions and fixes register.xlsx` | The questions and gaps to take back to the client. |
+| `projects/<name>/Questions and fixes register.xlsx` | The questions and gaps, with your team's internal fixes. |
+| `projects/<name>/Questions for the client.xlsx` | The client's questions alone: the file to send them. |
 | `projects/<name>/1 Client documents/` … `7 Change requests/` | What people open, numbered in the order of the process: the client's documents, reviews, workshops, mock-up screenshots, the requirements document (Word and PDF), UAT, change requests. Estimates and the CR log are in `Internal – estimates and change requests/`, never sent. |
 | `projects/<name>/_blueprint/` | Blueprint's working files (spec, register, mock-up, comments). Leave them to Blueprint. |
 | `knowledge/` | What the team has learnt: gap patterns, estimating building blocks, requirements standard. |

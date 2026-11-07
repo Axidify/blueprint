@@ -95,8 +95,9 @@ catch: list those screens and lists for a walk-through instead of guessing.
 
 ## Hand over
 
-- **What was made, where, for whom:** the verdict, the top items and any part you could not read; in
-  `Questions and fixes register.xlsx` the **For client** sheet goes to the client, the other sheets are internal; the review's
+- **What was made, where, for whom:** the verdict, the top items and any part you could not read; 
+  `Questions for the client.xlsx` goes to the client (the client's questions alone); `Questions and fixes register.xlsx` is
+  internal, never sent; the review's
   Word file is **internal**, never sent. Both are linked from `Project overview.html`.
 - **Next step, in the words to say:** a draft with open client questions: "prepare the workshop" (and
   "build a mock-up" if there is none); a generated document: fix the findings in the spec, then "generate

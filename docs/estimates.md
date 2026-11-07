@@ -63,7 +63,9 @@ Send the Excel file (or just its *Rates needed* sheet) to the lead developer. Th
 figure per unit for each building block (one figure is fine), and send it back. Drop it in the project or
 the inbox and tell Blueprint "save these rates": it reads them with `estimate.py rates-from`, shows you what
 it would write in `knowledge/building-blocks.md`, saves them only after you agree, and renders the estimate
-again, now priced. The rates are shared by everyone using the workspace, so the next estimate on that
+again, now priced. If they filled in the sheet in the shared folder, take the rates in before rendering
+again: `render` stops rather than write over a sheet with rates typed in (`--force` keeps that file beside
+the new one). The rates are shared by everyone using the workspace, so the next estimate on that
 platform is priced too.
 
 ## How the figures are worked out
@@ -124,8 +126,9 @@ of work's mandays:
 python -I tools/estimate.py weeks projects/<slug> --team 2
 ```
 
-gives working weeks per scope-of-work line (or per group) for that team size. Only weeks, activities and
-milestones go into the spec; mandays, rates and cost stay in the estimate. See `timeline` in
+gives working weeks per scope-of-work line (or per group) for that team size. Weeks, activities and
+milestones go into the spec, with the scope of work's mandays per item; the estimate's mandays, rates and
+cost stay in the estimate. See `timeline` in
 [Spec format](spec-format.md).
 
 ## The estimate file

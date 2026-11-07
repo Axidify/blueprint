@@ -3,7 +3,7 @@
 Usage:
     python -I tools/estimate.py blocks    "<platform>"
     python -I tools/estimate.py inventory projects/<slug>
-    python -I tools/estimate.py render    projects/<slug> ["<estimate.json>"]
+    python -I tools/estimate.py render    projects/<slug> ["<estimate.json>"] [--force]
     python -I tools/estimate.py weeks     projects/<slug> --team 2 ["<estimate.json>"]
     python -I tools/estimate.py rates-from "<estimate.xlsx>" [--json]
 
@@ -14,9 +14,12 @@ inventory  what the project has to count from: roles, screens, forms, lists, dia
 render     checks an estimate file, works out the ranges, the confidence level and the comparison with the
            scope of work, and writes the Excel file: into "Internal – estimates and change requests" (next
            to the .json in a project not yet in the new folder layout). Without a file name it takes the
-           newest file in the project's estimates folder (_blueprint/estimates/, or estimates/)
+           newest file in the project's estimates folder (_blueprint/estimates/, or estimates/). When rates
+           were typed into the Rates needed sheet of the Excel file it would replace, it stops (take them in
+           with rates-from first); --force writes it anyway and keeps that file beside it
 weeks      turns the estimate's mandays into working weeks for a team size, per scope-of-work line or
-           group, for drafting the project timeline (weeks only: mandays never go to the client)
+           group, for drafting the project timeline (weeks only: the estimate's mandays never go to the client;
+           the timeline shows the scope of work's mandays instead)
 rates-from the rates a lead developer filled in on the Rates needed sheet of an estimate's Excel file, as
            rows for knowledge/building-blocks.md (or --json); it changes nothing
 
@@ -59,6 +62,7 @@ See docs/estimates.md.
 """
 import argparse
 import datetime as dt
+import os
 import json
 import math
 import re
@@ -1005,6 +1009,26 @@ def render_xlsx(est, res, out):
     wb.save(out)
 
 
+def rates_typed(path):
+    """How many building blocks have a rate typed into the Rates needed sheet of an existing Excel file (0 when
+    there is no file, no such sheet, or it cannot be read)."""
+    from openpyxl import load_workbook
+
+    if not Path(path).exists():
+        return 0
+    try:
+        ws = load_workbook(path, data_only=True)[RATES_SHEET]
+    except Exception:
+        return 0
+    rows = list(ws.iter_rows(values_only=True))
+    head = next((i for i, row in enumerate(rows) if RATE_HEADS[0] in row), None)
+    if head is None:
+        return 0
+    cols = [rows[head].index(h) for h in RATE_HEADS[:2] if h in rows[head]]
+    return sum(1 for row in rows[head + 1:] if re.search(r"BB-\d+\s*$", str(row[0] or ""))
+               and any(c < len(row) and str(row[c] if row[c] is not None else "").strip() for c in cols))
+
+
 def read_rates_sheet(path):
     """The rates a lead developer filled in on a returned workbook's Rates needed sheet."""
     from openpyxl import load_workbook
@@ -1232,6 +1256,18 @@ def cmd_render(a):
     # "Internal – estimates and change requests" and the source stays in _blueprint/estimates/.
     out = layout.estimate_xlsx(a.project, path) if path.parent.resolve() == layout.estimates_source(a.project).resolve() else path.with_suffix(".xlsx")
     out.parent.mkdir(parents=True, exist_ok=True)
+    typed = rates_typed(out)
+    if typed and not a.force:
+        sys.exit(f"Rates were typed into the Rates needed sheet of {out.name} ({plural(typed, 'building block')}): writing it "
+                 f"again would lose them. Nothing was written. Take them in first with: python -I tools/estimate.py "
+                 f"rates-from \"{out}\", or add --force to write it anyway (the filled-in file is then kept beside it).")
+    if typed:
+        kept = out.with_name(f"{out.stem} - rates kept {dt.datetime.now().strftime('%Y-%m-%d %H%M')}.xlsx")
+        try:
+            os.replace(out, kept)
+        except PermissionError:
+            sys.exit(f"Cannot move {out.name} aside: close it in Excel and run this again. Nothing was written.")
+        print(f"  The workbook with the typed rates is kept as {kept.name}")
     try:
         render_xlsx(est, res, out)
     except PermissionError:
@@ -1336,8 +1372,8 @@ def cmd_weeks(a):
 
     people = f"{num(a.team)} developer{'s' if a.team != 1 else ''}"
     print(f"Working weeks for {people}, {num(a.days)} days a week, from {path.name}")
-    print("Effort divided by the team: it assumes the work can be shared out and nobody waits. Mandays stay internal;")
-    print("only weeks go into the timeline.")
+    print("Effort divided by the team: it assumes the work can be shared out and nobody waits. These mandays stay")
+    print("internal: only weeks go into the timeline, with the scope of work's mandays (never these) per item.")
     for key, part in groups.items():
         priced = [l for l in part if l["priced"]]
         missing = [l["id"] for l in part if not l["priced"]]
@@ -1395,6 +1431,8 @@ def main():
     r = sub.add_parser("render")
     r.add_argument("project")
     r.add_argument("file", nargs="?")
+    r.add_argument("--force", action="store_true",
+                   help="write the Excel file even when rates were typed into its Rates needed sheet (that file is kept beside it)")
     r.set_defaults(fn=cmd_render)
     w = sub.add_parser("weeks")
     w.add_argument("project")

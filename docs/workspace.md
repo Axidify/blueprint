@@ -39,7 +39,7 @@ Each file is optional. Without it, Blueprint uses the neutral version in `templa
 | File | Effect |
 |---|---|
 | `logo.png` | Your logo on the document cover |
-| `document-template.docx` | Your Word template: styles and page set-up, plus its header and footer when the format says `header_footer: template` (any `{company}` in them is replaced with the company name). The document body is ignored |
+| `document-template.docx` | Your Word template: styles and page set-up, plus its header and footer when the format says `header_footer: template` (any `{company}` in them is replaced with the company name). Nothing else of it is used: its body, comments, footnotes and file properties (title, subject, last saved by) never reach a generated document, so a template made from an earlier document is safe |
 | `document-boilerplate.yaml` | Your standard document wording (disclaimer, confidentiality, sign-off). Start from `templates/document-boilerplate.yaml`. Placeholders: `{system}`, `{client}`, `{client_short}`, `{company}`, `{company_short}` |
 | `document-format.yaml` | Your changes to the document design: colours, fonts, sizes, section order and numbering. Only the keys you set change. See [Document format](document-format.md) |
 
@@ -70,7 +70,8 @@ tucked away in `_blueprint`. A folder appears only once the project has somethin
 |---|---|---|---|
 | `Project overview.html` | The project at a glance: the next step, the open questions and fixes, and every document in the order of the process, each a link with a line saying what it is and who it is for (see below) | everyone | `tools/overview.py`, rebuilt by the tools |
 | `Open the mock-up.cmd`, `Open the mock-up.command` | Double-click to open the project's mock-up so comments typed in it are saved (`.cmd` on Windows, `.command` on a Mac). Only in a project with a mock-up | everyone | `tools/overview.py` |
-| `Questions and fixes register.xlsx` | The project register for the BA. Only its "For client" sheet goes to the client | client sheet only | the skills, `tools/register.py render` |
+| `Questions and fixes register.xlsx` | The project register for the BA: client questions, internal fixes and a hidden record of every item. Never sent | internal | the skills, `tools/register.py render` |
+| `Questions for the client.xlsx` | The client's questions alone, written with the register: the file to send. The client's answers in a returned copy are taken in with `register.py render --from` | for the client | `tools/register.py render` |
 | `1 Client documents/` | The client's documents (and your team's notes), kept as received. New ones are named with the date and what they are, e.g. `2026-11-12 client comments on v1.3.docx` | from the client | `process-inbox`, `new-project`, `tools/project.py file` |
 | `2 Reviews/` | Each review as a Word file (`<document> review.docx`), the mock-up's change notes (`Mock-up v0.2 changes.docx`), and `Mock-up comments.xlsx`: every comment on the mock-up, one row each across all versions, with its outcome, note, register item and the version it was worked into | internal | `review-requirements`, `apply-feedback`, `tools/overview.py` |
 | `3 Workshops/` | For each session, the agenda for the client and the facilitator notes, which are internal | client / internal | `prep-workshop` |
@@ -89,9 +90,9 @@ deep in a OneDrive folder.
 A project folder holds a few hundred files once the mock-up has screenshots and versions, nearly all of
 them in `_blueprint`. `Project overview.html` is the way in: double-click it, from the shared folder too,
 to see what is open, what to do next (in the words to say to Claude) and every document as a row that
-opens it. Each row says who the file is for: **From the client**, **For the client**, **Client sheet only**
-(the register: send only its "For client" sheet), **Show the client**, **Can be shared**, or **Internal**
-with a lock (estimates, facilitator notes, reviews and change notes: never send these). The page never
+opens it. Each row says who the file is for: **From the client**, **For the client** (among them
+`Questions for the client.xlsx`), **Show the client**, **Can be shared**, or **Internal** with a lock (the
+register, estimates, facilitator notes, reviews and change notes: never send these). The page never
 shows mandays, rates or cost. Blueprint rebuilds it whenever one of its tools writes into the project; to
 rebuild it by hand, `python -I tools/overview.py build projects/<slug>` (or `build --all`).
 

@@ -98,8 +98,19 @@ one of its earlier versions). In Claude, "open the mock-up for …" does the sam
 session, use the dark bar in the bottom-right corner. It is yours, not part of the client's system, and it
 never appears in the document's pictures: it shows which mock-up version is open, **View as** switches the
 role you are signed in as, and **Feedback** (or F2) starts commenting. The arrows at its left fold it away
-to one small button when it is in the way, and while the Feedback panel is open the screen makes room for
-it. Click anything on the screen and type the
+to one small button when it is in the way. The Feedback and What changed panels lie over the right of the
+screen without moving it, so pins and boxes stay where they were put. To reach something under a panel, minimise
+it with **–** in its corner: the list goes, nothing covers the screen, and Feedback stays on. **Comments** (or
+**What changed**) on the bar brings it back, and so does a click on a pin. A comment with no mark on the page
+says why on its card: what it is about is folded away, no longer on the screen, or only drawn for the role it
+was made as (View as that role to see it).
+
+Comments build up in layers. Only open comments are marked on the screen; once a comment is applied or noted
+for follow-up it moves to **Done** at the bottom of the panel, and **Show on the screen** there brings those
+marks back, faded. A box never gets in the way: click what is inside it to comment on that, or its pin to
+open its comment. Comment on something that was commented on before and the comment box lists the earlier
+comments and what became of them; the new comment is saved as following them, so "a bit smaller" or "put it
+back" is read against the change already made. Click anything on the screen and type the
 client's comment. Or drag a box: around several things for one comment about all of them ("make these one
 date range"), or where there is nothing yet for something new ("an Export button here"); the box stays drawn
 on the screen with its number, beside what it was drawn next to, whatever the width of the window. A box
@@ -147,7 +158,8 @@ while the session is open, each comment shows what became of it, and "undo that"
 **Just you looking?** In the Claude app, say "open the mock-up" and it can open in the app's own browser
 pane beside the chat; then simply say what should change.
 
-Pins mark the comments on a screen. Click a pin to see its comment; Ctrl + Enter saves the comment you are
+Pins mark the comments on a screen. Click a pin to see its comment, or click a comment in the Feedback panel to
+see what it is about: the card stays marked and the thing it names is outlined, as in What changed; Ctrl + Enter saves the comment you are
 typing, and Esc backs out of it. A comment can be changed with **Edit** or taken back with **Delete** in the
 Feedback panel, by whoever wrote it (on the same laptop) or by you on the laptop running the mock-up, until
 Claude starts on it; after that, add a new comment instead.

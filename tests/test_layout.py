@@ -129,7 +129,7 @@ def old_project(projects, slug="leave-request"):
 
 
 def issue(p, run):
-    run(project_tool, "issue", p.name, "--date", "2026-11-10")
+    run(project_tool, "issue", p.name, "--date", "2026-11-10", "--without-pdf")  # the PDF needs Word, not here
 
 
 def tree(folder):
@@ -240,7 +240,8 @@ def test_migrate_moves_everything_to_its_place_and_undo_puts_it_back_byte_for_by
     top = sorted(x.name for x in p.iterdir())
     assert top == ["1 Client documents", "2 Reviews", "3 Workshops", "4 Mock-up screenshots", "5 Requirements document",
                    "6 UAT", "7 Change requests", "Internal – estimates and change requests", "Open the mock-up.cmd",
-                   "Open the mock-up.command", "Project overview.html", "Questions and fixes register.xlsx", "_blueprint"]
+                   "Open the mock-up.command", "Project overview.html", "Questions and fixes register.xlsx",
+                   "Questions for the client.xlsx", "_blueprint"]
     assert sorted(x.name for x in (p / "2 Reviews").iterdir()) == ["Mock-up comments.xlsx", "Mock-up v0.1 changes.docx", "SRS v1.0 review.docx"]
     assert sorted(x.name for x in (p / "3 Workshops").iterdir()) == [
         "2026-02-10 workshop 2 - agenda.docx", "2026-02-10 workshop 2 - facilitator notes (internal).docx"]
@@ -475,3 +476,21 @@ def test_status_shows_an_old_project_with_the_offer_to_migrate(projects, temp_wo
     assert "(old-one): " in out and "old folder layout" in out.split("(old-one)")[1].split("\n- ")[0]
     assert "migrate the folders" in out
     assert "old folder layout" not in out.split("(new-one)")[1].split("\n- ")[0]
+
+
+
+def test_a_failed_move_says_what_could_not_be_put_back(projects, monkeypatch):
+    """It said "Everything moved so far was put back" even when putting back failed."""
+    p = old_project(projects)
+    real = layout._move
+
+    def failing(project, src, dst):
+        if src == "output":
+            raise PermissionError("locked")
+        real(project, src, dst)
+
+    monkeypatch.setattr(layout, "_move", failing)
+    monkeypatch.setattr(layout.os, "rename", lambda a, b: (_ for _ in ()).throw(PermissionError("still open"))
+                        if os.path.basename(b) == "docs" else os.replace(a, b))
+    with pytest.raises(RuntimeError, match="could NOT be put back"):
+        layout.migrate(p)

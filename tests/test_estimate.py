@@ -1354,3 +1354,20 @@ def test_the_note_on_reading_the_total_is_printed_and_in_the_excel_file(tmp_path
     assert sheet["A4"].value == "Likely effort: 12 – 24 mandays (confidence: low)"
     assert sheet["A5"].value.startswith("The total adds the low end of every line"), "right under the headline"
 
+
+
+def test_render_never_writes_over_rates_typed_into_the_sheet(tmp_path, run):
+    """The lead developer may fill the Rates needed sheet in the shared folder: rendering again lost them."""
+    blocks = BLOCKS.replace("| BB-08 | Dashboard | Status counts | 6 | – |", "| BB-08 | Dashboard | Status counts | TBD | – |")
+    knowledge = write_knowledge(tmp_path / "knowledge", blocks=blocks)
+    path = full_project(tmp_path / "project", estimate_of(block("L01", "BB-08")))
+    run(knowledge, "render", tmp_path / "project")
+    xlsx = path.with_suffix(".xlsx")
+    fill_rates(xlsx, {"BB-08": (2, 3)})
+    with pytest.raises(SystemExit, match="Rates were typed into the Rates needed sheet"):
+        run(knowledge, "render", tmp_path / "project")
+    assert estimate.rates_typed(xlsx) == 1, "untouched"
+    out = run(knowledge, "render", tmp_path / "project", "--force")
+    kept = list(xlsx.parent.glob("* - rates kept *.xlsx"))
+    assert len(kept) == 1 and estimate.rates_typed(kept[0]) == 1 and kept[0].name in out
+    assert estimate.rates_typed(xlsx) == 0

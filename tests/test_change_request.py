@@ -78,6 +78,7 @@ def new_project(projects, issued=True, run=None):
     shutil.copy(support.EXAMPLE / "spec" / "app.yaml", p / "spec" / "app.yaml")
     (p / "register.json").write_text(json.dumps(REGISTER), encoding="utf-8")
     (p / "output" / f"{DOC}.docx").write_bytes(b"generated")
+    (p / "output" / f"{DOC}.pdf").write_bytes(b"%PDF-1.4 generated")
     shutil.copy(p / "spec" / "app.yaml", p / "output" / "spec-v0.1.yaml")  # as the generator leaves it
     if issued:
         run(project_tool, "issue", "leave-request", "--date", "2026-11-10")
@@ -364,3 +365,26 @@ def test_only_an_ambiguous_request_is_asked(issued, run):
     write_log(issued, NEW)
     with pytest.raises(SystemExit, match="only an Ambiguous CR"):
         run(cr_tool, "ask", issued, "CR-001")
+
+
+
+def test_ask_writes_the_register_and_the_log_together_or_neither(issued, run, monkeypatch):
+    """The register was written, then the log: when the log could not be written, the question was in the
+    register with no link from the CR, and asking again added it twice."""
+    write_log(issued, AMBIGUOUS)
+    before = (issued / "register.json").read_bytes()
+
+    def locked(project, log):
+        sys.exit("Cannot write crs.json: close it")
+
+    monkeypatch.setattr(cr_tool, "save_log", locked)
+    with pytest.raises(SystemExit, match="Cannot write crs.json"):
+        run(cr_tool, "ask", issued, "CR-001")
+    assert (issued / "register.json").read_bytes() == before, "the register put back"
+
+
+def test_the_request_in_the_client_note_is_checked_for_internal_words(issued):
+    cr = {**NEW, "request": "HR wants an export, about 4 mandays"}
+    write_log(issued, cr)
+    errors = cr_tool.check_log(cr_tool.load_log(issued), issued)[0]
+    assert any("request mentions 'mandays'" in e for e in errors), errors

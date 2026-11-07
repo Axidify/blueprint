@@ -4,6 +4,7 @@ Documents are generated in temp folders, the way a machine without Microsoft Wor
 and read back with python-docx. What a page looks like, the table of contents, page numbers and the PDF
 are made by Word and are not checked here, except by the one opt-in test at the end.
 """
+import copy
 import json
 import os
 import re
@@ -219,23 +220,50 @@ def test_access_matrix_has_one_column_per_role(built):
     assert all(len(row) == 1 + len(roles) and set(row[1:]) <= {"✓", ""} for row in rows(matrix)[1:])
 
 
+def action_rows(matrix_rows):
+    """{(screen, action): ticks} from the access matrix, whose rows hold a screen's actions open to the same
+    roles together ("Job Details: Navigate, Call Customer")."""
+    out = {}
+    for row in matrix_rows:
+        if ": " in row[0]:
+            screen, actions = row[0].split(": ", 1)
+            for action in actions.split(", "):
+                out[(screen, action)] = row[1:]
+    return out
+
+
 def test_access_matrix_ticks_follow_the_screens(example):
     matrix = rows(support.table_starting(chapter(example.doc, TITLES["users_access"]), "Menu or action"))
     ticks = {row[0]: row[1:] for row in matrix[1:]}  # Employee, Line Manager, HR Admin
+    actions = action_rows(matrix[1:])
     assert ticks["My Applications"] == ["✓", "", ""]
     assert ticks["Pending Approvals"] == ["", "✓", ""]
     assert ticks["Leave Types"] == ["", "", "✓"]
-    assert ticks["Leave Application Details: Cancel Application"] == ["✓", "", ""], "a button's own roles win over the screen's"
-    assert ticks["Review Leave Application: Approve"] == ["", "✓", ""]
-    assert ticks["Leave Types: Add Leave Type"] == ["", "", "✓"]
-    assert not any(label.endswith((": Back", ": Cancel", ": View")) for label in ticks), "navigation is not an access right"
+    assert actions[("Leave Application Details", "Cancel Application")] == ["✓", "", ""], "a button's own roles win over the screen's"
+    assert actions[("Review Leave Application", "Approve")] == ["", "✓", ""]
+    assert actions[("Leave Types", "Add Leave Type")] == ["", "", "✓"]
+    assert not any(action in ("Back", "Cancel", "View") for _, action in actions), "navigation is not an access right"
+
+
+def test_access_matrix_puts_a_screens_actions_for_the_same_roles_on_one_row(example):
+    """A row per button made the matrix three pages long, mostly blank."""
+    matrix = rows(support.table_starting(chapter(example.doc, TITLES["users_access"]), "Menu or action"))[1:]
+    by_screen = {}
+    for row in matrix:
+        if ": " in row[0]:
+            by_screen.setdefault(row[0].split(": ", 1)[0], []).append(tuple(row[1:]))
+    assert by_screen, "the sample has actions"
+    for screen, tick_sets in by_screen.items():
+        assert len(tick_sets) == len(set(tick_sets)), f"{screen}: two rows for the same roles"
 
 
 def test_access_matrix_leaves_out_demo_and_excluded_buttons(wide):
-    labels = column(support.table_starting(chapter(wide.doc, TITLES["users_access"]), "Menu or action"))
-    assert "Equipment: Edit" in labels
-    assert "Equipment: Print label" not in labels      # access: false
-    assert "Booking Details: Show loan terms" not in labels  # example: true
+    matrix = rows(support.table_starting(chapter(wide.doc, TITLES["users_access"]), "Menu or action"))[1:]
+    actions = action_rows(matrix)
+    assert ("Equipment", "Edit") in actions
+    assert ("Equipment", "Print label") not in actions      # access: false
+    assert ("Booking Details", "Show loan terms") not in actions  # example: true
+    labels = [row[0] for row in matrix]
     assert len(labels) == len(set(labels))
 
 
@@ -575,7 +603,7 @@ def test_issued_version_refuses_to_regenerate(temp_workspace, monkeypatch, capsy
     project = support.make_project(temp_workspace / "projects" / "leave-request")
     first = support.generate(project)
     before = first.path.read_bytes()
-    monkeypatch.setattr(sys, "argv", ["project.py", "issue", "leave-request", "--date", "2026-11-10"])
+    monkeypatch.setattr(sys, "argv", ["project.py", "issue", "leave-request", "--date", "2026-11-10", "--without-pdf"])  # no Word here
     project_tool.main()
     assert "Issued v0.1 to SAMPLE on 2026-11-10" in capsys.readouterr().out
 
@@ -1738,3 +1766,240 @@ def test_dates_read_the_same_way_everywhere(example):
     assert generate_requirements.readable_date(None) == ""
     front = support.chapters(example.doc)[0][1]
     assert ["Date", "6 November 2026"] in rows(tables(front)[1])
+
+
+# ====================================================================== page layout
+def writer():
+    return generate_requirements.Writer(Document(), generate_requirements.load_format())
+
+
+def picture(path, size, box=None, canvas=(229, 232, 239), ink=(20, 24, 32)):
+    """A screenshot: a canvas with a dark shape on it (a phone), or a screen filled edge to edge (a desktop)."""
+    from PIL import Image, ImageDraw
+
+    im = Image.new("RGB", size, canvas)
+    ImageDraw.Draw(im).rectangle(box or (0, 0, size[0] - 1, 40), fill=ink)
+    im.save(path)
+    return path
+
+
+def test_a_phone_is_cut_free_of_its_canvas_and_a_desktop_screen_is_left_alone(tmp_path):
+    w = writer()
+    phone, shape = w.trimmed(picture(tmp_path / "phone.png", (2000, 2300), box=(800, 100, 1200, 2200)))
+    assert phone != tmp_path / "phone.png" and shape > 3, "the phone is a tall picture once the canvas is gone"
+    assert w.grounds[str(phone)] == "E5E8EF", "its figure takes the canvas colour"
+    desktop, shape = w.trimmed(picture(tmp_path / "desk.png", (2000, 1200)))
+    assert desktop == tmp_path / "desk.png" and shape == 0.6
+
+
+def test_no_picture_is_taller_than_its_page_allows(built):
+    section = built.doc.sections[0]
+    room = (section.page_height - section.top_margin - section.bottom_margin) / 360000
+    for shape in built.doc.inline_shapes:
+        assert shape.height / 360000 <= room - generate_requirements.Writer.FIGURE_ROOM + 0.01, \
+            "a picture taller than the page covered the footer and left the page before it blank"
+
+
+def test_two_phone_screens_share_a_row_at_the_scale_of_every_phone(tmp_path):
+    w = writer()
+    tall = picture(tmp_path / "a.png", (2000, 2300), box=(820, 100, 1180, 2200))
+    short = picture(tmp_path / "b.png", (2000, 1700), box=(820, 100, 1180, 1100))
+    w.figure_pair((tall, "My Jobs"), (short, "My Jobs, dialog"))
+    w.figure(short, "Alone")
+    pair = w.doc.tables[-2]
+    assert len(pair.columns) == 2
+    assert [c.text for c in pair.rows[1].cells] == ["Figure 1 · My Jobs", "Figure 2 · My Jobs, dialog"]
+    widths = [round(s.width / 360000, 2) for s in w.doc.inline_shapes]
+    assert widths[1] == widths[2] <= round(w.phone_width, 2), "a phone alone is drawn at the scale of a phone in a pair"
+    assert w.pictures[:2] == [w.trimmed(tall)[0], w.trimmed(short)[0]], "the PDF step gets them left to right"
+
+
+def test_requirement_ids_fit_their_column_on_one_line(wide):
+    for table in tables(chapter(wide.doc, TITLES["requirements"])):
+        longest = max(len(c) for c in column(table, 0))
+        assert table.columns[0].width / 360000 >= longest * FORMAT["sizes"]["table"] * 0.95 * 0.6 / 72 * 2.54 + 0.5
+
+
+def test_a_priority_few_requirements_have_is_shown_after_the_text(tmp_path):
+    groups = copy.deepcopy(support.load_spec(support.EXAMPLE)["requirements"])
+    first = groups[0]["items"][0]
+    groups[0]["items"][0] = {"text": first if isinstance(first, str) else first["text"], "priority": "Should"}
+    result = support.generate(project_from_example(tmp_path / "p", requirements=groups))
+    table = rows(tables(support.split_at_headings(chapter(result.doc, TITLES["requirements"]), 2)[1][1])[0])
+    assert table[0] == ["ID", "Requirement"], "no column of blanks for one priority"
+    assert table[1][1].replace("\xa0", " ").rstrip().endswith(" Should")
+
+
+def test_a_roles_open_decisions_are_one_line_of_numbers(wide):
+    parts = dict(support.split_at_headings(chapter(wide.doc, TITLES["by_role"]), 2)[1:])
+    for heading, blocks in parts.items():
+        lines = [p for p in support.paragraphs(blocks) if p.startswith("● Decision")]
+        assert len(lines) <= 1, f"{heading}: the questions are written out once, in the decisions chapter"
+        for line in lines:
+            assert re.fullmatch(r"● Decisions? needed R-\d+(, R-\d+)*(  ·  section \d+)?", line), line
+
+
+def test_screens_leave_the_contents_when_it_would_run_past_a_page(tmp_path, monkeypatch):
+    monkeypatch.setattr(generate_requirements, "CONTENTS_LINES", 5)
+    result = support.generate(project_from_example(tmp_path / "p"))
+    blocks = chapter(result.doc, TITLES["screens"])
+    shown = [b for b in blocks if support.is_heading(b, 3)]
+    assert len(shown) == len(result.spec["screens"]) and not any(support.is_heading(b, 2) for b in blocks)
+    assert all(r.font.size.pt == FORMAT["sizes"]["h2"] for b in shown for r in b.runs), "they still look like sections"
+
+
+def test_glossary_terms_are_set_in_the_body_font(wide):
+    table = support.table_starting(chapter(wide.doc, TITLES["users_access"]), "Term")
+    assert not any("Mono" in (r.font.name or "") for c in table.columns[0].cells[1:] for p in c.paragraphs for r in p.runs)
+
+
+# ====================================================================== mandays in the timeline
+def with_mandays(**extra):
+    timeline = copy.deepcopy(SHORT_TIMELINE)
+    items = timeline["stages"][0]["items"]
+    items[0]["mandays"], items[1]["mandays"] = 4, 37.5
+    timeline.update(extra)
+    return timeline
+
+
+def test_the_timeline_lists_the_scope_of_works_mandays_with_their_total(tmp_path):
+    """The client sees the mandays they agreed in the scope of work, per item; pricing stays internal."""
+    result = support.generate(project_from_example(tmp_path / "p", timeline=with_mandays()))
+    blocks = chapter(result.doc, TITLES["timeline"])
+    assert FORMAT["labels"]["sow_mandays"] in support.paragraphs(blocks)
+    assert rows(support.table_starting(blocks, "Item")) == [
+        ["Item", "Activity", "Mandays"], ["1", "Workshops", "4"], ["2", "Development", "37.5"], ["", "Total", "41.5"]]
+    words = " ".join(support.paragraphs(blocks) + [c.text for t in tables(blocks) for r in t.rows for c in r.cells])
+    assert not re.search(r"(rates?|costs?|prices?|amount)", words, re.I), "no pricing in the timeline"
+
+
+def test_a_timeline_without_mandays_has_no_mandays_table(tmp_path):
+    result = support.generate(project_from_example(tmp_path / "p", timeline=SHORT_TIMELINE))
+    assert FORMAT["labels"]["sow_mandays"] not in support.paragraphs(chapter(result.doc, TITLES["timeline"]))
+
+
+def test_mandays_must_be_a_figure_on_an_activity_and_pricing_is_refused():
+    spec = support.load_spec(support.EXAMPLE)
+    bad = with_mandays(rate=800)
+    bad["stages"][0]["items"][1]["mandays"] = "about 40"
+    bad["stages"][0]["items"][2]["mandays"] = 2
+    errors = generate_requirements.document_errors(support.changed(spec, timeline=bad))
+    assert any("Development" in e and "'mandays' must be" in e for e in errors)
+    assert any("Go-live" in e and "a milestone has no mandays" in e for e in errors)
+    assert any("'rate' does not go into the requirements document" in e for e in errors)
+    assert generate_requirements.document_errors(support.changed(spec, timeline=with_mandays())) == []
+
+
+# ====================================================================== references are links
+W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+
+
+def links_and_places(doc):
+    body = doc.element.body
+    places = {b.get(W + "name") for b in body.iter(W + "bookmarkStart")}
+    text = lambda h: "".join("-" if e.tag == W + "noBreakHyphen" else (e.text or "") for e in h.iter(W + "t", W + "noBreakHyphen"))
+    links = [(h.get(W + "anchor"), text(h)) for h in body.iter(W + "hyperlink")]
+    return links, places
+
+
+def test_every_reference_link_leads_to_a_place_in_the_document(built):
+    links, places = links_and_places(built.doc)
+    assert links, "references are links"
+    assert all(anchor in places for anchor, _ in links if anchor.startswith("_bp")), "no link goes nowhere"
+
+
+def test_screens_requirements_and_decisions_are_linked_to_their_places(wide):
+    links, places = links_and_places(wide.doc)
+    anchor = generate_requirements.Writer.anchor
+    linked = {(text, a) for a, text in links}
+    screens = {anchor(f"screen:{x['id']}") for x in wide.spec["screens"]}
+    assert screens <= places, "every screen is a place"
+    assert any(a in screens for _, a in linked), "a screen number leads to its screen"
+    assert anchor("section:open-issues") in places and any(a == anchor("section:open-issues") for _, a in linked)
+    group = wide.spec["requirements"][0]["id"]
+    assert anchor(f"req:{group}") in places and anchor(f"reqitem:{group}.1") in places
+    assert any(text.startswith("R-") and a == anchor(f"reg:{text}") for text, a in linked), "a decision's number leads to it"
+
+
+def test_a_reference_to_something_not_in_the_document_stays_plain_text():
+    w = generate_requirements.Writer(Document(), generate_requirements.load_format())
+    w.runs(w.doc.add_paragraph(), [("5.1", "ref", "screen:gone"), (" ", ""), ("4.2", "ref", "screen:here")])
+    w.bookmark(w.doc.add_paragraph("4.2 Here"), "screen:here")
+    w.unlink_missing()
+    links, _ = links_and_places(w.doc)
+    assert [text for _, text in links] == ["4.2"]
+    assert w.doc.paragraphs[0].text == "5.1 4.2"
+
+
+def test_a_phone_screen_takes_its_table_beside_it(tmp_path):
+    """The half of the page beside a phone holds its field table, so the screen and its fields share a page."""
+    w = writer()
+    phone = picture(tmp_path / "p.png", (2000, 2300), box=(820, 100, 1180, 1500))
+    w.figure_beside(phone, "Work Report", lambda width: w.table(["Field", "Type", "Rule or source"],
+                                                                  [["Findings *", "Long text", "–"]], [2.5, 2.1, width - 4.6]))
+    outer = w.doc.tables[-1]
+    left, right = outer.rows[0].cells
+    assert len(outer.columns) == 2 and left.tables and right.tables
+    assert "Figure 1 · Work Report" in left.tables[0].rows[1].cells[0].text
+    assert rows(right.tables[0]) == [["Field", "Type", "Rule or source"], ["Findings *", "Long text", "–"]]
+    assert round(w.doc.inline_shapes[0].width / 360000, 2) <= round(w.phone_width, 2), "the phone at the scale of every phone"
+
+
+def test_a_tall_desktop_screen_is_never_taken_for_a_phone(tmp_path):
+    w = writer()
+    assert not w.is_phone(picture(tmp_path / "long.png", (1600, 3300))), "a long desktop page fills its picture"
+    assert w.is_phone(picture(tmp_path / "phone.png", (1600, 2300), box=(650, 100, 950, 2200)))
+
+
+def test_the_section_numbers_on_the_summary_and_sign_off_pages_are_links(wide):
+    """"see section 7" on the sign-off card and the sections in How to review it lead to those sections."""
+    links, places = links_and_places(wide.doc)
+    anchor = generate_requirements.Writer.anchor
+    to_decisions = [text for a, text in links if a == anchor("section:open-issues") and text.startswith("section ")]
+    assert len(to_decisions) >= 2, "How to review it and the sign-off card both link to the decisions"
+    for key in ("section:by-role", "section:screens"):
+        assert anchor(key) in places and any(a == anchor(key) and text.startswith("section ") for a, text in links), key
+
+
+def test_nothing_of_the_word_template_but_its_look_reaches_a_generated_document(tmp_path):
+    """The template's body, comments and file properties used to be kept: a template made from an earlier
+    client's requirements document put that document, with its mandays and rates, into every new one."""
+    import zipfile
+
+    import docx
+
+    template = tmp_path / "document-template.docx"
+    d = docx.Document(str(support.ROOT / "templates" / "document-template.docx"))
+    d.add_paragraph("OTHER-CLIENT body: 42 mandays at 1500 a day")
+    d.sections[0].header.paragraphs[0].text = "Header kept {company}"
+    cp = d.core_properties
+    cp.title, cp.subject, cp.comments, cp.last_modified_by, cp.keywords = ("OTHER-TITLE", "OTHER-SUBJECT", "OTHER-COMMENT",
+                                                                          "OTHER-PERSON", "OTHER-KEYWORDS")
+    d.save(str(template))
+    fresh = generate_requirements.template_document(template)
+    assert fresh.paragraphs == [] or all(not p.text for p in fresh.paragraphs)
+    assert fresh.sections[0].header.paragraphs[0].text == "Header kept {company}", "the header and footer stay"
+    out = tmp_path / "out.docx"
+    fresh.add_paragraph("New content")
+    fresh.save(str(out))
+    raw = b"".join(zipfile.ZipFile(out).read(n) for n in zipfile.ZipFile(out).namelist())
+    assert b"OTHER-" not in raw
+    # Every generated Word file starts from it: the UAT document, the CR note, the agenda and the review too.
+    for tool in ("generate_requirements", "uat", "change_request", "workshop", "review_doc"):
+        source = (support.ROOT / "tools" / f"{tool}.py").read_text(encoding="utf-8")
+        assert 'Document(str(workspace.asset("document-template.docx")))' not in source, tool
+        assert "template_document()" in source, tool
+
+
+
+def test_effort_rates_or_money_in_the_timelines_own_words_are_refused():
+    """Only `mandays` on an activity was checked: a summary card such as "45–60 mandays" or a price in an
+    assumption went into the document as it was."""
+    spec = support.load_spec(support.EXAMPLE)
+    for change in ({"summary": [{"value": "45 – 60 mandays", "label": "Estimated effort"}]},
+                   {"assumptions": ["Billed at RM 1,500 a day"]}, {"intro": "Total cost $40,000"}):
+        timeline = {**with_mandays(), **change}
+        errors = generate_requirements.document_errors(support.changed(spec, timeline=timeline))
+        assert any("does not go into the requirements document" in e for e in errors), change
+    weeks = {**with_mandays(), "summary": [{"value": "27 – 32 weeks", "label": "Kick-off to go-live"}]}
+    assert generate_requirements.document_errors(support.changed(spec, timeline=weeks)) == []

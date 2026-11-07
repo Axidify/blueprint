@@ -147,12 +147,15 @@ timeline:
 | `client` | `true` when the client must take part (workshops, reviews, data, UAT, training): drawn in the accent colour |
 | `milestone`, `week` | A milestone's ID (M1, M2 …) and the week it falls in; drawn as a diamond |
 | `title`, `client_action` | A milestone's full name and what the client must do, for the milestones table |
+| `mandays` | An activity's mandays as agreed in the scope of work (a number). The document lists them under the chart with their total. Never the estimate's figures; rates and cost never go into the spec |
 
 Projects longer than 40 weeks show one column per 2 or more weeks. Durations come from the estimate, not from the
 SOW's mandays, which are a commercial figure and often lower than the likely effort:
 `python -I tools/estimate.py weeks projects/<slug> --team 2` gives the working weeks per SOW item for a team
-size. State the team size and the other assumptions behind the weeks. Mandays, rates and cost never go
-into the spec.
+size. State the team size and the other assumptions behind the weeks. The mandays shown are the SOW's, one
+per item (`mandays`); the estimate's mandays, rates and cost never go into the spec. The timeline's own
+words (the intro, the summary figures, stage and activity names, milestones and assumptions) may not speak of
+mandays, rates, cost or prices either: the generator refuses them, because they are printed as they are.
 
 ## Screens
 
@@ -355,6 +358,12 @@ buttons:
   - {label: Submit, style: primary, toast: "Application {id} submitted", to: my-applications}
 ```
 
+**Changed records.** On a form opened on a record (`?record=`, or its own `record`), the main button
+(`style: primary`, not one that opens a dialog) keeps what was typed in that record before it goes where it
+goes: Save on Edit User sets the user Inactive, and the Users list shows it. Only fields the list's records
+hold are written (a comment typed on an approval form is not), never the record's id or status, and only
+fields the presenter saw. Nothing to add to the spec; a `set_status` on the same button still moves the record.
+
 ## The walk-through
 
 What the mock-up changes while it is acted out (records added and moved) is kept for the browser tab's
@@ -472,7 +481,9 @@ nearly spells a real one, such as `colums` or `tittle`, with the name it expects
 Settings the format does not know at all are **warnings**: the build goes on and lists them, because the
 mock-up ignores them. A key with no value is pointed out as a likely comma inside unquoted text between
 `{ }` (`{label: Yes, approve}` becomes a label and a stray `approve`). Start a note of your own with an
-underscore (`_note: ask about the balance`) and it is never warned about.
+underscore (`_note: ask about the balance`) and it is never warned about. Such notes, a requirement item's
+`note`, the `timeline` (with the scope of work's mandays) and `platform_fit` are left out of the built
+mock-up, which anyone in the room can read.
 
 When `mockup.py screenshots` finds a screen the mock-up cannot draw, it stops with the name of that screen,
 the error the browser reported and the likely cause, instead of waiting in vain.

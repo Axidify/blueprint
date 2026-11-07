@@ -123,7 +123,7 @@ Tell the user, in plain words:
     once the project lead has checked it;
   - the CR log (`Internal – estimates and change requests/CR log (internal).xlsx`) with the sizing: **internal**, for the project lead and
     lead developer, never sent;
-  - for Ambiguous requests, the question in `Questions and fixes register.xlsx` on the **For client** sheet.
+  - for Ambiguous requests, the question in `Questions for the client.xlsx` (the register file to send; the register itself stays internal).
 - **The next step, in the words to say:** for a New CR, "the project lead sold CR-00n at 4 mandays" (the
   note is written again with the price) and later "the client approved CR-00n"; for an Ambiguous one, "the
   client answered R-0nn" once they reply (or "prepare the workshop" for a list of questions to settle

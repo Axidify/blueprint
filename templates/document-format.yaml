@@ -74,6 +74,8 @@ labels:
   impact_medium: Needs an answer
   impact_low: Clarification
   decision_needed: Decision needed
+  decisions_needed: Decisions needed
+  sow_mandays: Effort by scope of work item   # timeline: the scope of work's mandays per item
   decisions_made: Decisions made
   default_status: Draft for client review
   confidential: Confidential
