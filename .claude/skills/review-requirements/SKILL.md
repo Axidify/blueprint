@@ -44,6 +44,20 @@ Work through every check.
 
 - **A. Consistency**: role, status, module and field names across sections, tables and figures; gaps in
   requirement IDs; every cross-reference; lists that should match; field formats against lengths.
+- **A2. Contradictions**: two places that say opposite things about one subject (one part says a bad upload
+  imports nothing, a requirement says import the good rows and skip the bad ones). Build the pack with
+  `python -I tools/contradictions.py --text _blueprint/reviews/<review>/extract/text.md`, and for a project
+  with a spec also `python -I tools/contradictions.py projects/<slug>`; read the `pack.md` each writes. Its
+  three parts are of different weight: every **clash** (found mechanically: a sentence against the status
+  rules, a cancel button against them, a field with two limits, a required field called optional) is a finding
+  unless re-reading shows the tool misread it; each **look here** pair is a cue to judge, many are fine; then
+  read **everything said about each subject**, subject by subject, asking whether the statements agree on who
+  may act, what happens on bad data or failure, limits and numbers, and what is in scope: the tool cannot
+  understand meaning, so most real contradictions are found here. Record each real one as `type:
+  contradiction` with both places in `source` (`SRS v1.0 §3.2 (p12); FR-PLN-001.4 (p20)`) and both texts
+  quoted in `finding`; *high* when it is about behaviour or scope. The question asks the client which one
+  holds, offering both; for a generated document it is internal, fixed in the spec, unless only the client can
+  say which is meant.
 - **B. Figures against text**: flow arrows and statuses, roles in diagrams, mock-up fields and buttons
   against the data tables. Read the text *inside* mock-ups (terms, help text, placeholders, sample data):
   a business rule stated only there is a gap.

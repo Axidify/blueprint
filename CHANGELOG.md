@@ -59,6 +59,16 @@ See [docs/maintaining.md](docs/maintaining.md).
 - **Test data in the knowledge base.** A projects-log row with the word TEST in capitals (or a yes in a Test column)
   is test data: estimates never count it as a delivered project, so a test run cannot make a platform look
   calibrated. The close-out marks test figures this way.
+- **Requirements that contradict each other.** `contradictions.py` gathers everything a spec says about the same
+  subject (each screen, dialog, status, field, integration and role, and themes such as uploads, cancelling and
+  notifications) into a review pack, so two places that disagree are read side by side before the document goes
+  to the client. It finds the clear clashes on its own: a requirement or a status's meaning that lets a role
+  cancel, edit or delete where the status rules say the opposite, a cancel button shown to a role the rules leave
+  out, a status that may be cancelled but cannot move to Cancelled, one field given two limits, a required field
+  called optional. Pairs it can only suspect, such as "nothing is imported" against "import the good rows and
+  skip the bad ones", are listed to judge. With `--text` it reads a client's own document the same way. The
+  review-requirements and generate-requirements skills now use it and record each real contradiction in the
+  register with both places quoted.
 
 ### Changed
 - **The client sees first what still needs an answer.** In `Questions for the client.xlsx` and the register,

@@ -48,6 +48,11 @@ activities. An issued version is locked.
   rebuilt from an older document is full of stale "section N.N" and mock-up remarks: fix them). Each TBC
   in a requirement is linked to its item with `tbc: R-xxx`.
 
+- No contradictions: `python -I tools/contradictions.py projects/<slug>` writes a pack of everything the spec
+  says about each subject. Fix every **clash** it lists in the spec (or, where only the client can say which
+  holds, add a register question); judge the **look here** pairs. A requirement that disagrees with a status
+  rule, a dialog message or the scope is printed into the signed document as it is.
+
 ## 2. Generate
 
 1. `python -I tools/mockup.py screenshots projects/<slug>`, always, so the pictures match the spec (no spec
@@ -74,8 +79,8 @@ entry and generate again. Never unlock an issued version: the client has that fi
 
 ## 3. Review before it goes out
 
-Run `review-requirements` on the generated document, focused on what generation cannot guarantee: workflow
-edge cases, undefined KPIs, integration scope, NFRs and open items. Fix findings in the spec and generate
+Run `review-requirements` on the generated document, focused on what generation cannot guarantee: requirements
+that contradict each other (read the spec's contradictions pack, subject by subject), workflow edge cases, undefined KPIs, integration scope, NFRs and open items. Fix findings in the spec and generate
 again. Something the generator does not produce (a process-flow diagram) goes in as a spec file
 (`_blueprint/spec/process-flow.png`) or as a change to the generator.
 

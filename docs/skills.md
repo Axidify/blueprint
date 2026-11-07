@@ -59,6 +59,9 @@ you: a real defect for the developers, a new wish for `change-request`, or not a
 Reads the whole document including its diagrams and mock-ups, checks consistency, completeness, workflow
 edge cases, data and KPI definitions, integrations, open items, scope against the SOW and document hygiene,
 and every gap pattern in the knowledge base. Every finding cites its location.
+Contradictions between parts of the document (one place says a bad upload imports nothing, a requirement
+says import the good rows and skip the bad ones) are looked for with a pack of everything said about each
+subject (`contradictions.py`), and each real one is recorded with both places quoted.
 A document the client already signed is reviewed too: its findings become possible change requests for
 change control. A scope-of-work or manday appendix inside the document is used as the SOW. For a document
 Blueprint generated, fixes go into the spec and most findings are internal.
@@ -162,7 +165,8 @@ role, functional requirements linked to screens, every screen with its fields, N
 estimate, in weeks), decisions needed before sign-off, a sign-off block per signatory, and appendices. It warns about stale cross-references
 and team-only text anywhere the client will read it (the mock-up, "proposed", register and feedback ids,
 requirement ids of another document), lists the parts still missing before issuing (NFRs, timeline, scope,
-signatories), then reviews the document with `review-requirements`.
+signatories), then reviews the document with `review-requirements`, starting from the spec's contradictions pack:
+the clashes it finds mechanically are fixed in the spec before the review.
 See [Document format](document-format.md).
 **Output:** `5 Requirements document/<System> – System Requirement Specifications v<version>.docx`, a PDF
 when Word is installed, and a snapshot of the spec used.
