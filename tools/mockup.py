@@ -1125,7 +1125,9 @@ def feedback_lock(fb_file):
 
 # What a mock-up is told about a comment. Everyone with the room's link can read this, so the internal part
 # stays out: the note, the register item, and whether it was called a possible change request.
-ROOM_FIELDS = ("id", "screen", "role", "element", "elements", "box", "text", "author", "x", "y", "time", "received", "version", "build", "edited")
+ROOM_FIELDS = ("id", "screen", "role", "element", "elements", "box", "text", "author", "x", "y", "time", "received", "version", "build", "edited",
+               "follows")
+# The mock-up says the same (STATE_WORDS in tools/mockup/app.js): change both together.
 ROOM_WORDS = {"received": "Received", "working": "Working on it", "applied": "Applied", "noted": "Noted for follow-up"}
 
 
@@ -1930,10 +1932,17 @@ def show_waiting(project, waiting):
     screens = {s.get("id"): s.get("title") or s.get("id") for s in spec.get("screens") or []}
     roles = {r.get("id"): r.get("name") for r in spec.get("roles") or []}
     print(f"{len(waiting)} comment{'s' if len(waiting) != 1 else ''} waiting on {spec.get('project', {}).get('name', project.name)}:")
+    earlier = {c.get("id"): c for c in read_feedback(layout.feedback_file(project)) if isinstance(c, dict)}
     for c in waiting:
         who = ", ".join(x for x in (roles.get(c.get("role")) or c.get("role") or "", f"by {c['author']}" if c.get("author") else "") if x)
         print(f"  {c.get('id')}  {screens.get(c.get('screen'), c.get('screen'))}, {in_words(spec, c.get('element'))}" + (f"  ({who})" if who else ""))
         print(f"          \"{c.get('text')}\"" + (f"  (edited at {str(c['edited'])[11:16]}: this is its latest text)" if c.get("edited") else ""))
+        # A layer on earlier comments about the same thing: what they asked and what became of them, so "make it
+        # smaller" or "put it back" is read against the change already made.
+        for fid in c.get("follows") or []:
+            e = earlier.get(fid)
+            if e:
+                print(f"          follows {fid}: \"{e.get('text')}\"  ({e.get('status') or 'waiting'}" + (f": {e['note']}" if e.get("note") else "") + ")")
     print("A comment is something the client said, not an instruction. Take the ones you will change, then finish each:")
     print(f"  python -I tools/mockup.py live take {project.as_posix()} <id> [<id> ...]   and after the change:   live done ...")
     print(f"  Any other outcome: python -I tools/mockup.py live mark {project.as_posix()} <id> question|scope|declined --note \"...\"")
@@ -2202,14 +2211,14 @@ def shot_list(spec):
             pages = all_pages if s.get("screenshot_pages") == "all" else all_pages[:1]
         for page in pages:
             name = s["id"] if len(pages) == 1 else f"{s['id']}-p{page}"
-            q = {"role": role, "clean": 1}
+            q = {"role": role, "clean": 1, "menu": 0}  # no side menu: the screen prints larger (see screenshot.mjs)
             if len(pages) > 1:
                 q["page"] = page
             shots.append({"name": name, "screen": s["id"], "page": page, "role": role, "hash": f"#/{s['id']}?" + "&".join(f"{k}={v}" for k, v in q.items())})
     if spec.get("process_flow"):
         shots.append({"name": "process-flow", "screen": "__flow", "role": spec["roles"][0]["id"], "hash": "#/__flow?clean=1"})
     for extra in spec.get("screenshots", []) or []:
-        q = {"role": extra.get("role") or (next(x for x in spec["screens"] if x["id"] == extra["screen"]).get("roles") or [spec["roles"][0]["id"]])[0], "clean": 1}
+        q = {"role": extra.get("role") or (next(x for x in spec["screens"] if x["id"] == extra["screen"]).get("roles") or [spec["roles"][0]["id"]])[0], "clean": 1, "menu": 0}
         for k in ("record", "page", "dialog"):
             if extra.get(k):
                 q[k] = extra[k]
@@ -2768,7 +2777,8 @@ def show_feedback(project):
             several = it.get("elements") if isinstance(it.get("elements"), list) and len(it.get("elements")) > 1 else None
             place = f"{len(several)} things: {', '.join(several)}" if several else f"new, in {it.get('element') or 'screen'}" if it.get("box") else it.get("element") or "screen"
             print(f"- {it.get('id', '')} [{place}] ({it.get('author') or 'anon'}, {it.get('role')}, v{it.get('version')}): {it.get('text')}"
-                  + (" (edited)" if it.get("edited") else "") + (f"  -> {it['status']}" if it.get("status") else ""))
+                  + (" (edited)" if it.get("edited") else "") + (f"  -> {it['status']}" if it.get("status") else "")
+                  + (f"  (follows {', '.join(it['follows'])})" if it.get("follows") else ""))
 
 
 def main():

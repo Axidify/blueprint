@@ -11,6 +11,75 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+### Fixed
+- **Saving an edit in the mock-up changes the record.** Save on a form opened on a record (Edit User, Edit
+  Part …) used to show its message and leave the list as it was. It now keeps what was typed in that record,
+  so the list and every screen that shows it follow, for the rest of the walk-through.
+- **Opening the Feedback or What changed panel no longer moves the page.** The panel lies over the right of the
+  screen instead of pushing the page aside, so boxes and pins drawn on the page stay where they were put; they
+  used to land beside what they were about when a panel opened or closed.
+- **No marks pointing at nothing.** A comment about something no longer on the screen (changed or removed
+  since) or in a part folded away has no pin or box on the page; its card in the Feedback panel says why. A pin
+  used to sit in the top-left corner, or at the comment's old place over something else. Unfold the part and
+  the marks come back. A comment made as another role, about something only drawn for that role, says to
+  View as that role.
+
+### Added
+- **Comments in layers.** Only open comments are marked on the screen: once applied or noted for follow-up a
+  comment moves to **Done** at the bottom of the Feedback panel, and **Show on the screen** brings those marks
+  back, faded. A box no longer blocks what is inside it: click the thing to comment on it, or the box's pin to
+  open its comment. Commenting on something already commented on lists the earlier comments and what became of
+  them, and the new comment is saved as following them (`follows`), so Claude reads "a bit smaller" or "put it
+  back" against the change already made; the live session and `mockup.py feedback` show the link.
+- **Minimise the Feedback and What changed panels.** **–** in a panel's corner puts its list away while
+  Feedback stays on, so nothing covers the screen; **Comments** (or **What changed**) on the bar, or a click on
+  a pin, brings it back. The Feedback panel remembers it.
+- **A comment box no longer stretches across the screen when something it was drawn around is hidden.** A box
+  drawn around several things (say a filter area) follows them; when one of them was hidden, for example in
+  a section folded away, the box stretched from the top-left corner of the page. It now stays round the things
+  on show, and where it was drawn when none are.
+- **Screenshots always fit on their page in the requirements document.** A tall screenshot was placed at the
+  full width of the page, so it ran over the footer, its caption was pushed to the next page and the page
+  before it was often left blank. Every figure is now sized to fit on its page with its caption.
+- **Phone screens are readable and take half the pages.** The empty canvas around a phone screenshot is cut
+  away, two phone screens of the same screen sit side by side, and every phone is drawn at the same scale.
+  The sample field-service document went from 77 pages to 62.
+- **Requirement IDs stay on one line.** The ID column is as wide as the longest ID ("FR-AUTH-001.1" used to
+  break after the dot), and a field's type ("Text (read-only)") no longer wraps.
+- **A phone screen and its fields share a page.** A phone screen on its own has its field table (or its
+  list's columns) beside it instead of under it; there a required field is marked with an asterisk, as on
+  the screen. Most phone screens now take one page instead of two.
+- **Portal screens print larger.** The screenshots for the document leave out the side menu and are taken
+  800 pixels wide, so a desktop screen's text prints about a quarter larger (the access matrix still lists
+  each role's menu). Take the screenshots again (`mockup.py screenshots`) to get them.
+- **No more half-empty pages before tables.** Longer tables may run on to the next page (with their header
+  repeated, and never leaving a single row behind) instead of jumping whole to a new page.
+
+### Added
+- **References in the requirements document are links.** Click a screen number (5.13), a requirement group
+  (FR-AUTH-001) or requirement (FR-DSP-001.1), a decision (R-019) or a section ("section 7", also in How to
+  review it and on the sign-off page's "see section 7") and Word or the PDF goes to that place. Links work in both the Word file and the PDF; a reference to something the document
+  leaves out stays plain text.
+
+### Changed
+- **Click a comment in the Feedback panel to see what it is about.** Like a change in What changed, the card
+  stays marked and the thing on the screen it names (its element, the box drawn for it, or its pin) is
+  brought into view and outlined for a moment. Works with the keyboard too (Tab, then Enter).
+- **The requirements document's timeline can show the scope of work's mandays.** Give each timeline activity
+  the mandays the client agreed in the scope of work (`mandays`), and the timeline lists them per item with
+  their total. Pricing stays strictly internal: the estimate's mandays, rates and cost never go into the
+  document, and a `rate`, `cost` or `price` in the timeline stops the generator.
+- **A shorter access matrix.** A screen's actions open to the same roles share one row ("Job Details:
+  Navigate, Call Customer, Accept Job"), so the matrix fits on one or two pages instead of three. It is kept on
+  one page when it fits on one.
+- **Requirements by role list each role's open decisions as one line of numbers** pointing to the decisions
+  chapter, instead of writing the same questions out under every role they mention.
+- **The contents stay on one page.** When chapters and sections would not fit, the screens are left out of
+  the contents (each still starts a page, with a heading that looks the same).
+- **A priority only a few requirements have is shown after their text** instead of in a column that was
+  otherwise blank.
+- Glossary terms are set in the body font, like the first column of every other table.
+
 ## [1.3.3] - 2026-11-07
 
 ### Fixed

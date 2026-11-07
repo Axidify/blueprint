@@ -51,8 +51,9 @@ or don't answer about, stays in the inbox with a note of why, and the start-up s
   section automatically. See [The register](register.md).
 - **Estimates** are counted from the brief, the scope of work or the spec in the knowledge base's building
   blocks, with the rates you set there, and are kept per project with their date, so you can see how the
-  range moved. They are internal: no mandays go into the mock-up or the requirements document. The
-  timeline chapter is drafted from the estimate, in weeks. See [Estimates](estimates.md).
+  range moved. They are internal: the estimate's mandays never go into the mock-up or the requirements
+  document. The timeline chapter is drafted from the estimate in weeks, and shows the scope of work's
+  mandays per item. Rates and cost never reach the client. See [Estimates](estimates.md).
 - **The knowledge base** grows with every project: each CR becomes evidence for a gap pattern, and each
   gap pattern becomes a standard workshop question and review check. See [Knowledge base](knowledge.md).
 

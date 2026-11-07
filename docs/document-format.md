@@ -27,13 +27,13 @@ orange otherwise ("Draft for client review", "Not approved", "Awaiting final rev
 | Document at a glance | Counts (roles, screens, requirements, decisions needed), how to review it, sign-off status, version history | Spec, register |
 | About this document | Disclaimer, confidentiality, concept acknowledgement | Standard wording |
 | Contents | Chapters and sections (updated by Word) | |
-| 1 Users and access | Overview, roles with data scope, access matrix (ticks), process flow and statuses, status rules (who may edit, cancel or delete in each status, and where it moves next), external systems and how each exchange works (trigger, data, what happens on failure), e-mail notifications, terms | Spec |
+| 1 Users and access | Overview, roles with data scope, access matrix (ticks; a screen's actions open to the same roles share a row), process flow and statuses, status rules (who may edit, cancel or delete in each status, and where it moves next), external systems and how each exchange works (trigger, data, what happens on failure), e-mail notifications, terms | Spec |
 | 2 Scope and assumptions | What is in scope, what is out of scope, and what has been assumed. Left out when the spec has no scope | Spec `scope` |
-| 2 Requirements by role | Per role: what they see, their screens with section numbers, what they can do, e-mails they receive, decisions that affect them | Spec, register |
-| 3 Functional requirements | Each group with its requirements, priority (when set) and the screens it applies to | Spec `requirements` |
+| 2 Requirements by role | Per role: what they see, their screens with section numbers, what they can do, e-mails they receive, and one line with the numbers of the decisions that affect them (each is written out once, in the decisions chapter) | Spec, register |
+| 3 Functional requirements | Each group with its requirements, priority and the screens it applies to. Priority has a column when at least half the requirements have one; otherwise it is shown after the text of those that do | Spec `requirements` |
 | 4 Screens | Each screen: who uses it, screenshot, what each figure on it counts, fields (type, required, rule or source), list columns, dialogs, linked requirements | Spec, mock-up |
 | 5 Non-functional requirements | Areas and measurable requirements, or a "to be confirmed" note | Spec `nfr` |
-| 6 Project timeline | Summary figures, a week-by-week chart of stages, activities and milestones (client activities highlighted), the milestones with what the client must do, and the assumptions behind the plan. Left out when the spec has no timeline | Spec `timeline` |
+| 6 Project timeline | Summary figures, a week-by-week chart of stages, activities and milestones (client activities highlighted), the scope of work's mandays per item with their total (when given), the milestones with what the client must do, and the assumptions behind the plan. Left out when the spec has no timeline | Spec `timeline` |
 | 7 onwards | Extra sections: environments, infrastructure … | Spec `extra_sections` |
 | Decisions needed before sign-off | Every open client question with its impact, owner, due date and the requirements it affects; then "Decisions made": the questions already answered, with the answer and where it was agreed | Register |
 | Client acknowledgement and sign-off | Standard wording; what is being signed ("Version 0.2 · What you are signing · 6 November 2026"), the decisions still open that are not part of it, and how to sign; one form per signatory, client first: name, designation, signature and date rows and a company stamp box | Spec `signoff` |
@@ -42,19 +42,34 @@ orange otherwise ("Draft for client review", "Not approved", "Awaiting final rev
 Every page except the cover has a header (system, version, status) and a footer (company, confidential,
 page number).
 
+The blue references are links, in the Word file and in the PDF: a screen's number (in the requirements and
+under each role) goes to the screen, a requirement group or requirement ID to its place in the functional
+requirements, a decision's number (R-019) to its row in the decisions chapter, and "section 7" or "1.5" to
+that section, including those in How to review it and on the sign-off page. The contents link to every chapter too. Section numbers written into a text with `{ref:...}`
+stay plain text.
+
 ## Page flow
 
 Generated documents are laid out so nothing is cut off awkwardly between pages:
 
 - every chapter, and every screen, starts on a new page (screens can run on; see `layout` below);
-- the lines of the contents are set close together, with a little space above each chapter, so a long
-  contents takes as few pages as it can;
+- the lines of the contents are set close together, with a little space above each chapter; when chapters and
+  sections would not fit on one page, the screens are left out of it (they still each start a page with a
+  heading of the same look, and the requirements by role give each one's number);
 - a heading always stays on the same page as the text, screenshot or table that follows it;
-- a screenshot and its caption are never separated;
-- tables never start with a lone header at the foot of a page, short tables (up to six rows) are kept
-  whole, rows never split, and the header row repeats on every page of a long table;
+- a screenshot and its caption are never separated, and every screenshot fits on its page with its caption:
+  a taller one is drawn narrower;
+- the empty canvas around a phone screenshot is cut away, two phone screens of a screen share a row, and
+  every phone is drawn at the same scale, alone or in a pair; a phone on its own has its field table (or
+  its list's columns) beside it, so the screen and its fields share a page; there a required field carries
+  an asterisk, as on the screen, in place of the Required column;
+- tables never start with a lone header at the foot of a page or end with a single row on the next one,
+  tables of up to three rows are kept whole, rows never split, and the header row repeats on every page of a
+  long table (longer tables may run on, so no third of a page is left empty above them); the access matrix is
+  kept on one page when it fits on one;
 - short lists (a role's screens) stay together, and each sign-off form stays on one page;
-- an ID or reference (FR-BKG-001.2, R-014) is never split across two lines, and in the decisions table
+- an ID or reference (FR-BKG-001.2, R-014) is never split across two lines: the ID column of the requirements
+  is as wide as the longest ID, and the Type column of a field table fits "Text (read-only)"; in the decisions table
   the impact, owner and due date each stay on one line when they are a single word or date;
 - no paragraph leaves a single line stranded at the top or bottom of a page.
 
@@ -86,7 +101,7 @@ titles:
 | `front` | Front matter in order: `cover`, `at_a_glance`, `about`, `contents` |
 | `chapters` | Chapters in order: `users_access`, `scope`, `by_role`, `requirements`, `screens`, `nfr`, `timeline`, `extras`, `decisions`, `signoff`. A company file that lists its own chapters must add `timeline` to get the timeline |
 | `titles.*` | Chapter and page titles |
-| `labels.*` | Words used in the document: impact levels, "Decision needed", "Decisions made", the default status, "Confidential", and the sign-off cards: `signing` ("What you are signing", under the version and its date), `not_signed` ("Not part of this sign-off", under the decisions still open, with their section), `nothing_left_out` (when none are open) and `how_to_sign` |
+| `labels.*` | Words used in the document: impact levels, "Decision needed" and its plural `decisions_needed`, `sow_mandays` (the title of the timeline's mandays table), "Decisions made", the default status, "Confidential", and the sign-off cards: `signing` ("What you are signing", under the version and its date), `not_signed` ("Not part of this sign-off", under the decisions still open, with their section), `nothing_left_out` (when none are open) and `how_to_sign` |
 
 **Mistakes are reported, not guessed at.** Before a document is generated the format is checked: a setting
 that does not exist (`colours` for `colors`, with the likely one suggested), a colour that is not six hex

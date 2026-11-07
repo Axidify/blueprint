@@ -147,12 +147,13 @@ timeline:
 | `client` | `true` when the client must take part (workshops, reviews, data, UAT, training): drawn in the accent colour |
 | `milestone`, `week` | A milestone's ID (M1, M2 …) and the week it falls in; drawn as a diamond |
 | `title`, `client_action` | A milestone's full name and what the client must do, for the milestones table |
+| `mandays` | An activity's mandays as agreed in the scope of work (a number). The document lists them under the chart with their total. Never the estimate's figures; rates and cost never go into the spec |
 
 Projects longer than 40 weeks show one column per 2 or more weeks. Durations come from the estimate, not from the
 SOW's mandays, which are a commercial figure and often lower than the likely effort:
 `python -I tools/estimate.py weeks projects/<slug> --team 2` gives the working weeks per SOW item for a team
-size. State the team size and the other assumptions behind the weeks. Mandays, rates and cost never go
-into the spec.
+size. State the team size and the other assumptions behind the weeks. The mandays shown are the SOW's, one
+per item (`mandays`); the estimate's mandays, rates and cost never go into the spec.
 
 ## Screens
 
@@ -354,6 +355,12 @@ buttons:
   - {label: Save as Draft, creates: true, set_status: draft, toast: "Draft {id} saved", to: my-applications}
   - {label: Submit, style: primary, toast: "Application {id} submitted", to: my-applications}
 ```
+
+**Changed records.** On a form opened on a record (`?record=`, or its own `record`), the main button
+(`style: primary`, not one that opens a dialog) keeps what was typed in that record before it goes where it
+goes: Save on Edit User sets the user Inactive, and the Users list shows it. Only fields the list's records
+hold are written (a comment typed on an approval form is not), never the record's id or status, and only
+fields the presenter saw. Nothing to add to the spec; a `set_status` on the same button still moves the record.
 
 ## The walk-through
 

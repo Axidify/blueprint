@@ -51,9 +51,10 @@ is; every tool goes through it.
   change the spec version instead.
 - `6 UAT/` – the testers' workbook and the client's UAT document.
 - `7 Change requests/` – the client's change request notes.
-- `Internal – estimates and change requests/` – the estimate Excel files and the CR log. Mandays, rates and
-  cost live here only: never copy them into the spec, the mock-up, the requirements document or a client
-  item in the register.
+- `Internal – estimates and change requests/` – the estimate Excel files and the CR log. Rates, cost and the
+  estimate's mandays live here only: never copy them into the spec, the mock-up, the requirements document
+  or a client item in the register. The one exception: the requirements document's timeline shows the scope
+  of work's mandays per item (`mandays` on the spec's `timeline` activities), never the estimate's.
 - `_blueprint/` – Blueprint's working files (with a README saying to leave them alone):
   - `register.json` – every question, gap, assumption, decision and fix, with status. The source of truth;
     render it with `tools/register.py`.
@@ -181,3 +182,5 @@ greys for the rest, and the sizes for type, spacing, buttons and tables. Change 
 - Fix generated documents in the spec, never by hand in the Word file.
 - Estimates are ranges with stated assumptions and a confidence level, never a single number. Never make up
   a rate or share: one the knowledge base or the lead developer has not set leaves the line not priced.
+- Pricing is strictly internal. Rates, cost and prices never reach the client; mandays reach the client only
+  as the scope of work's figures in the requirements document's timeline.

@@ -16,7 +16,8 @@ render     checks an estimate file, works out the ranges, the confidence level a
            to the .json in a project not yet in the new folder layout). Without a file name it takes the
            newest file in the project's estimates folder (_blueprint/estimates/, or estimates/)
 weeks      turns the estimate's mandays into working weeks for a team size, per scope-of-work line or
-           group, for drafting the project timeline (weeks only: mandays never go to the client)
+           group, for drafting the project timeline (weeks only: the estimate's mandays never go to the client;
+           the timeline shows the scope of work's mandays instead)
 rates-from the rates a lead developer filled in on the Rates needed sheet of an estimate's Excel file, as
            rows for knowledge/building-blocks.md (or --json); it changes nothing
 
@@ -1336,8 +1337,8 @@ def cmd_weeks(a):
 
     people = f"{num(a.team)} developer{'s' if a.team != 1 else ''}"
     print(f"Working weeks for {people}, {num(a.days)} days a week, from {path.name}")
-    print("Effort divided by the team: it assumes the work can be shared out and nobody waits. Mandays stay internal;")
-    print("only weeks go into the timeline.")
+    print("Effort divided by the team: it assumes the work can be shared out and nobody waits. These mandays stay")
+    print("internal: only weeks go into the timeline, with the scope of work's mandays (never these) per item.")
     for key, part in groups.items():
         priced = [l for l in part if l["priced"]]
         missing = [l["id"] for l in part if not l["priced"]]

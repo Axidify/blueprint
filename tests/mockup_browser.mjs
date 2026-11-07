@@ -306,7 +306,7 @@ out.tools.commentBoxOnTools = (await page.locator(".fb-dialog").count()) > 0;
 await page.click("#fb-toggle");
 
 // ---- the presenter's chrome: dark charcoal with the Cobalt accent, never orange; it folds away, and the open
-// Feedback panel makes room beside the page so the last column is not under it
+// Feedback panel lies over the page without moving it, so pins and boxes stay where they were put
 const colour = (selector) => page.evaluate((sel) => { const s = getComputedStyle(document.querySelector(sel)); return { bg: s.backgroundColor, color: s.color }; }, selector);
 out.chrome = {};
 await open("#/approvals?role=manager");
@@ -314,14 +314,12 @@ out.chrome.bar = await colour(".fb-bar");
 out.chrome.toggle = await colour("#fb-toggle");
 out.chrome.css = await page.evaluate(() => [...document.styleSheets].flatMap((sh) => { try { return [...sh.cssRules].map((r) => r.cssText); } catch (e) { return []; } })
   .filter((t) => /fb-|cw-tag/.test(t)).join("\n"));
+const pageAt = () => page.evaluate(() => { const r = document.querySelector("#content").getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top), Math.round(r.width)]; });
+const before = await pageAt();
 await page.click("#fb-toggle");
 await page.waitForTimeout(150);
 out.chrome.panel = await colour("#fb-panel");
-out.chrome.room = await page.evaluate(() => {
-  const panel = document.getElementById("fb-panel").getBoundingClientRect();
-  const cells = [...document.querySelectorAll("#content thead th, #content tbody tr[data-row] td")].map((c) => c.getBoundingClientRect().right);
-  return { panelLeft: Math.round(panel.left), lastColumnRight: Math.round(Math.max(...cells)), overflow: document.documentElement.scrollWidth > window.innerWidth + 1 };
-});
+out.chrome.room = { before, after: await pageAt(), overflow: await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1) };
 await page.click("#fb-fold");                                     // folded away: the panel goes with it
 await page.waitForTimeout(100);
 const barState = () => page.evaluate(() => ({ width: Math.round(document.querySelector(".fb-bar").getBoundingClientRect().width), panel: !document.getElementById("fb-panel").hidden
@@ -380,6 +378,12 @@ if (process.env.MOCKUP_RED_URL) {
   await page.waitForSelector("#fb-changes:not([hidden])", { timeout: 5000 }).catch(() => {});
   out.live.changes = await page.evaluate(() => [...document.querySelectorAll("#fb-changes .fb-wc-item .fb-text")].map((t) => t.textContent));
   out.live.feedbackOn = await page.evaluate(() => document.body.classList.contains("fb-active"));   // off after an update
+  // Minimised, What changed leaves the screen free; What changed on the bar brings the list back.
+  const wc = () => page.evaluate(() => ({ panel: !document.getElementById("fb-changes").hidden, on: document.getElementById("fb-changes-btn").classList.contains("on") }));
+  await page.click("#wc-mini");
+  out.live.wcMini = await wc();
+  await page.click("#fb-changes-btn");
+  out.live.wcBack = await wc();
   // A change with a mistake in it: the last good mock-up stays, and the room is told nothing.
   await page.waitForTimeout(3500);                                // the "updated" message has gone
   fs.writeFileSync(process.env.MOCKUP_RED_SPEC, renamed.replace("to: review-application", "to: nowhere"));
@@ -544,6 +548,19 @@ await page.waitForTimeout(150);
 out.formOnRecord.withdrawn = await formState();
 await visit("#/application-details?role=employee&record=LV-2026-014");
 out.formOnRecord.statusAfter = (await detailState()).status;
+
+// ---- Save on a form opened on a record keeps what was typed in that record, and adds no record
+const countRecords = () => page.evaluate(() => window.Mockup.data.applications.length);
+out.editSaved = { countBefore: await countRecords() };
+await open("#/change-reason?role=employee&record=LV-2026-013");
+await page.fill('[data-el="field:reason"] textarea', "Changed in the walk-through");
+await page.fill('[data-el="field:note"] input', "Not a field of the list");
+await page.click('[data-el="button:Save"]');
+await page.waitForSelector('[data-el="title:My Leave Applications"]');
+out.editSaved.countAfter = await countRecords();
+out.editSaved.record = await page.evaluate(() => { const r = window.Mockup.data.applications.find((x) => x.id === "LV-2026-013"); return { reason: r.reason, note: "note" in r }; });
+await visit("#/application-details?role=employee&record=LV-2026-013");
+out.editSaved.shown = await page.evaluate(() => (document.querySelector('[data-el="field:reason"] .f-value') || {}).textContent);
 
 // ---- a new form adds a record: it shows in the lists, counts and task lists it matches, and opens
 const rowIds = (p) => p.evaluate(() => [...document.querySelectorAll("#content tbody tr[data-row]")].filter((tr) => !tr.hidden).map((tr) => tr.innerText.trim().split(/\s+/)[0]));
@@ -731,6 +748,12 @@ await page.click("#fb-toggle");                                   // feedback mo
 await page.click(".fb-pin");
 await page.waitForTimeout(150);
 out.pinClick = await page.evaluate(() => ({ on: document.body.classList.contains("fb-active"), shown: document.querySelectorAll("#fb-panel .fb-item.flash").length }));
+// a card in the panel is picked like a change in What changed: it stays tinted, and its element is outlined
+await page.click("#fb-panel .fb-pick");
+await page.waitForTimeout(150);
+out.cardPick = await page.evaluate(() => ({ picked: document.querySelectorAll("#fb-panel .fb-pick.on").length,
+  outlined: document.querySelectorAll("#app .fb-wc-flash, .fb-pin.fb-wc-flash, .fb-box.fb-wc-flash").length,
+  dialog: document.querySelectorAll(".fb-dialog").length }));
 out.pinPlaces = await page.evaluate(() => [...document.querySelectorAll(".fb-pin")].map((p) => Math.round(p.getBoundingClientRect().left)));
 
 // ---- a comment that waits can be edited and deleted from the Feedback panel

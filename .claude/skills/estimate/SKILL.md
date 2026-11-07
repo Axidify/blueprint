@@ -12,8 +12,10 @@ never by module name: a module called "Dashboard" can be 2 days or 30.
   a "most likely" figure, in the file or in chat. Do the arithmetic with the tool, not by hand.
 - **Never invent a figure.** A rate, a share for other work or the size of an open question comes from the
   knowledge base or the lead developer. Otherwise the line keeps its count and shows as "not priced".
-- **Internal.** No mandays, rates or cost ever go into the spec, the mock-up, the requirements document or
-  a client item in the register. The timeline gets weeks only.
+- **Internal.** No rates or cost ever go into the spec, the mock-up, the requirements document or a client
+  item in the register, and neither do this estimate's mandays. The one exception is the scope of work's
+  mandays, which the requirements document's timeline shows per item (`mandays` on a timeline activity):
+  the figure the client agreed, never the estimate's range.
 
 Read `python -I tools/estimate.py --help` first: its commands, the estimate file's format and every kind
 of line. More in `docs/estimates.md`; `examples/leave-request/estimates/` has a sample.
@@ -94,7 +96,8 @@ v0.3.json`); never overwrite an earlier one, so the history shows how the figure
 render projects/<slug>` and fix what it reports. Confidence comes from rules: you may lower it
 (`confidence_reason`), never raise it. The requirements document's timeline is drafted from the latest
 estimate, never the SOW's mandays: `estimate.py weeks projects/<slug> --team <people>` (team size from the
-lead developer; each size if not fixed; lines not priced have no weeks). Only weeks reach the spec.
+lead developer; each size if not fixed; lines not priced have no weeks). The weeks come from the estimate;
+the mandays the timeline shows come from the scope of work, one figure per SOW item.
 
 ## Hand over
 

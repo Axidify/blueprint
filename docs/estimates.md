@@ -124,8 +124,9 @@ of work's mandays:
 python -I tools/estimate.py weeks projects/<slug> --team 2
 ```
 
-gives working weeks per scope-of-work line (or per group) for that team size. Only weeks, activities and
-milestones go into the spec; mandays, rates and cost stay in the estimate. See `timeline` in
+gives working weeks per scope-of-work line (or per group) for that team size. Weeks, activities and
+milestones go into the spec, with the scope of work's mandays per item; the estimate's mandays, rates and
+cost stay in the estimate. See `timeline` in
 [Spec format](spec-format.md).
 
 ## The estimate file

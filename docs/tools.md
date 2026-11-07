@@ -217,10 +217,12 @@ Called by `mockup.py screenshots`; you don't run it directly. Drives the install
 used). When neither starts, it says so and quotes why the browser the system usually has (Edge on Windows,
 Chrome elsewhere) did not start.
 
-- **Width.** A screenshot is printed about 14 cm wide in the requirements document, so the narrower the
-  window it is taken in, the larger the screen's text on paper. Each screen is taken 1000 pixels wide
-  (text prints at about 6 pt). A screen that does not fit, for example a list with many columns, is taken
-  1200 or 1440 pixels wide instead, and the command says so; its text prints smaller.
+- **Width.** A screenshot is printed about 15 cm wide in the requirements document, so the narrower the
+  window it is taken in, the larger the screen's text on paper. Each screen is taken 800 pixels wide
+  without the side menu (text prints at about 7.5 pt; the access matrix lists each role's menu). A screen
+  that does not fit, for example a list with many columns, is taken 1000, 1200 or 1440 pixels wide instead,
+  and the command says so; its text prints smaller. The process flow is taken 1000 pixels wide, so the words
+  in its boxes fit.
 - **Height.** Each screenshot is cropped to its content, with no minimum: a list with one row is a short
   picture. The login card and an open dialog are centred with space around them.
 - **Sharpness.** Pictures have twice the pixels of the screen. The Word file keeps them whole. Word's PDF
