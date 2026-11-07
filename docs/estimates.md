@@ -33,6 +33,13 @@ Everything is in `knowledge/building-blocks.md`, shared by everyone using the wo
   cell starts with is the rate: after it you may write a unit or a note (`3 (was 5)`, `2–4 per form`). Write
   decimals with a point. A cell that does not start with a number or a range (`1,5`, `from 2`) is not used:
   its lines are not priced, and `blocks` and the estimate say the rate could not be read.
+- **All platforms**: blocks that count whatever the platform, in an `All platforms` table: a mobile app
+  (foundation, screens, camera, scanning, signature, location, push notifications), offline working
+  (foundation, offline data, sync conflict rules) and planning (planning board, scheduling rules,
+  automatic grouping or assignment), and a second language per language added. A platform's own table may repeat one of their IDs to give it a rate
+  for that platform; that row wins. Below the table, *What each block counts* says what one unit is, what
+  it includes and the questions that narrow it. A workspace created before this table existed does not
+  have it: ask Blueprint to add it from `templates/knowledge/building-blocks.md`.
 - **Other work** (project management, testing, UAT support, training …): an `Other work` table with a share
   of the building-block subtotal (`10–15%`) or fixed mandays (`2–3 MD`) per item. Add, remove or rename
   rows to match how your company scopes projects. A workspace created before this table existed does not
@@ -67,6 +74,23 @@ again, now priced. If they filled in the sheet in the shared folder, take the ra
 again: `render` stops rather than write over a sheet with rates typed in (`--force` keeps that file beside
 the new one). The rates are shared by everyone using the workspace, so the next estimate on that
 platform is priced too.
+
+## A mobile app, offline working, planning and languages
+
+These have their own blocks (`All platforms` above), because they cost much the same whatever the web
+platform is, and are easy to miss when a project is counted as forms and lists. `estimate.py inventory`
+points at them in a spec:
+
+| What | Found from | Count |
+|---|---|---|
+| Mobile app screens | Screens whose id starts with `m-` (the phone screens of the mock-up) | One *mobile app screen* each, and one *mobile app foundation* per app (per platform when Android and iOS are built separately) |
+| Device features | Signature and file fields on those screens and the dialogs they open, and the words scan, barcode, QR, GPS or location | One per place a photo, scan, signature or location is taken |
+| Offline working | Offline, sync, "without a signal" … in the overview, scope, screens, requirements and NFRs | One *offline foundation* per app; *offline data* per kind of record on the phone; a *sync conflict rule* per kind of record that can change both on the phone and in the office |
+| Planning and scheduling | Scheduling, time slots, capacity, routes, dispatch, planner … | A *planning board* per board, a *scheduling rule* per rule, *automatic grouping or assignment* per method |
+| Languages | Translation, bilingual, a language named … | One *second language* per language added beyond the first, for the whole system: not extra screens. The translating itself is an assumption (who does it) |
+
+The words only say where to look; the count is yours. The starter knowledge base sets no rate for any of
+these blocks: the lead developer sets them, as for every other block.
 
 ## How the figures are worked out
 

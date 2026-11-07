@@ -270,7 +270,7 @@ def test_blocks_come_from_the_platform_section(kb):
     assert platforms == [PLATFORM, "Other Platform"]
     assert list(blocks) == [f"BB-0{n}" for n in range(1, 9)], "BB-99 sits outside a platform section"
     assert blocks["BB-04"] == {"name": "List with filters", "drivers": "Columns", "rate": (2, 4), "rate_problem": None,
-                               "confidence": "medium"}
+                               "confidence": "medium", "section": PLATFORM}
     assert blocks["BB-07"]["rate"] is None and blocks["BB-07"]["confidence"] is None
 
     other, _ = estimate.read_blocks("other platform", kb)  # the platform name is matched without regard to case
@@ -317,6 +317,62 @@ def test_rate_depends_on_the_platform(kb):
     assert mandays(res, "L01") == (20, 40)
     assert errors_of(kb, estimate_of(block("L01", "BB-04"), platform="Other Platform")) == [
         "L01: BB-04 is not a building block for Other Platform in building-blocks.md"]
+
+
+# The All platforms section: blocks that count on every platform (a mobile app, offline working, planning).
+ALL = """
+## All platforms
+
+| ID | Building block | What drives the effort | Rate (MD) | Confidence |
+|---|---|---|---|---|
+| BB-31 | Mobile app screen, per screen | Fields | 1–2 | low |
+| BB-32 | Offline data, per kind of record | Records | TBD | – |
+| BB-04 | List with filters | Columns | 9 | high |
+"""
+
+
+@pytest.fixture
+def kb_all(tmp_path):
+    head, tail = BLOCKS.split("## Other work")
+    return write_knowledge(tmp_path / "knowledge", blocks=head + ALL + "\n## Other work" + tail)
+
+
+def test_all_platforms_blocks_count_on_every_platform(kb_all):
+    blocks, platforms = estimate.read_blocks(PLATFORM, kb_all)
+    assert platforms == [PLATFORM, "Other Platform"], "All platforms is not a platform"
+    assert blocks["BB-31"]["section"] == estimate.ALL_PLATFORMS and blocks["BB-31"]["rate"] == (1, 2)
+    assert blocks["BB-04"]["section"] == PLATFORM and blocks["BB-04"]["rate"] == (2, 4), "the platform's own row wins"
+    other, _ = estimate.read_blocks("Other Platform", kb_all)
+    assert sorted(other) == ["BB-01", "BB-04", "BB-31", "BB-32"] and other["BB-04"]["rate"] == (9, 9)
+    assert estimate.read_blocks("Nowhere", kb_all)[0].keys() == {"BB-31", "BB-32", "BB-04"}
+
+
+def test_all_platforms_blocks_are_priced_from_their_own_row(kb_all):
+    res = work_out(kb_all, estimate_of(block("L01", "BB-31", count=4), block("L02", "BB-32", count=2), platform="Other Platform"))
+    assert mandays(res, "L01") == (4, 8) and line(res, "L01")["block_name"] == "Mobile app screen, per screen"
+    assert line(res, "L02")["priced"] is False and res["blocks_without_rate"] == ["BB-32"]
+    assert errors_of(kb_all, estimate_of(block("L01", "BB-02"), platform="Other Platform")) == [
+        "L01: BB-02 is not a building block for Other Platform in building-blocks.md"]
+
+
+def test_a_platform_with_only_the_all_platforms_blocks_is_not_known(kb_all):
+    res = work_out(kb_all, estimate_of(block("L01", "BB-31", count=2), block("L02", "BB-02"), fixed("L03", 1, 1), platform="Nowhere"))
+    assert res["platform_known"] is False
+    assert mandays(res, "L01") == (2, 4), "a mobile screen is priced on a platform with no table of its own"
+    assert line(res, "L02")["priced"] is False, "a block the knowledge base does not know is counted, not refused"
+    assert errors_of(kb_all, estimate_of(block("L02", "BB-02"), platform="Nowhere")) == []
+
+
+def test_blocks_command_lists_the_all_platforms_blocks(kb_all, run):
+    out = run(kb_all, "blocks", "Nowhere").splitlines()
+    assert "No building blocks for 'Nowhere'" in out[0]
+    assert out[1].endswith("The All platforms blocks below still count.")
+    assert "BB-31  Mobile app screen, per screen  [1 – 2 MD per unit, low confidence]  driven by: Fields" in out
+    listed = run(kb_all, "blocks", PLATFORM).splitlines()
+    heading = next(i for i, l in enumerate(listed) if l.startswith("All platforms ("))
+    assert listed.index("BB-31  Mobile app screen, per screen  [1 – 2 MD per unit, low confidence]  driven by: Fields") > heading
+    bb04 = [i for i, l in enumerate(listed) if l.startswith("BB-04")]
+    assert len(bb04) == 1 and bb04[0] < heading, "the platform's own BB-04, listed once"
 
 
 def test_platform_missing_from_the_knowledge_base_prices_nothing(kb):
@@ -766,6 +822,24 @@ def test_sample_is_priced_where_the_knowledge_base_has_rates(rated):
     assert [q["source"] for q in res["questions"][1:]] == ["GP-04", "GP-03", "GP-08", "GP-02", "GP-03", "GP-12"]
 
 
+def test_starter_all_platforms_blocks_say_what_they_count():
+    """Mobile app, offline working and planning: in the starter, with no rate, each explained with its questions."""
+    blocks, _ = estimate.read_blocks("A platform of its own", STARTER)
+    shared = {k: b for k, b in blocks.items() if b["section"] == estimate.ALL_PLATFORMS}
+    assert len(shared) >= 14 and all(b["rate"] is None and b["confidence"] is None for b in shared.values())
+    names = " ".join(b["name"] for b in shared.values()).lower()
+    for kind in ("mobile app screen", "mobile app foundation", "camera", "scan", "signature", "offline", "conflict",
+                 "planning board", "scheduling rule", "grouping", "second language"):
+        assert kind in names, kind
+    joget, _ = estimate.read_blocks("Joget DX", STARTER)
+    assert not set(shared) & {k for k, b in joget.items() if b["section"] == "Joget DX"}, "IDs clash with the Joget table"
+    text = (STARTER / "building-blocks.md").read_text(encoding="utf-8")
+    explained = text.split("### What each block counts")[1].split("## Other work")[0]
+    for block_id in shared:
+        entry = re.search(rf"\*\*{block_id} [^*]+\*\* – (.+?)(?=\n- \*\*|\n\n|$)", explained, re.S)
+        assert entry and "*Ask:*" in entry.group(1), f"{block_id}: what it counts and the questions that narrow it"
+
+
 # ====================================================================== the commands: blocks
 def test_blocks_command_lists_rates_shares_and_evidence(kb, run):
     out = run(kb, "blocks", PLATFORM).splitlines()
@@ -845,6 +919,57 @@ def test_inventory_lists_the_register_items_that_can_move_the_estimate(tmp_path,
         assert expected in out
     assert not any(l.startswith(("  R-002", "  R-003", "  R-004")) for l in out), "medium without an effort impact, or resolved"
     assert not any(l.startswith("Earlier estimates") for l in out)
+
+
+def app_spec():
+    """The made-up sample with a phone app added: two m- screens, a dialog with a signature, offline and planning."""
+    spec = support.load_spec(support.EXAMPLE)
+    spec["screens"] += [
+        {"id": "m-tasks", "type": "list", "title": "My tasks", "roles": ["employee"],
+         "description": "Today's tasks, kept on the phone so they can be used without a signal."},
+        {"id": "m-task", "type": "form", "title": "Task", "roles": ["employee"],
+         "sections": [{"title": "Task", "fields": [{"id": "photo", "label": "Photo", "type": "file"}]}],
+         "buttons": [{"label": "Scan the barcode", "dialog": "m-done-dialog"}]}]
+    spec["dialogs"] += [{"id": "m-done-dialog", "title": "Done",
+                         "fields": [{"id": "sig", "label": "Signature", "type": "signature"},
+                                    {"id": "where", "label": "Current location", "type": "text"}]}]
+    spec["requirements"].append({"id": "FR-PLN-001", "title": "Plan the day", "items": [
+        "System shall group the tasks into routes by area.", "System shall warn when a time slot is over capacity.",
+        "System shall send the changes made offline when the phone is back online.",
+        "System shall show the app in English or Bahasa Malaysia, as the driver chooses."]})
+    spec["nfr"].append({"area": "Offline", "requirement": "The app works for a full shift with no connection."})
+    return spec
+
+
+def test_app_inventory_finds_the_phone_offline_and_planning():
+    app = estimate.app_inventory(app_spec())
+    assert app["mobile"] == ["m-tasks", "m-task"]
+    assert app["features"] == {"signature": ["m-done-dialog"], "photo or file": ["m-task"],
+                               "scan": ["m-task"], "location": ["m-done-dialog"]}
+    assert app["offline"] == ["m-tasks", "FR-PLN-001.3", "NFR Offline"]
+    assert app["planning"] == ["FR-PLN-001.1", "FR-PLN-001.2"]
+    assert app["language"] == ["FR-PLN-001.4"]
+
+
+def test_app_inventory_of_a_web_only_spec_is_empty():
+    app = estimate.app_inventory(support.load_spec(support.EXAMPLE))
+    assert app == {"mobile": [], "features": {}, "offline": [], "planning": [], "language": []}
+
+
+def test_inventory_lists_the_phone_offline_and_planning(tmp_path, kb, run):
+    project = support.make_project(tmp_path / "app", spec=app_spec())
+    out = run(kb, "inventory", project).splitlines()
+    for expected in (
+            "Mobile app, offline working, planning and languages (the All platforms blocks):",
+            "  Mobile app screens: 2 (m-tasks, m-task): one mobile app screen each, and one mobile app foundation per app",
+            "    signature on the phone: m-done-dialog", "    scan on the phone: m-task",
+            "  Offline working, mentioned in: m-tasks, FR-PLN-001.3, NFR Offline: one offline foundation per app, offline "
+            "data per kind of record, a sync conflict rule per kind of record changed in two places"):
+        assert expected in out
+    assert any(l.startswith("  Planning or scheduling, mentioned in: FR-PLN-001.1, FR-PLN-001.2:") for l in out)
+    assert "  Languages, mentioned in: FR-PLN-001.4: one second language per language added, not extra screens" in out
+    plain = run(kb, "inventory", support.make_project(tmp_path / "web")).splitlines()
+    assert not any(l.startswith("Mobile app, offline") for l in plain), "nothing to say about a web-only spec"
 
 
 def test_inventory_before_there_is_a_spec(tmp_path, kb, run):

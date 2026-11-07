@@ -43,6 +43,15 @@ One line per thing that gets built, with a block and a count; say in its `note` 
 - **Integrations**: one per endpoint or data exchange, not per system. AD or SSO sign-in is its own block.
 - **Notifications**: one per event (look in the requirements if `notifications` is empty).
 - **Exports, roles, master-data screens, audit trail, environment migrations**: one line each.
+- **Mobile app, offline working, planning, languages**: the blocks of the `All platforms` table, on any platform; its
+  *What each block counts* says what one unit is and the questions that narrow it. `inventory` lists the
+  `m-` screens, the signatures, photos, scans and locations on them, and where offline working and planning
+  are mentioned: one mobile app screen per `m-` screen and one app foundation; for offline, one foundation,
+  offline data per kind of record and a conflict rule per kind changed in two places; for planning, the
+  boards, the scheduling rules (slots, capacity) and any automatic grouping; a second language per language
+  added, never as extra screens. If the workspace's
+  `building-blocks.md` has no `All platforms` table, say so and offer to add it from
+  `templates/knowledge/building-blocks.md` (after the user agrees).
 - **Platform fit**: read the spec's `platform_fit` (run `platform_fit.py check` when there is none). Each
   `custom` feature is its own line in the block its sheet names; a `not supported` one is not priced until
   the lead developer says how it would be built.
@@ -63,7 +72,8 @@ lead developer for its mandays and say the knowledge base may lack that block.
 - **The Rates needed sheet comes back** ("save these rates", or a returned estimate Excel file in the inbox):
   run `estimate.py rates-from "<file>"` (`--json` for the figures as data). Show the user the rows it gives,
   the blocks left empty and anything it could not read. Only after they agree, put each rate in the
-  `Rate (MD)` cell of its row in `knowledge/building-blocks.md` for that platform, low confidence (it is
+  `Rate (MD)` cell of its row in `knowledge/building-blocks.md` (the platform's table, or `All platforms`
+  for a block there: `estimate.py blocks` shows which), low confidence (it is
   shared; no client content). Then render the estimate again and lead with the new figures.
 - **Other work** (project management, testing, UAT support, training, documentation, warranty): one line
   per item that applies, from the "Other work" table; an item with nothing set is listed, not priced. If
