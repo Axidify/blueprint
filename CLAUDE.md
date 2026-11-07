@@ -145,6 +145,7 @@ tools/<script>.py`, the environment `setup.sh` makes; wherever these instruction
 `estimate.py` (rates, project inventory, estimate checks and Excel, weeks for the timeline),
 `workshop.py` (what a workshop has to settle, agenda checks and the two workshop documents),
 `platform_fit.py` (a spec against what its platform gives, and the platform sheets),
+`contradictions.py` (what a spec or document says about each subject, clashes it can prove and pairs to judge),
 `overview.py` (each project's overview page and mock-up shortcut), `review_doc.py` (a review as a Word file),
 `uat.py` (UAT draft from the spec, checks, workbook and document, results of a filled-in workbook),
 `change_request.py` (scope check against the signed version, CR log, sizing, client CR note),
