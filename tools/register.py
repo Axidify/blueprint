@@ -4,7 +4,8 @@ Usage:
     python -I tools/register.py add      projects/<slug> --file <items.json> [--check]
     python -I tools/register.py add      projects/<slug> [--check]  < items.json   (items on standard input)
     python -I tools/register.py similar  projects/<slug> "<question or finding>" [--top 5]
-    python -I tools/register.py update   projects/<slug> R-001 [R-002 ...] --set field=value [--set field=value ...]
+    python -I tools/register.py update   projects/<slug> R-001 [R-002 ...] --set field=value [--set field=value ...] [--check]
+    python -I tools/register.py update   projects/<slug> --file <changes.json> [--check]
     python -I tools/register.py render   projects/<slug> [--overwrite] [--from "<returned register.xlsx>"]
     python -I tools/register.py validate projects/<slug>
     python -I tools/register.py next-id  projects/<slug>
@@ -25,12 +26,21 @@ similar lists the existing items closest to a question or finding, to check a ca
 update changes fields of existing items: --set status=resolved --set answer="..." --set resolved_in="...".
 Unknown fields and values not allowed are refused, and nothing is written. An empty value (--set owner=)
 removes an optional field. An answer on an open or asked item moves it to answered, as in Excel, unless
---set status is given too.
+--set status is given too. --check reports what would change and writes nothing.
+
+update --file takes many changes at once, for answers that came by e-mail or in call notes: a list of
+  [ {"id": "R-012", "set": {"answer": "Only HR may cancel.", "status": "resolved"}}, ... ]
+(UTF-8 JSON). The whole file is checked first, by the same rules; one bad change and nothing is written.
+
+When an answer or a decision replaces an earlier one (by update, or taken from Excel by render), the earlier
+text is kept in the item's history with the day it was replaced, and the output says so: the client may
+have changed their mind.
 
 add and update write register.json only. Run render afterwards for the Excel file.
 
 render writes register.xlsx from register.json, and beside it "Questions for the client.xlsx": the client
-items alone, the only register file to send (register.xlsx has internal sheets). First it takes over what was typed into the existing
+items alone, the only register file to send (register.xlsx has internal sheets). In both, the client's items
+are in two sheets: For client holds the questions still to answer (open or asked), Already answered the rest. First it takes over what was typed into the existing
 register.xlsx since it was written: a client's answer (Client response, Answer / decision) or a changed
 Status. Those go into register.json, so they are not lost when the Excel file is written again. When
 Excel and register.json both changed the same thing, it stops and says so; --overwrite writes the file
@@ -60,12 +70,16 @@ Item fields (required unless marked optional):
   source          where it was found, e.g. "v1.0 §3.2 FR-REQ-003.1" or "Figure 2"
   finding         what is wrong or missing, stated as fact, with the quote if useful
   question        for client items: the question to ask, in plain business language
-  recommendation  optional: your suggested answer or fix
+  recommendation  optional: your suggested answer or fix. On a client item it GOES TO THE CLIENT ("Our
+                  recommendation"): write only what you would say to them. (A workshop agenda's internal_view
+                  is the internal one.)
   effort_impact   optional: none | low | medium | high - effect on mandays if resolved the costly way
   status          open | asked | answered | resolved | wont-fix
   answer          optional: the client's answer or the decision taken, in their words
   decision        optional: what was agreed, in one line as it is signed; the requirements document's
                   Decisions made shows it instead of the raw answer (project.py ready asks for it)
+  history         kept by register.py, never set by hand: each answer or decision that was replaced,
+                  [{"field": "answer", "text": "...", "replaced": "YYYY-MM-DD"}]
   raised          date raised, YYYY-MM-DD
   resolved_in     optional: document version or meeting where it was closed
   owner           optional: who must answer or fix it (default in the Open Issues table: the client)
@@ -91,10 +105,14 @@ STAGES = {"sow", "workshop-1", "mockup", "workshop-2", "requirements-draft", "re
           "srs-draft", "srs-final"}  # the last two are the names used before 0.4.0
 REQUIRED = ["id", "type", "audience", "severity", "category", "stage", "source", "finding", "status", "raised"]
 FIELDS = ["id", "type", "audience", "severity", "category", "stage", "source", "finding", "question", "recommendation",
-          "effort_impact", "status", "answer", "decision", "raised", "resolved_in", "owner", "due"]  # every field, in the order written
+          "effort_impact", "status", "answer", "decision", "history", "raised", "resolved_in", "owner", "due"]  # every field, in the order written
 EFFORTS = {"none", "low", "medium", "high"}
 DUPLICATE = 0.5  # similarity from which add names an existing item as a likely duplicate
 SEV_ORDER = {"high": 0, "medium": 1, "low": 2}
+TO_ANSWER = ("open", "asked")  # a client item in these still needs the client's answer
+CLIENT_SHEET, ANSWERED_SHEET = "For client", "Already answered"  # the client's items: still to answer, and the rest
+KEEPS_HISTORY = ("answer", "decision")  # a changed value of these keeps the earlier one in the item's history
+CHANGED = "CHANGED"  # how render marks an answer that replaced an earlier one
 RENDERED = "_rendered"  # a hidden sheet: the status and answer of every item as the file was written
 EDITABLE = {"Status": "status", "Client response": "answer", "Answer / decision": "answer"}  # column -> field
 # The team's words: never in what a client item says (render warns before the client's file is sent).
@@ -282,14 +300,26 @@ def take_excel_edits(project, reg, edits):
     items = {it["id"]: it for it in reg["items"]}
     done = []
     for (rid, field), value in sorted(edits.items()):
+        before = text(items[rid].get(field))
         items[rid][field] = value
-        done.append(f"{rid} {field}: {value if len(value) <= 70 else value[:67] + '...'}")
+        done.append(f"{rid} {field}: {clip(value)}")
+        if field in KEEPS_HISTORY and before and before != value:
+            keep_earlier(items[rid], field, before)
+            done.append(f"{rid} {field} {CHANGED}, replacing an earlier one (kept in its history): {clip(before, 60)}")
         # An answer came in and nobody moved the status: it is answered (not yet resolved).
         if field == "answer" and value and (rid, "status") not in edits and items[rid].get("status") in ("open", "asked"):
             items[rid]["status"] = "answered"
             done.append(f"{rid} status: answered (it has an answer now)")
     save(project, reg)
     return done
+
+
+def report_taken(done):
+    """Print what was taken from an Excel file, and point out an answer that replaced an earlier one."""
+    print("\n".join(f"  - {line}" for line in done))
+    if any(f" {CHANGED}," in line for line in done):
+        print(f"  An answer replaced an earlier one (marked {CHANGED} above; the earlier one is kept in the item's "
+              "history). The client may have changed their mind: check each with the BA.")
 
 
 def load(project):
@@ -363,6 +393,8 @@ def field_errors(it, where, keys=None):
     for key in (it if keys is None else keys):
         if key not in FIELDS:
             errors.append(f"{where}: unknown field '{key}' (fields: {', '.join(FIELDS)})")
+        elif key == "history":
+            errors.append(f"{where}: history is kept by register.py (the earlier answers and decisions); leave it out")
         elif it.get(key) is not None and not isinstance(it[key], str):
             errors.append(f"{where}: {key} must be text, not {json.dumps(it[key], ensure_ascii=False)}")
     effort = it.get("effort_impact")
@@ -510,43 +542,125 @@ def likely_duplicates(reg, new, floor=DUPLICATE):
     return found
 
 
-def update(reg, ids, sets):
-    """Apply `field=value` changes to the items `ids`: (changes, errors). Nothing is changed when there are errors."""
+def clip(value, width=70):
+    value = " ".join(text(value).split())
+    return value if len(value) <= width else value[:width - 3] + "..."
+
+
+def keep_earlier(it, field, before, today=None):
+    """Keep the answer or decision being replaced in the item's history, with the day it was replaced."""
+    history = [h for h in it.get("history") or [] if isinstance(h, dict)]
+    history.append({"field": field, "text": before, "replaced": today or date.today().isoformat()})
+    put(it, "history", history)
+
+
+def parse_sets(sets):
+    """{field: value} from `field=value` texts: (values, errors)."""
     errors, values = [], {}
     for s in sets:
         key, sep, value = s.partition("=")
-        key = key.strip()
-        if not sep or not key:
+        if not sep or not key.strip():
             errors.append(f"--set {s}: write it as field=value")
-        elif key == "id":
-            errors.append("id cannot be changed: ids are never reused")
-        elif key not in FIELDS:
-            errors.append(f"unknown field '{key}' (fields: {', '.join(f for f in FIELDS if f != 'id')})")
         else:
-            values[key] = value.strip()
+            values[key.strip()] = value.strip()
+    return values, errors
+
+
+def read_changes(source):
+    """The changes in an update --file, as ([(id, {field: value})], errors). The file holds a list of
+    {"id": "R-012", "set": {"field": "value", ...}}, or {"changes": [...]}."""
+    path = Path(source)
+    if not path.is_file():
+        sys.exit(f"No file at {path}. Nothing was changed.")
+    raw = path.read_bytes()
+    try:
+        data = json.loads(raw.decode("utf-16") if raw[:2] in (b"\xff\xfe", b"\xfe\xff") else raw.decode("utf-8-sig"))
+    except UnicodeDecodeError:
+        sys.exit(f"{path} is not UTF-8 text. Save it as UTF-8 and run this again. Nothing was changed.")
+    except json.JSONDecodeError as e:
+        sys.exit(f"{path} is not valid JSON (line {e.lineno}, column {e.colno}: {e.msg}). Nothing was changed.")
+    if isinstance(data, dict) and isinstance(data.get("changes"), list):
+        data = data["changes"]
+    if isinstance(data, dict):
+        data = [data]
+    if not isinstance(data, list) or not data:
+        sys.exit('Give a list of changes: [{"id": "R-012", "set": {"answer": "..."}}, ...]. Nothing was changed.')
+    changes, errors, seen = [], [], set()
+    for n, entry in enumerate(data, 1):
+        if not isinstance(entry, dict) or not isinstance(entry.get("id"), str) or not isinstance(entry.get("set"), dict):
+            errors.append(f'change {n}: write it as {{"id": "R-012", "set": {{"answer": "..."}}}}')
+            continue
+        rid = entry["id"].strip()
+        if rid in seen:
+            errors.append(f"change {n}: {rid} is in the file twice; put all its fields in one change")
+        seen.add(rid)
+        extra = sorted(set(entry) - {"id", "set"})
+        if extra:
+            errors.append(f"change {n} ({rid}): unknown key {', '.join(extra)} (a change has only id and set)")
+        values = {}
+        for key, value in entry["set"].items():
+            if value is not None and not isinstance(value, str):
+                errors.append(f"{rid} {key}: the value must be text, not {json.dumps(value, ensure_ascii=False)}")
+            else:
+                values[str(key).strip()] = (value or "").strip()
+        if not entry["set"]:
+            errors.append(f"change {n} ({rid}): set holds nothing to change")
+        changes.append((rid, values))
+    return changes, errors
+
+
+def update(reg, ids, sets, today=None):
+    """Apply `field=value` texts to the items `ids`: (changes, errors, replaced), as update_many."""
+    values, errors = parse_sets(sets)
+    if errors:
+        return [], errors, []
+    return update_many(reg, [(rid, values) for rid in ids], today)
+
+
+def update_many(reg, entries, today=None):
+    """Apply [(id, {field: value})] to the register as one: (changes, errors, replaced). Nothing is changed while
+    there is any error. An empty value removes an optional field. An answer on an open or asked item moves it to
+    answered, unless the same change sets status. An answer or decision that replaces an earlier one keeps that
+    one in the item's history, with the day it was replaced; `replaced` names each (the client may have changed
+    their mind)."""
+    errors = []
+    for _, values in entries:
+        for key in values:
+            if key == "id":
+                errors.append("id cannot be changed: ids are never reused")
+            elif key == "history":
+                errors.append("history cannot be set: register.py keeps it when an answer or decision changes")
+            elif key not in FIELDS:
+                errors.append(f"unknown field '{key}' (fields: {', '.join(f for f in FIELDS if f not in ('id', 'history'))})")
     items = {it.get("id"): it for it in reg.get("items", []) if isinstance(it, dict)}
-    missing = [f"{rid}: no such item in the register" for rid in ids if rid not in items]
-    if missing:
-        return [], errors + missing
-    changed, changes = {rid: json.loads(json.dumps(items[rid])) for rid in ids}, []
-    for rid, it in changed.items():
+    errors = list(dict.fromkeys(errors)) + [f"{rid}: no such item in the register" for rid, _ in entries if rid not in items]
+    if errors:
+        return [], errors, []
+    changed, changes, replaced = {}, [], []
+    for rid, values in entries:
+        it = changed.setdefault(rid, json.loads(json.dumps(items[rid])))
         for key, value in values.items():
             before = text(it.get(key))
+            if before == value:
+                continue
+            if key in KEEPS_HISTORY and before:
+                keep_earlier(it, key, before, today)
+                replaced.append(f"{rid} {key}: the earlier one is kept in its history: {clip(before, 80)}")
             if value:
                 put(it, key, value)
             else:
                 it.pop(key, None)
-            if before != value:
-                changes.append(f"{rid} {key}: {before or '(empty)'} -> {value or '(removed)'}")
+            changes.append(f"{rid} {key}: {before or '(empty)'} -> {value or '(removed)'}")
         if values.get("answer") and "status" not in values and it.get("status") in ("open", "asked"):
             changes.append(f"{rid} status: {it['status']} -> answered (it has an answer now)")
             it["status"] = "answered"
         errors += validate({"items": [it]}) + field_errors(it, rid, keys=values)
-    if not errors:
-        for rid, it in changed.items():
-            items[rid].clear()
-            items[rid].update(it)
-    return changes, errors
+    if errors:
+        return [], errors, []
+    for rid, it in changed.items():
+        items[rid].clear()
+        items[rid].update(it)
+    return changes, errors, replaced
 
 
 def render(project, reg, overwrite=False, returned=None):
@@ -568,7 +682,7 @@ def render(project, reg, overwrite=False, returned=None):
             sys.exit(1)
         if edits:
             print(f"Taken from {own} into register.json:")
-            print("\n".join(f"  - {line}" for line in take_excel_edits(project, reg, edits)))
+            report_taken(take_excel_edits(project, reg, edits))
     if returned:
         name = Path(returned).name
         edits, conflicts = excel_edits(project, reg, returned)
@@ -580,7 +694,7 @@ def render(project, reg, overwrite=False, returned=None):
             sys.exit(1)
         if edits:
             print(f"Taken from {name} into register.json:")
-            print("\n".join(f"  - {line}" for line in take_excel_edits(project, reg, edits)))
+            report_taken(take_excel_edits(project, reg, edits))
         else:
             print(f"Nothing new in {name}: no answer or status differs from what it held when it was written.")
 
@@ -628,6 +742,8 @@ def render(project, reg, overwrite=False, returned=None):
         ("Our recommendation", 40, "recommendation"), ("Client response", 45, "answer"), ("Agreed decision", 45, "decision"),
         ("Status", 12, "status"), ("Raised", 12, "raised"),
     ]
+    earlier_of = lambda it: "\n".join(f"{h.get('replaced', '')} {h.get('field', '')}: {h.get('text', '')}".strip()
+                                      for h in it.get("history") or [] if isinstance(h, dict))
     internal_cols = [
         ("ID", 8, "id"), ("Severity", 10, cap("severity")), ("Type", 13, "type"), ("Category", 12, "category"),
         ("Document", 12, doc_of), ("Where", 34, where_of), ("Finding", 60, "finding"),
@@ -635,12 +751,24 @@ def render(project, reg, overwrite=False, returned=None):
         ("Raised", 12, "raised"),
     ]
     finding_at = next(i for i, c in enumerate(internal_cols) if c[0] == "Finding")
-    all_cols = internal_cols[:finding_at] + [("Audience", 11, "audience"), ("Stage", 12, "stage")] +         internal_cols[finding_at:finding_at + 1] + [("Question for client", 50, "question")] +         internal_cols[finding_at + 1:] + [("Answer / decision", 40, "answer"), ("Agreed decision", 40, "decision"), ("Resolved in", 16, "resolved_in")]
+    all_cols = internal_cols[:finding_at] + [("Audience", 11, "audience"), ("Stage", 12, "stage")] +         internal_cols[finding_at:finding_at + 1] + [("Question for client", 50, "question")] +         internal_cols[finding_at + 1:] + [("Answer / decision", 40, "answer"), ("Agreed decision", 40, "decision"), ("Resolved in", 16, "resolved_in"),
+                                                ("Earlier answers", 40, earlier_of)]
+
+    # The client's items in two sheets, so what still needs an answer is seen at once: For client holds the
+    # open and asked questions, Already answered the rest (answered, resolved, won't fix). Both are read back.
+    for_client = [it for it in items if it["audience"] == "client"]
+    to_answer = [it for it in for_client if it["status"] in TO_ANSWER]
+    answered = sorted((it for it in for_client if it["status"] not in TO_ANSWER),
+                      key=lambda it: (it["status"] != "answered", SEV_ORDER.get(it["severity"], 9), it["id"]))
+
+    def client_sheets(book):
+        ws = book.active
+        ws.title = CLIENT_SHEET
+        sheet(ws, client_cols, to_answer, fill_in=("Client response",))
+        sheet(book.create_sheet(ANSWERED_SHEET), client_cols, answered, fill_in=("Client response",))
 
     wb = Workbook()
-    ws = wb.active
-    ws.title = "For client"
-    sheet(ws, client_cols, [it for it in items if it["audience"] == "client"], fill_in=("Client response",))
+    client_sheets(wb)
     sheet(wb.create_sheet("Internal fixes"), internal_cols, [it for it in items if it["audience"] == "internal"], mark=internal)
     sheet(wb.create_sheet("All items"), all_cols, items, fill_in=("Answer / decision",), mark=internal)
 
@@ -693,10 +821,8 @@ def render(project, reg, overwrite=False, returned=None):
 
     # The file to send: the client's items and nothing else, in no sheet, hidden or not. Its hidden note holds
     # only those items, so a copy the client sends back is taken in with --from like the BA's file.
-    for_client = [it for it in items if it["audience"] == "client"]
     cwb = Workbook()
-    sheet(cwb.active, client_cols, for_client, fill_in=("Client response",))
-    cwb.active.title = "For client"
+    client_sheets(cwb)
     note = cwb.create_sheet(RENDERED)
     note.append(["id", "status", "answer"])
     for it in for_client:
@@ -713,7 +839,7 @@ def render(project, reg, overwrite=False, returned=None):
 COMMANDS = {  # command: (switches, options that take a value, (fewest, most) plain arguments)
     "add": ({"--check"}, {"--file"}, (1, 1)),
     "similar": (set(), {"--top"}, (2, None)),
-    "update": (set(), {"--set"}, (2, None)),
+    "update": ({"--check"}, {"--set", "--file"}, (1, None)),
     "render": ({"--overwrite"}, {"--from"}, (1, 1)),
     "validate": (set(), set(), (1, 1)),
     "next-id": (set(), set(), (1, 1)),
@@ -739,8 +865,14 @@ def parse(argv):
             sys.exit(__doc__)
         else:
             args.append(a)
-    if len(args) < fewest or (most is not None and len(args) > most) or (cmd == "update" and "--set" not in opts):
+    if len(args) < fewest or (most is not None and len(args) > most):
         sys.exit(__doc__)
+    if cmd == "update" and ("--set" in opts) == ("--file" in opts):
+        sys.exit("Give either --set field=value with the ids, or --file <changes.json>. Nothing was changed.\n" + __doc__)
+    if cmd == "update" and "--set" in opts and len(args) < 2:
+        sys.exit("Name the items to change: register.py update projects/<slug> R-001 [R-002 ...] --set field=value")
+    if cmd == "update" and "--file" in opts and (len(args) > 1 or len(opts["--file"]) > 1):
+        sys.exit("With --file give the project and one file; the ids are in the file. Nothing was changed.")
     return cmd, args, opts
 
 
@@ -793,18 +925,29 @@ def cmd_similar(reg, args, opts):
 
 
 def cmd_update(project, reg, args, opts):
-    changes, errors = update(reg, args, opts["--set"])
+    if "--file" in opts:
+        entries, errors = read_changes(opts["--file"][0])
+        if not errors:
+            changes, errors, replaced = update_many(reg, entries)
+    else:
+        changes, errors, replaced = update(reg, args, opts["--set"])
     if errors:
-        print("Nothing was changed:")
+        print("Nothing was changed. Fix these and run it again:")
         print("\n".join(f"  - {e}" for e in errors))
         sys.exit(1)
     if not changes:
         print("Nothing to change: the items already hold those values.")
         return
-    save(project, reg)
-    print("Changed in register.json:")
-    print("\n".join(f"  - {c if len(c) <= 110 else c[:107] + '...'}" for c in changes))
-    print(f"Next: python -I tools/register.py render {project}")
+    check = "--check" in opts
+    if not check:
+        save(project, reg)
+    print("Checked, nothing written. These would change in register.json:" if check else "Changed in register.json:")
+    print("\n".join(f"  - {clip(c, 110)}" for c in changes))
+    if replaced:
+        print("Replaced an earlier answer or decision. The client may have changed their mind: check each with the BA.")
+        print("\n".join(f"  - {clip(r, 110)}" for r in replaced))
+    print(f"Next: python -I tools/register.py update {project} --file <file>  (without --check, to record them)" if check
+          else f"Next: python -I tools/register.py render {project}")
 
 
 def main():
@@ -822,7 +965,7 @@ def main():
         return cmd_similar(reg, args[1:], opts)
     if cmd == "update":
         cmd_update(project, reg, args[1:], opts)
-        return refresh_overview(project)
+        return None if "--check" in opts else refresh_overview(project)
     errors = validate(reg)
     if errors:
         print("\n".join(errors))
@@ -836,8 +979,9 @@ def main():
     out = render(project, reg, overwrite="--overwrite" in opts, returned=returned[0] if returned else None)
     c = Counter(it["audience"] for it in reg["items"])
     print(f"Wrote {out}: {c['client']} client items, {c['internal']} internal fixes (for the team)")
-    print(f"Wrote {layout.client_register_xlsx(project)}: the {c['client']} client items alone. Send this one to the client, "
-          "never the register itself.")
+    still = sum(1 for it in reg["items"] if it["audience"] == "client" and it["status"] in TO_ANSWER)
+    print(f"Wrote {layout.client_register_xlsx(project)}: the {c['client']} client items alone ({still} still to answer on "
+          f"the {CLIENT_SHEET} sheet, {c['client'] - still} on {ANSWERED_SHEET}). Send this one to the client, never the register itself.")
     refresh_overview(project)
 
 
