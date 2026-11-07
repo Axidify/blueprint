@@ -8,5 +8,6 @@
 name: Your Company Sdn. Bhd.
 short_name: YourCo
 day_rate:        # your standard day rate, used to cost estimates and variances
-currency: RM
-platforms: [Joget DX]
+currency:        # e.g. RM, SGD, USD
+platforms: []    # the platforms your company builds on, set at first launch, e.g. [Joget DX, Custom web]. Offered
+                 # when a project is created; a project's platform is always the one its brief names, never a default

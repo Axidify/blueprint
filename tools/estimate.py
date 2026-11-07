@@ -174,6 +174,36 @@ def read_blocks(platform, kdir):
     return {**shared, **own}, platforms
 
 
+def spec_platform(project):
+    """The platform the project's spec says it is built on, or "" when there is no spec or it says none."""
+    try:
+        import layout
+        import yaml
+        path = layout.spec_file(Path(project))
+        spec = yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else None
+        return str(((spec or {}).get("project") or {}).get("platform") or "").strip()
+    except Exception:
+        return ""
+
+
+def same_platform(a, b):
+    """Whether two names are the same platform: one contains the other ("Joget DX" and "Joget DX 9")."""
+    a, b = " ".join(str(a).lower().split()), " ".join(str(b).lower().split())
+    return a in b or b in a
+
+
+def block_owner(block_id, platform, platforms, kdir):
+    """The other platform whose own table has this block, or None. A custom build was once counted, and priced,
+    in another platform's blocks because they were the only ones the knowledge base had."""
+    for other in platforms:
+        if other.lower() == (platform or "").lower():
+            continue
+        found = read_blocks(other, kdir)[0].get(block_id)
+        if found and found.get("section") == other:
+            return other
+    return None
+
+
 def platform_has_blocks(blocks):
     """Whether the platform has building blocks of its own (not only those of the All platforms section)."""
     return any(b.get("section") != ALL_PLATFORMS for b in blocks.values())
@@ -269,6 +299,10 @@ def compute(est, project, kdir):
     if est.get("confidence") and est["confidence"] not in LEVELS:
         errors.append(f"confidence '{est['confidence']}' not in {list(LEVELS)}")
     platform = est.get("platform", "")
+    built_on = spec_platform(project)
+    if platform and built_on and not same_platform(platform, built_on):
+        errors.append(f"platform '{platform}' is not the project's: its spec says it is built on '{built_on}'. Count on "
+                      "the project's own platform, so no other platform's blocks or rates are used")
     blocks, platforms = read_blocks(platform, kdir)
     on_platform, _ = logged_projects(platform, kdir)
     other_work = read_other_work(kdir)
@@ -297,8 +331,16 @@ def compute(est, project, kdir):
                 errors.append(f"{where}: count must be a number above 0")
                 continue
             known = blocks.get(line["block"])
+            owner = None if known else block_owner(line["block"], platform, platforms, kdir)
+            if owner:
+                errors.append(f"{where}: {line['block']} is a building block of {owner}, not of {platform}: count it with "
+                              f"the All platforms blocks or a block of {platform}'s own, so {owner}'s rates are not used")
+                continue
             if platform_has_blocks(blocks) and not known:
                 errors.append(f"{where}: {line['block']} is not a building block for {platform} in building-blocks.md")
+                continue
+            if blocks and not known:  # the All platforms table counts on every platform: an ID outside it is a slip
+                errors.append(f"{where}: {line['block']} is not a building block in building-blocks.md")
                 continue
             out["block_name"] = known["name"] if known else ""
             given = pair(line.get("rate")) if "rate" in line else None

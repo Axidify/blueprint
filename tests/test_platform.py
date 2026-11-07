@@ -15,7 +15,7 @@ import support
 import mockup
 import platform_fit as platform_tool
 
-STARTER = support.ROOT / "templates" / "knowledge"
+STARTER = support.ROOT / "tests" / "fixtures" / "knowledge-with-a-platform"  # a starter knowledge base with a platform set up
 STARTER_SHEET = STARTER / "platforms" / "joget-dx.md"
 
 

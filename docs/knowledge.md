@@ -29,9 +29,9 @@ this:
 - **Source and Checked:** the page of the product's own documentation the row was checked against, and
   when. **Confirmed:** the lead developer who confirmed it.
 
-The starter Joget DX sheet was written from general knowledge and none of its rows is checked: each is
-looked up in Joget's documentation the first time a project uses it. Lookups use product and feature words
-only, never a client's name or anything from a project.
+The starter knowledge base has no platform sheet: Blueprint assumes no platform. A sheet is started the
+first time a project names a product, and each row is looked up in that product's own documentation.
+Lookups use product and feature words only, never a client's name or anything from a project.
 
 ## Evidence levels
 

@@ -72,9 +72,9 @@
   const esc = (v) => String(v == null ? "" : v).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const slug = (v) => String(v).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
-  // The look the build drew it in (project.theme; a spec without one keeps joget). The desk theme speaks in
+  // The look the build drew it in (project.theme, or the one its platform suggests). The desk theme speaks in
   // sentence case and follows the design language's button tiers; its accent is Cobalt when the spec sets none.
-  const THEME = String(BUILD.theme || P.theme || "joget");
+  const THEME = String(BUILD.theme || P.theme || "desk");
   const DESK = THEME === "desk";
   document.documentElement.dataset.theme = THEME;
   document.documentElement.style.setProperty("--primary", P.primary_color || (DESK ? "#1F5FBF" : "#1f6fb2"));

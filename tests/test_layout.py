@@ -193,6 +193,20 @@ def test_a_new_project_starts_in_the_new_layout(projects, run):
     assert sorted(x.name for x in p.iterdir()) == ["1 Client documents", "Project overview.html", "_blueprint"]
     assert json.loads(layout.register_json(p).read_text(encoding="utf-8"))["project"] == "Courier Booking System"
     assert "Blueprint's working files are in" in (p / overview.PAGE).read_text(encoding="utf-8")
+    register = json.loads(layout.register_json(p).read_text(encoding="utf-8"))
+    assert register["platform"] == "" and "Platform: not set. Nothing assumes one" in out, "no default platform"
+    assert "Mock-up look: desk" in out
+
+
+def test_the_starter_workspace_assumes_no_platform_rate_or_split():
+    """A default once made every new project a Joget project, and its estimate, platform check and look followed."""
+    import yaml
+    starter = support.ROOT / "templates"
+    company = yaml.safe_load((starter / "company.yaml").read_text(encoding="utf-8"))
+    assert company["platforms"] == [] and not company["day_rate"] and not company["currency"]
+    blocks = (starter / "knowledge" / "building-blocks.md").read_text(encoding="utf-8")
+    assert not re.search(r"^## Platform:", blocks, re.M) and not (starter / "knowledge" / "platforms").exists()
+    assert "joget" not in blocks.lower()
 
 
 def test_a_teammates_project_in_the_other_layout_is_read_by_every_tool_that_reads(projects, run):

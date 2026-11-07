@@ -13,8 +13,11 @@ paths unless they need one.
 Run `python -I tools/doctor.py`. If anything required is MISSING, explain the fix in one or two plain
 sentences (usually "double-click setup.cmd", or on a Mac "run ./setup.sh") and stop there.
 
-If the company profile is still the placeholder ("Your Company"), ask for the company name and short name
-and write them into `workspace/company.yaml`. Mention that a logo (`workspace/branding/logo.png`), a Word
+If the company profile is still the placeholder ("Your Company"), ask for the company name and short name,
+the currency, and the platforms the company builds on (only offered as choices when a project is created:
+each project still says its own), and write them into `workspace/company.yaml`. Blueprint assumes nothing
+until then: no platform, no rate, no manday split. Say that the rates and the split are asked with each
+project's estimate, and can become the company's standard figures whenever the lead developer says so. Mention that a logo (`workspace/branding/logo.png`), a Word
 template (`document-template.docx`) and standard wording (`document-boilerplate.yaml`) can go in the same folder.
 
 ## 2. Show where things stand

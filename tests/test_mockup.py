@@ -576,14 +576,15 @@ def test_a_new_project_starts_with_desk_unless_its_platform_is_joget(platform, t
     assert mockup.default_theme(platform) == theme
 
 
-def test_a_spec_without_a_theme_keeps_joget_and_desk_is_built_when_asked(tmp_path, capsys):
-    """Existing projects never change look by themselves; desk is the design language's theme."""
+def test_a_spec_without_a_theme_takes_its_platforms_look_and_desk_is_built_when_asked(tmp_path, capsys):
+    """A spec without a theme takes the look its platform suggests: joget only on Joget. A custom build without
+    one used to be shown as a Joget system."""
     spec = sample()
     del spec["project"]["theme"]
     project = tmp_path / "plain"
     support.write_spec(project, spec)
     mockup.build(project)
-    assert "theme joget: the spec sets no theme, so it keeps joget" in capsys.readouterr().out
+    assert "theme joget: the spec sets no theme, so it takes joget, from its platform" in capsys.readouterr().out
     assert '"theme": "joget"' in (project / "mockup" / "build.js").read_text(encoding="utf-8")
     assert (project / "mockup" / "assets" / "theme.css").read_text(encoding="utf-8") == (mockup.ENGINE / "themes" / "joget.css").read_text(encoding="utf-8")
     spec["project"]["theme"] = "desk"
@@ -593,6 +594,11 @@ def test_a_spec_without_a_theme_keeps_joget_and_desk_is_built_when_asked(tmp_pat
     css = (project / "mockup" / "assets" / "theme.css").read_text(encoding="utf-8")
     for token in ("#F5F5F7", "#1D1D1F", "#6E6E73", "#E5E5EA", "#D2D2D7", "#E9E9EE", "Geist", "Geist Mono", "16px", "20px", "prefers-reduced-transparency"):
         assert token in css, token
+    del spec["project"]["theme"]
+    spec["project"]["platform"] = "Custom web and mobile"
+    support.write_spec(project, spec)
+    mockup.build(project)
+    assert '"theme": "desk"' in (project / "mockup" / "build.js").read_text(encoding="utf-8"), "never Joget's look off Joget"
 
 
 def test_the_sample_specs_pass_the_check():

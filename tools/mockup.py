@@ -66,9 +66,14 @@ import layout  # noqa: E402  (where everything is in a project folder)
 ENGINE = ROOT / "tools" / "mockup"
 SCREEN_TYPES = {"login", "dashboard", "list", "form", "detail", "custom"}
 TEXT_SIZES = ("normal", "large", "larger")
-# The look of the client's screens (tools/mockup/themes/). A spec without `theme` keeps the look it always had,
-# joget, so no project changes look by itself; a new project's spec is written with default_theme().
-UNSET_THEME = "joget"
+# The look of the client's screens (tools/mockup/themes/). A spec without `theme` takes the look its platform
+# suggests (default_theme): joget only on Joget, otherwise the neutral desk. It used to be joget whatever the
+# platform, so a custom build without a theme was shown as a Joget system.
+
+
+def theme_of(p):
+    """The theme in effect for a spec's `project` settings."""
+    return p.get("theme") or default_theme(p.get("platform"))
 
 
 def default_theme(platform):
@@ -1236,7 +1241,7 @@ def build(project):
     spec = load_spec(project)
     out = layout.mockup_dir(project)
     (out / "assets").mkdir(parents=True, exist_ok=True)
-    theme = spec["project"].get("theme") or UNSET_THEME
+    theme = theme_of(spec["project"])
     theme_file = ENGINE / "themes" / f"{theme}.css"
     if not theme_file.exists():
         sys.exit(f"Unknown theme '{theme}'. Available: {[p.stem for p in (ENGINE / 'themes').glob('*.css')]}")
@@ -1282,7 +1287,7 @@ def build(project):
     (out / BUILT_FROM).write_text(inputs, encoding="utf-8")
     snapshot(project, spec)
     print(f"Built {out / 'index.html'} ({len(spec['screens'])} screens, theme {theme}"
-          + ("" if spec["project"].get("theme") else ": the spec sets no theme, so it keeps joget") + ")")
+          + ("" if spec["project"].get("theme") else f": the spec sets no theme, so it takes {theme}, from its platform") + ")")
     if fonts_missing:
         print(f"{' and '.join(fonts_missing)} could not be put into the mock-up (node_modules/geist is missing: run setup again): "
               "it shows in that font only on computers that have it installed.")
@@ -2888,7 +2893,7 @@ def look_notes(spec):
     if ratio is not None and ratio < 4.5:
         notes.append(f"White words on {p['primary_color']} (the main button{', the top bar' if str(p.get('header')).lower() == 'brand' else ''}) "
                      f"are hard to read: contrast {ratio:.1f} to 1, where text needs at least 4.5 to 1. A darker shade of the brand colour reads better.")
-    theme = p.get("theme") or UNSET_THEME
+    theme = theme_of(p)
     if theme == "desk":
         for what, colour in [("The accent", p.get("primary_color"))] + [("A data colour", c) for c in (p.get("data_colors") or [])]:
             clash = colour_clash(colour)
@@ -2911,7 +2916,7 @@ def look_notes(spec):
 def look_lines(spec, project):
     """The look in effect, setting by setting, in plain words."""
     p = spec["project"]
-    theme = p.get("theme") or UNSET_THEME
+    theme = theme_of(p)
     theme_text = theme_css(ENGINE / "themes" / f"{theme}.css") if (ENGINE / "themes" / f"{theme}.css").exists() else ""
     import re
 
@@ -2993,7 +2998,7 @@ def try_look(project, tries):
             tried["project"][key] = value
     errors = validate(tried)
     errors += [e for e in look_errors(tried, project) if e not in errors]
-    theme = tried["project"].get("theme") or UNSET_THEME
+    theme = theme_of(tried["project"])
     if not (ENGINE / "themes" / f"{theme}.css").exists():
         errors.append(f"theme '{theme}' is not one of {', '.join(sorted(p.stem for p in (ENGINE / 'themes').glob('*.css')))}")
     if errors:

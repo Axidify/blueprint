@@ -15,19 +15,24 @@ and from their message, work out:
 - **System name**, e.g. "Courier Booking System" (the document's title or the system it describes);
 - **Client** and **short name**, e.g. "Acme Logistics Sdn. Bhd." / "Acme" (cover page, letterhead, the
   parties of a SOW, the e-mail domain);
-- **Platform**: one of the platforms in `workspace/company.yaml`, or what the document names; and the rest
-  of the tech stack if it says (database, directory, cloud service, reporting tool);
+- **Platform**: what the document names (`workspace/company.yaml`'s `platforms` are only the choices to
+  offer), and the rest of the tech stack if it says (database, directory, cloud service, reporting tool).
+  Blueprint assumes no platform: never fill one in from the company's list or an earlier project;
 - **Folder name (slug)** from the system name: lowercase, hyphenated, short (`courier-booking`);
-- **Mock-up look** from the platform: `joget` for a Joget project (it looks like what Joget delivers),
-  otherwise `desk`, the default. `modern` (a branded custom UI) and `vivid` (a bold showcase for demos)
+- **Mock-up look** from the platform: `joget` only for a Joget project (it looks like what Joget delivers),
+  otherwise `desk`, the neutral default. `modern` (a branded custom UI) and `vivid` (a bold showcase for demos)
   only when the user asks for them.
 
 ## 2. Confirm, and ask only what is missing
 
 One AskUserQuestion call: show what you worked out in one short block ("Courier Booking System for Acme
-Logistics (Acme), on Joget DX, folder courier-booking, Joget look") with **Looks right** first and
-**Change something**, and in the same call ask only what you could not work out (usually the platform when
-there is no document, or the client's short name). With no document at all, ask for the system name,
+Logistics (Acme), on <platform>, folder courier-booking, desk look") with **Looks right** first and
+**Change something**, and in the same call ask only what you could not work out (often the client's short
+name). **The platform comes from the files the user gave** (a brief, scope of work, minutes or draft that
+names it): show it in the block to confirm. Only when no file says it, ask, offering the company's
+`platforms` as choices plus "Not decided yet"; never pick one for them. "Not decided yet" creates the project with no platform
+(`new_project.py` without `--platform`), and nothing is assumed until it is set. Say that its rates and its
+manday split are asked when it is estimated. With no document at all, ask for the system name,
 client and platform together in that one call, and say a brief can be dropped into the inbox instead.
 Never guess a client's name.
 

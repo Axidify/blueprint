@@ -316,7 +316,8 @@ def test_rate_depends_on_the_platform(kb):
     res = work_out(kb, estimate_of(block("L01", "BB-01", count=2), platform="Other Platform"))
     assert mandays(res, "L01") == (20, 40)
     assert errors_of(kb, estimate_of(block("L01", "BB-04"), platform="Other Platform")) == [
-        "L01: BB-04 is not a building block for Other Platform in building-blocks.md"]
+        "L01: BB-04 is a building block of Sample Platform, not of Other Platform: count it with the All platforms blocks "
+        "or a block of Other Platform's own, so Sample Platform's rates are not used"]
 
 
 # The All platforms section: blocks that count on every platform (a mobile app, offline working, planning).
@@ -352,15 +353,16 @@ def test_all_platforms_blocks_are_priced_from_their_own_row(kb_all):
     assert mandays(res, "L01") == (4, 8) and line(res, "L01")["block_name"] == "Mobile app screen, per screen"
     assert line(res, "L02")["priced"] is False and res["blocks_without_rate"] == ["BB-32"]
     assert errors_of(kb_all, estimate_of(block("L01", "BB-02"), platform="Other Platform")) == [
-        "L01: BB-02 is not a building block for Other Platform in building-blocks.md"]
+        "L01: BB-02 is a building block of Sample Platform, not of Other Platform: count it with the All platforms blocks "
+        "or a block of Other Platform's own, so Sample Platform's rates are not used"]
 
 
 def test_a_platform_with_only_the_all_platforms_blocks_is_not_known(kb_all):
-    res = work_out(kb_all, estimate_of(block("L01", "BB-31", count=2), block("L02", "BB-02"), fixed("L03", 1, 1), platform="Nowhere"))
+    res = work_out(kb_all, estimate_of(block("L01", "BB-31", count=2), fixed("L03", 1, 1), platform="Nowhere"))
     assert res["platform_known"] is False
     assert mandays(res, "L01") == (2, 4), "a mobile screen is priced on a platform with no table of its own"
-    assert line(res, "L02")["priced"] is False, "a block the knowledge base does not know is counted, not refused"
-    assert errors_of(kb_all, estimate_of(block("L02", "BB-02"), platform="Nowhere")) == []
+    assert errors_of(kb_all, estimate_of(block("L02", "BB-77"), platform="Nowhere")) == [
+        "L02: BB-77 is not a building block in building-blocks.md"], "an ID in no table is a slip"
 
 
 def test_blocks_command_lists_the_all_platforms_blocks(kb_all, run):
@@ -376,10 +378,24 @@ def test_blocks_command_lists_the_all_platforms_blocks(kb_all, run):
 
 
 def test_platform_missing_from_the_knowledge_base_prices_nothing(kb):
-    res = work_out(kb, estimate_of(block("L01", "BB-01"), fixed("L02", 2, 4), platform="Nowhere"))
+    res = work_out(kb, estimate_of(block("L01", "BB-77"), fixed("L02", 2, 4), platform="Nowhere"))
     assert res["platform_known"] is False and res["platforms"] == [PLATFORM, "Other Platform"]
     assert line(res, "L01")["priced"] is False
     assert res["total"] == (2, 4) and res["confidence"] == "low"
+
+
+def test_a_block_of_another_platform_is_refused_and_so_is_another_platform_than_the_spec(kb, tmp_path):
+    """A custom build was counted, and priced, in another platform's building blocks: the only ones there were."""
+    errors = errors_of(kb, estimate_of(block("L01", "BB-01"), platform="Nowhere"))
+    assert errors == ["L01: BB-01 is a building block of Sample Platform, not of Nowhere: count it with the All platforms "
+                      "blocks or a block of Nowhere's own, so Sample Platform's rates are not used"]
+    project = tmp_path / "custom"
+    support.write_spec(project, {"project": {"name": "Custom", "platform": "Custom web and mobile"}})
+    _, errors = estimate.compute(estimate_of(fixed("L01", 2, 4), platform=PLATFORM), project, kb)
+    assert errors == [f"platform '{PLATFORM}' is not the project's: its spec says it is built on 'Custom web and mobile'. "
+                      "Count on the project's own platform, so no other platform's blocks or rates are used"]
+    _, errors = estimate.compute(estimate_of(fixed("L01", 2, 4), platform="custom web and mobile"), project, kb)
+    assert errors == []
 
 
 def test_knowledge_folder_without_files_prices_nothing(tmp_path):
@@ -792,7 +808,8 @@ def test_sample_against_the_starter_knowledge_base_is_a_count_only():
     res = work_out(STARTER, sample())
     assert len(res["lines"]) == 13 and len(res["unpriced"]) == 13, "the starter knowledge base sets no rate or share"
     assert res["total"] == (0, 0) and res["confidence"] == "low"
-    assert res["platform_known"] and res["blocks_without_rate"] == res["blocks_used"]
+    assert not res["platform_known"], "the starter assumes no platform: every block is in its All platforms table"
+    assert res["blocks_without_rate"] == res["blocks_used"]
     assert [r["id"] for r in res["risks"]] == ["K01", "K02", "K03", "K04"] and not any(r["sized"] for r in res["risks"])
 
 

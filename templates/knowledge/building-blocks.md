@@ -8,16 +8,24 @@ logged by `close-project`. A rate is mandays per unit, as a range ("2–4") or a
 as TBD is counted in estimates and not priced. Until at least three projects are logged, every estimate
 must say it is low-confidence.
 
-## Platform: Joget DX
+## All platforms
+
+Blocks that count on any platform: forms, lists, approvals, integrations, reports, a mobile app, working
+offline, planning logic and a second language. Blueprint assumes no platform: the rates are TBD until the
+lead developer sets them for the platforms your company builds on, and each project counts on its own.
+
+When a platform's figures differ, add a table of its own, headed `## Platform: <name as the projects name it>`,
+with the same columns: a row there with the same ID gives that block its rate on that platform and wins, and
+a block only that platform has gets an ID of its own. A project is never priced from another platform's table.
 
 | ID | Building block | What drives the effort | Rate (MD) | Confidence |
 |---|---|---|---|---|
-| BB-01 | Simple eForm (single page) | Fields, validations, lookups | TBD | – |
-| BB-02 | Multi-page eForm | Pages, conditional sections, calculated fields | TBD | – |
+| BB-01 | Form, single page | Fields, validations, lookups | TBD | – |
+| BB-02 | Form, several pages | Pages, conditional sections, calculated fields | TBD | – |
 | BB-03 | Workflow step (approval) | Routing rule, reject path, notifications | TBD | – |
 | BB-04 | Digital signature capture | Number of signers, storing the image in PDFs | TBD | – |
 | BB-05 | Drawing or markup on an image | Inspection diagrams | TBD | – |
-| BB-06 | List or datalist with filters | Columns, filters, actions | TBD | – |
+| BB-06 | List with filters | Columns, filters, actions | TBD | – |
 | BB-07 | Operational dashboard | Status counts, lists, drill-down levels | TBD | – |
 | BB-08 | KPI dashboard with custom calculations | Formulas, calendars, period splitting, charts | TBD | – |
 | BB-09 | External API integration, per endpoint | Auth, mapping, error handling, testing with client | TBD | – |
@@ -30,17 +38,6 @@ must say it is low-confidence.
 | BB-16 | AD / SSO login integration | Group mapping, environments | TBD | – |
 | BB-17 | Audit trail | Which actions, old/new values | TBD | – |
 | BB-18 | Environment migration (dev → test → prod) | Number of environments, configuration | TBD | – |
-
-## All platforms
-
-Blocks that count whatever the platform: a mobile app, working offline, planning logic and a second
-language. An estimate on
-any platform can use them; a platform's own table may repeat an ID to give it a rate of its own there,
-which then wins. The rates are TBD until the lead developer sets them: work like this varies most with the
-team's experience of the mobile technology, so no starting figure is given.
-
-| ID | Building block | What drives the effort | Rate (MD) | Confidence |
-|---|---|---|---|---|
 | BB-31 | Mobile app foundation, per app | Platforms (Android, iOS or both), sign-in, menus, build and distribution, supported devices | TBD | – |
 | BB-32 | Mobile app screen, per screen | Fields and states shown, actions, steps in a flow | TBD | – |
 | BB-33 | Camera photo on the phone, per place it is taken | Photos per record, categories, size and compression, upload | TBD | – |
@@ -60,6 +57,47 @@ team's experience of the mobile technology, so no starting figure is given.
 
 Count one unit for each of the things below. A question under a block is one to ask before its count and
 rate settle; the `estimate` skill turns them into workshop questions.
+
+**Forms, lists and workflow**
+
+- **BB-01 Form, single page** – one per form on one page. Includes its fields, validations, lookups and
+  saving. *Ask:* How many fields, and which are lookups? Which checks must pass before saving?
+- **BB-02 Form, several pages** – one per form that runs over several pages or tabs. Includes moving between
+  pages, conditional sections and calculated fields. *Ask:* Which sections appear only in some cases? What is
+  calculated, and from what?
+- **BB-03 Workflow step (approval)** – one per step a record waits at. Includes who it goes to, approve,
+  reject or return, and the notifications. *Ask:* Who approves, and who stands in when they are away? What
+  happens on reject?
+- **BB-04 Digital signature capture** – one per place a signature is taken. *Ask:* How many signers? Where
+  does the signature appear (the record, a PDF)?
+- **BB-05 Drawing or markup on an image** – one per image people draw on. *Ask:* What is marked (damage,
+  areas)? Is the marked image kept or printed?
+- **BB-06 List with filters** – one per list. Includes its columns, filters, search, sorting and row
+  actions. *Ask:* Which columns and filters? Who sees which rows?
+- **BB-07 Operational dashboard** – one per dashboard of counts and lists. *Ask:* Which figures, for whom,
+  and what does clicking one open?
+- **BB-08 KPI dashboard with custom calculations** – one per dashboard whose figures need formulas. *Ask:*
+  The formula of each figure, its period and calendar (working days, holidays)? Charts?
+- **BB-09 External API integration, per endpoint** – one per call to or from another system. Includes
+  authentication, mapping, error handling and testing with the other side. *Ask:* What starts it, what goes
+  across, and what happens when it fails? Is there a test environment on the other side?
+- **BB-10 Generated PDF document** – one per document layout. *Ask:* Who receives it and how (download,
+  e-mail)? Signatures or a letterhead on it?
+- **BB-11 Scheduled job or reminder** – one per job. *Ask:* When does it run, and when does it stop? Who is
+  told?
+- **BB-12 E-mail notification, per event** – one per event that sends a message. *Ask:* Who receives it,
+  and what does it say? Is the wording set by the client?
+- **BB-13 Excel export** – one per export. *Ask:* Which columns and rows, and how many at most?
+- **BB-14 Role with its own menus** – one per role. Includes its menus, what it may do and the data it sees.
+  *Ask:* What does this role only see, and what may it change?
+- **BB-15 Admin CRUD screen (master data)** – one per kind of master data kept in the system. *Ask:* Who
+  maintains it? What must be unique, and what happens to records using an entry that is removed?
+- **BB-16 AD / SSO login integration** – one per sign-in method. *Ask:* Which directory or provider? How do
+  groups map to roles? Do outside users sign in differently?
+- **BB-17 Audit trail** – one per kind of record whose changes are logged. *Ask:* Which actions, old and new
+  values, who may see the log, and for how long is it kept?
+- **BB-18 Environment migration (dev → test → prod)** – one per environment the system is moved to. *Ask:*
+  How many environments, and who deploys to the client's?
 
 **Mobile app**
 
@@ -136,7 +174,8 @@ rate settle; the `estimate` skill turns them into workshop questions.
 
 Work around the build. Set each item as a share of the building-block subtotal ("10–15%") or as fixed
 mandays ("2–3 MD"). An item left as TBD is listed in estimates and not priced. Add or remove rows to match
-how your company scopes projects.
+how your company scopes projects. These are the company's starting figures: each project's split is agreed
+with the lead developer for what that project needs, and an estimate line can carry its own figure.
 
 | ID | Item | Share or mandays | Notes |
 |---|---|---|---|
