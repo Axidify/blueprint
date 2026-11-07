@@ -182,8 +182,17 @@ def read_other_work(kdir):
     return out
 
 
+def is_test_row(header, row):
+    """A projects-log row of test data: a cell with the word TEST in capitals ("TEST DATA" in Notes), or a yes
+    in a "Test" column. Test rows are never counted as delivered projects."""
+    i = header.index("test") if "test" in header else None
+    if i is not None and len(row) > i and row[i].strip().lower() in ("yes", "y", "x", "test", "true"):
+        return True
+    return any(re.search(r"(?<![^\W_])TEST(?![^\W_])", c) for c in row)
+
+
 def logged_projects(platform, kdir):
-    """Delivered projects in the projects log: (on this platform, all)."""
+    """Delivered projects in the projects log, test rows left out (is_test_row): (on this platform, all)."""
     path = kdir / "projects-log.md"
     on_platform, everyone = set(), set()
     if not path.exists():
@@ -196,7 +205,7 @@ def logged_projects(platform, kdir):
         if header is None:
             header = [c.lower() for c in row]
             continue
-        if set("".join(row)) <= set("-: ") or not row[0]:
+        if set("".join(row)) <= set("-: ") or not row[0] or is_test_row(header, row):
             continue
         everyone.add(row[0])
         i = header.index("platform") if "platform" in header else 1

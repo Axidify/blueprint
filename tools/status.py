@@ -112,6 +112,14 @@ def project_status(p):
     issues = read(layout.issued_file(p), json.loads, problems)
     if isinstance(issues, list) and issues and isinstance(issues[-1], dict):
         s["last_issued"] = issues[-1]
+    # After the document goes to the client: UAT scripts, UAT results, change requests, the close-out draft.
+    s["uat_scripts"] = bool(files(layout.uat_source(p), "*.json"))
+    s["uat_results"] = any(re.search(r"\buat results?\b", name, re.I) for name in s["docs"])
+    log = read(layout.cr_log(p), json.loads, problems)
+    crs = [c for c in (log.get("crs") or []) if isinstance(c, dict)] if isinstance(log, dict) else []
+    s["crs"] = len(crs)
+    s["crs_open"] = sum(1 for c in crs if c.get("status") not in ("rejected", "built"))
+    s["close_draft"] = (layout.machine(p) / "close" / "close.json").exists()
     return s
 
 
@@ -145,12 +153,29 @@ def next_steps(s):
             hint = "for the lead developer: no estimate yet; say 'estimate this project'"
         elif s["spec_mtime"] > s["estimate_mtime"]:
             hint = "for the lead developer: the spec changed since the last estimate; say 'estimate this project' again"
+    # The latest stage the project reached decides, so an old workshop or comment never outlives the sign-off.
+    if s.get("close_draft"):
+        return ("the close-out is drafted, not yet in the knowledge base: say 'close the project' to go through "
+                "the proposal"), ""
+    if issued:
+        after = "after delivery, say 'close the project' and share the actual effort"
+        if s.get("crs_open"):
+            return (f"{s['crs_open']} of {s['crs']} change request(s) still open: say 'is this a change request' for a new "
+                    f"one, or update the CR log as they are decided; {after}"), ""
+        if s.get("crs"):
+            return f"the {s['crs']} change request(s) are decided: {after}", ""
+        if s.get("uat_results"):
+            return ("UAT results are in: real defects go to the team, and a failure that is a new wish goes to "
+                    f"'is this a change request'; {after}"), ""
+        if s.get("uat_scripts"):
+            return ("the UAT scripts are written: when the testers send back the workbook, drop it in the inbox and "
+                    f"say 'process my inbox'; {after}"), ""
     feedback = s.get("feedback_unprocessed")
     if feedback:
         return f"{feedback} mock-up comment(s) not worked in yet: say 'apply the feedback'", hint
     if issued_current:
-        return (f"v{issued.get('version', '?')} went to the client: after delivery, say 'close the project' "
-                "and share the actual effort and the change requests"), ""
+        return (f"v{issued.get('version', '?')} went to the client: say 'write the UAT scripts' when testing is near; "
+                "after delivery, say 'close the project' and share the actual effort and the change requests"), ""
     high, workshop = s.get("client_high_open", 0), s.get("upcoming_workshop")
     if not spec:
         if not s.get("docs"):
@@ -211,6 +236,8 @@ def main():
             bits.append("document generated, not issued")
         if "client_open" in s:
             bits.append(f"{s['client_open']} client questions open ({s['client_high_open']} high), {s['internal_open']} internal")
+        if s.get("crs"):
+            bits.append(f"{s['crs']} change request(s), {s['crs_open']} open")
         if s.get("actuals"):
             bits.append("delivered, actuals logged")
         if s.get("layout") == "old" and layout.is_old_project(p):

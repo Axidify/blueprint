@@ -108,7 +108,7 @@ def touch(path, when, text="x"):
 
 
 def staged(root, *, docs=False, review=None, spec=None, high=0, medium=0, workshop=None, feedback=0,
-           estimate=None, doc=None, issued=None, actuals=False):
+           estimate=None, doc=None, issued=None, actuals=False, uat=False, uat_results=False, crs=None, close=False):
     """A project at a stage. Times are in days from now (negative is earlier): spec=-3 means the spec was last
     changed three days ago."""
     now = time.time()
@@ -136,6 +136,14 @@ def staged(root, *, docs=False, review=None, spec=None, high=0, medium=0, worksh
         touch(p / "output" / "issued.json", now, json.dumps([{"version": issued, "to": "Client", "date": "2026-11-05"}]))
     if actuals:
         touch(root / "knowledge" / "actuals" / "leave-request.md", now)
+    if uat:
+        touch(p / "uat" / "2026-12-01 uat scripts v0.2.json", now, "{}")
+    if uat_results:
+        touch(p / "docs" / "2026-12-10 UAT results.xlsx", now)
+    if crs is not None:
+        touch(p / "changes" / "crs.json", now, json.dumps({"crs": [{"id": f"CR-{n + 1:03}", "status": st} for n, st in enumerate(crs)]}))
+    if close:
+        touch(p / "close" / "close.json", now, "{}")
     return p
 
 
@@ -154,12 +162,19 @@ def staged(root, *, docs=False, review=None, spec=None, high=0, medium=0, worksh
     (dict(spec=-3, doc=("0.2", -2), review=("requirements-v0.2", -2.5)), "v0.2 is generated and reviewed: when it goes to the client"),
     (dict(spec=-3, doc=("0.2", -2), review=("generated", -1)), "v0.2 is generated and reviewed"),
     (dict(spec=-3, doc=("0.2", -2), review=("requirements-v0.1", -2.5)), "say 'review the generated requirements document'"),
-    (dict(spec=-3, doc=("0.2", -2), issued="0.2"), "v0.2 went to the client: after delivery, say 'close the project'"),
+    (dict(spec=-3, doc=("0.2", -2), issued="0.2"), "v0.2 went to the client: say 'write the UAT scripts'"),
+    (dict(spec=-3, high=2, workshop=4, doc=("0.2", -2), issued="0.1", uat=True), "the UAT scripts are written"),
+    (dict(spec=-3, high=2, workshop=4, issued="0.1", uat=True, uat_results=True), "UAT results are in"),
+    (dict(spec=-3, high=2, workshop=4, feedback=2, issued="0.1", uat_results=True, crs=["raised", "built"]),
+     "1 of 2 change request(s) still open"),
+    (dict(spec=-3, issued="0.2", crs=["rejected", "built"]), "the 2 change request(s) are decided: after delivery, say 'close the project'"),
+    (dict(spec=-3, issued="0.2", crs=["raised"], close=True), "the close-out is drafted"),
     (dict(spec=-3, doc=("0.2", -2), issued="0.1"), "say 'review the generated requirements document'"),
     (dict(spec=-3, actuals=True), "say 'archive this project'"),
 ], ids=["nothing", "docs", "reviewed-no-spec", "spec-high-open", "workshop-coming", "workshop-past", "feedback",
         "no-document", "document-older-than-spec", "document-of-older-version", "not-reviewed", "reviewed-by-name",
-        "reviewed-after", "review-of-another-version", "issued", "new-version-after-issue", "delivered"])
+        "reviewed-after", "review-of-another-version", "issued", "uat-scripts-after-issue", "uat-results", "crs-open",
+        "crs-decided", "close-drafted", "new-version-after-issue", "delivered"])
 def test_the_next_step_follows_the_stage(tmp_path, run, stage, said):
     staged(tmp_path, **stage)
     out = run()

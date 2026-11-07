@@ -635,6 +635,33 @@ def score(prof, others, text, comments, file_name, contexts=None):
     return sorted(ev, key=lambda e: -e[0])
 
 
+def guess_kind(path, text, comments):
+    """What the file looks like, in process-inbox's words, or "" when nothing says. A hint for the filing name
+    and the next step: Claude still reads the file before acting on it."""
+    if comments is not None:
+        return "mock-up comments export"
+    sheets = [s.strip().lower() for s in re.findall(r"^## Sheet: (.+?) \(", text, re.M)]
+    if "test steps" in sheets:
+        filled = re.search(r"=(pass|fail|blocked)(?= \||$)", text, re.I | re.M)  # a cell that is a result
+        return "UAT results" if filled else "UAT workbook"
+    if "for client" in sheets and re.search(r"client response", text, re.I):
+        return "client answers to the register"
+    t = text[:20000]
+    if len(re.findall(r"\bshall\b", text, re.I)) >= 10:
+        return "requirements document"
+    if re.search(r"\bactual(s| effort| mandays)\b", t, re.I) and re.search(r"\b(mandays?|man-days?|MD)\b", t):
+        return "project actuals"
+    # A note or e-mail during UAT asking for things ("three requests"); a requirements document that mentions
+    # UAT and a "leave request" is not one, so only a short text file counts on that ground.
+    note = Path(path).suffix.lower() in (".txt", ".eml", ".md", ".msg") and len(text) < 8000
+    if (re.search(r"\bchange requests?\b|\bCR-\d+\b", t, re.I)
+            or (note and re.search(r"\bUAT\b", t) and re.search(r"\brequests\b", t, re.I))):
+        return "change requests"
+    if re.search(r"\bR-\d{3}\b", t) and re.search(r"\banswer", t, re.I):
+        return "client answers"
+    return ""
+
+
 def match_file(path, text_file=None):
     """Which project a file belongs to: {file, kind, verdict, best, summary, projects, archived, delivered, note}."""
     path = Path(path)
@@ -666,7 +693,7 @@ def match_file(path, text_file=None):
     else:
         verdict = "unknown"
     top = ranked[0] if ranked and verdict != "unknown" else None
-    kind = "mock-up comments export" if comments is not None else ""
+    kind = guess_kind(path, text, comments)
     summary = ""
     if top:
         lead = top["evidence"][0]["what"] if top["evidence"] else ""

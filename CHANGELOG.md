@@ -11,6 +11,27 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+### Added
+- **Closing a project has a tool.** `close.py draft` drafts the actuals record, the projects-log row, the gap-pattern
+  evidence and building-block notes from the project's own estimate, CR log, register and the lead developer's
+  figures, into the project's `_blueprint/close/`. Nothing reaches the shared knowledge base until you agree and
+  `close.py apply` writes it; a figure nobody gave stays "not given". The close-project skill uses it.
+- **"CRs" that were in the signed version are caught.** At close-out every change request, from the CR log and the
+  lead developer's list, is held against the version the client signed (`close.py check`); one that was in scope is
+  left out of the billed CRs and the gap evidence, so the knowledge base does not learn the wrong lesson. Logging a
+  CR marked New that reads closely like the signed version now prints a `Check:` line too.
+- **Test data in the knowledge base.** A projects-log row with the word TEST in capitals (or a yes in a Test column)
+  is test data: estimates never count it as a delivered project, so a test run cannot make a platform look
+  calibrated. The close-out marks test figures this way.
+
+### Fixed
+- **The next step follows the project to the end.** Once a version has gone to the client, the start-up summary
+  follows the latest stage reached (UAT scripts, UAT results, change requests open or decided, close-out drafted)
+  instead of still pointing at an old workshop. The summary also counts the change requests.
+- **The inbox names more kinds of file.** `project.py match` now says what a filled-in UAT workbook, a change-request
+  e-mail, the lead developer's actuals, a returned register and a requirements document are (it used to say nothing
+  for most of them), so filing and the next step are suggested right.
+
 ## [1.5.0] - 2026-11-07
 
 ### Added

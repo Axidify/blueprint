@@ -582,6 +582,10 @@ def primary(m, phrase):
         "generate the requirements document": [("Open the requirements document", document), ("Open the mock-up", mock)],
         "review the generated requirements document": [("Open the requirements document", document)],
         "close the project": [("Open the requirements document", document)],
+        # after the version went to the client (tools/status.py follows the latest stage)
+        "write the UAT scripts": [("Open the requirements document", document)],
+        "is this a change request": [("Open the CR log", layout.cr_log_xlsx(p)), ("Open the requirements document", document)],
+        "process my inbox": [("Open the requirements document", document)],
     }
     options = choices.get(phrase) or ([("Open the requirements document", document)] if phrase.startswith("record that") else [])
     for label, target in options:

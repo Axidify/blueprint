@@ -10,7 +10,7 @@ version from `templates/knowledge/`.
 | `building-blocks.md` | Estimating units (multi-page form, approval step, signature capture, API endpoint, KPI dashboard …) with mandays per platform and a confidence level | You set the rates, and the shares for other work (project management, testing …) in its `Other work` table; they are then calibrated from logged actuals. A block or item with no figure is counted in [estimates](estimates.md) and not priced. Until three projects are logged, estimates are low-confidence |
 | `platforms/<product>.md` | One sheet per product a project is built with (Joget DX to start with): for each kind of feature, whether the product does it as standard, by configuration, by custom work or not at all, what it takes, the building block it is estimated with, and the page of the product's own documentation it was checked against | The `platform-fit` skill looks features up in the product's documentation online and adds what it finds, after you agree; your lead developer confirms rows. See [Platform sheets](#platform-sheets) |
 | `requirements-standard.md` | The sections every requirements document needs and the quality rules a review checks | Updated when reviews keep finding the same kind of gap |
-| `projects-log.md` | Estimate vs actual for every delivered project | One row per project phase, from `close-project` |
+| `projects-log.md` | Estimate vs actual for every delivered project | One row per project phase, from `close-project`. A row with the word `TEST` in capitals (or a yes in a `Test` column) is test data, never counted by estimates |
 | `actuals/<project>.md` | Effort, CRs, what the requirements document already showed, lessons | Written by `close-project` |
 
 ## Platform sheets

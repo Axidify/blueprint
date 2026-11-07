@@ -71,6 +71,8 @@ is; every tool goes through it.
     went to the client.
   - `workshops/`, `estimates/`, `uat/` – the dated `.json` sources (estimate format in `docs/estimates.md`);
     `changes/crs.json` – the change request log.
+  - `close/` – the close-out: the lead developer's actuals, the actuals draft and the knowledge-base proposal
+    (`tools/close.py`), applied to `knowledge/` only after the user agrees.
   - `migration.json` – in a project moved from the old layout, the log of the moves.
 - `projects/_archive/<slug>/` – delivered projects, out of the active list (`tools/project.py`).
 
@@ -146,6 +148,7 @@ tools/<script>.py`, the environment `setup.sh` makes; wherever these instruction
 `overview.py` (each project's overview page and mock-up shortcut), `review_doc.py` (a review as a Word file),
 `uat.py` (UAT draft from the spec, checks, workbook and document, results of a filled-in workbook),
 `change_request.py` (scope check against the signed version, CR log, sizing, client CR note),
+`close.py` (a delivered project's close-out drafted for the knowledge base, CRs held against the signed version),
 `tour.py` (the tour's scratch copy), `layout.py` (where each part of a project folder is, in either layout),
 `workspace.py` (where the workspace is, the company profile and branding files), `sheets.py` (the look of every workbook), `check_docs.py`.
 
