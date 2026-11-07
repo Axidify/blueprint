@@ -50,8 +50,11 @@ on the dark bar in the bottom-right corner, click anything on the screen and typ
 around several things for one comment about all of them, or where there is nothing yet for something new
 ("an Export button here"); the box stays beside what it was drawn next to, whatever the width of the
 window. Comments are saved automatically, and every comment with what became of it is
-listed in the project's `2 Reviews/Mock-up comments.xlsx`. When the mock-up is changed, **Update ready**
-appears; press it and **What changed** lists each change, so you can go through them with the room. Submitting a form or approving a request plays out on screen, and the walk-through is kept
+listed in the project's `2 Reviews/Mock-up comments.xlsx`. Only open comments are marked on the screen: once
+worked in they move to **Done** in the Feedback panel, and **–** in the panel's corner puts the list away
+while you keep presenting. When the mock-up is changed, **Update ready**
+appears; press it and **What changed** lists each change, so you can go through them with the room. Submitting
+a form, saving an edit or approving a request plays out on screen, and the walk-through is kept
 (and shared with everyone in the room) until you press **Reset sample data**.
 
 ## Where things are
@@ -67,7 +70,8 @@ appears; press it and **What changed** lists each change, so you can go through 
 | `knowledge/` | What the team has learnt: gap patterns, estimating building blocks, requirements standard. |
 
 `inbox/`, `projects/` and `knowledge/` live in your **workspace**, together with your company profile
-(`company.yaml`) and branding (`branding/`: logo, Word template, standard document wording). By default the
+(`company.yaml`) and branding (`branding/`: logo, Word template, standard document wording; only the
+template's look is used, never its text). By default the
 workspace is the `workspace/` folder here. To share one workspace across a team, put it in a shared
 folder (OneDrive or SharePoint) and set its path in `.blueprint-local.json`:
 
