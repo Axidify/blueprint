@@ -186,6 +186,21 @@ with the lead developer for what that project needs, and an estimate line can ca
 | OW-05 | Training and user guide | TBD | |
 | OW-06 | Warranty support | TBD | |
 
+## Story points
+
+How the backlog turns a story's mandays into story points. Set it with the lead developer: a story gets the
+smallest number of points whose "Mandays up to" covers its mandays. A story above the last row is too big
+and should be split. While a row is TBD, the backlog leaves story points blank.
+
+| Points | Mandays up to |
+|---|---|
+| 1 | TBD |
+| 2 | TBD |
+| 3 | TBD |
+| 5 | TBD |
+| 8 | TBD |
+| 13 | TBD |
+
 ## Calibration notes
 
 None yet.

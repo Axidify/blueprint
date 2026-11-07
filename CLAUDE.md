@@ -52,7 +52,9 @@ is; every tool goes through it.
   change the spec version instead.
 - `6 UAT/` – the testers' workbook and the client's UAT document.
 - `7 Change requests/` – the client's change request notes.
-- `Internal – estimates and change requests/` – the estimate Excel files and the CR log. Rates, cost and the
+- `Internal – estimates and change requests/` – the estimate Excel files, the CR log, and the development
+  backlog's workbook and import files (the backlog's traceability sheet, for the client, is in
+  `5 Requirements document/`). Rates, cost and the
   estimate's mandays live here only: never copy them into the spec, the mock-up, the requirements document
   or a client item in the register. The one exception: the requirements document's timeline shows the scope
   of work's mandays per item (`mandays` on the spec's `timeline` activities), never the estimate's.
@@ -69,7 +71,7 @@ is; every tool goes through it.
   - `feedback/feedback.json` – comments from sessions (and the live session's state).
   - `output/` – a spec snapshot per generated version, and `issued.json`, which records the versions that
     went to the client.
-  - `workshops/`, `estimates/`, `uat/` – the dated `.json` sources (estimate format in `docs/estimates.md`);
+  - `workshops/`, `estimates/`, `backlog/`, `uat/` – the dated `.json` sources (estimate format in `docs/estimates.md`);
     `changes/crs.json` – the change request log.
   - `close/` – the close-out: the lead developer's actuals, the actuals draft and the knowledge-base proposal
     (`tools/close.py`), applied to `knowledge/` only after the user agrees.
@@ -123,6 +125,9 @@ after the user agrees; describe gaps in general terms, without client content.
 - `estimate` – brief, scope of work or spec → manday ranges in building blocks, with assumptions, confidence,
   a line-by-line comparison with the SOW and the questions that narrow the range. Rates and shares come
   from the knowledge base or the lead developer, never invented; the timeline is drafted from the estimate.
+- `backlog` – the signed spec → epics and user stories with acceptance criteria, story points from the
+  estimate and the lead developer's scale; a traceability sheet for the client and import files for Project
+  Desk, Jira and Azure DevOps; the gaps it finds go into the register.
 - `uat-scripts` – the signed spec → UAT scenarios (main process as each role, status rules and what is not
   allowed, field checks, access, notifications, integrations), every requirement covered; a workbook for the
   client's testers and a Word document.
@@ -148,6 +153,7 @@ tools/<script>.py`, the environment `setup.sh` makes; wherever these instruction
 `contradictions.py` (what a spec or document says about each subject, clashes it can prove and pairs to judge),
 `overview.py` (each project's overview page and mock-up shortcut), `review_doc.py` (a review as a Word file),
 `uat.py` (UAT draft from the spec, checks, workbook and document, results of a filled-in workbook),
+`backlog.py` (backlog draft from the spec, checks, story points, the team's workbook, traceability and import files),
 `change_request.py` (scope check against the signed version, CR log, sizing, client CR note),
 `close.py` (a delivered project's close-out drafted for the knowledge base, CRs held against the signed version),
 `tour.py` (the tour's scratch copy), `layout.py` (where each part of a project folder is, in either layout),

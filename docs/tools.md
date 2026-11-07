@@ -389,6 +389,28 @@ one or more defects (open, fixed, retest, closed, "not a defect" with a `--note`
 request", with `--cr` for its CR id), keeping each change in the defect's history. The file format is at the top
 of the script. Used by the `uat-scripts` skill. See [UAT scripts](uat.md).
 
+### backlog.py
+
+```bash
+python -I tools/backlog.py draft  projects/<slug> [--current] [--estimate "<estimate.json>"] [--date YYYY-MM-DD] [--force]
+python -I tools/backlog.py check  projects/<slug> ["<backlog.json>"]
+python -I tools/backlog.py render projects/<slug> ["<backlog.json>"] [--ado-process agile|scrum]
+python -I tools/backlog.py scale
+```
+`draft` writes `_blueprint/backlog/<date> backlog v<version>.json` from the spec: an epic per
+requirement group, a user story per requirement item, acceptance criteria from the screens placed on the
+story they read most like (the rest under `unplaced`), and the estimate's lines linked to the epic whose
+name they share. It uses the version issued last, or the current spec when nothing is issued or with
+`--current`; the newest estimate unless `--estimate` names one; and refuses to replace a draft of the same
+name without `--force`. `check` lists the mistakes that stop render (an unknown role, screen, requirement or
+estimate line, a requirement in no story and not excluded, shares of a line above the whole, mandays or
+rates in a title), what is still to refine, each story's points or why it has none, and the gaps for the
+register (estimate lines and screens in no story, stories waiting on an open register item). `render`
+checks and writes the team's workbook, the client's traceability sheet, and the Project Desk, Jira and
+Azure DevOps import files next to the JSON. `scale` shows the story-point scale in
+`knowledge/building-blocks.md`, or prints the table to add. Used by the `backlog` skill. See
+[Development backlog](backlog.md).
+
 ### platform_fit.py
 
 ```bash

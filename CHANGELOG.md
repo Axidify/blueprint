@@ -99,6 +99,19 @@ See [docs/maintaining.md](docs/maintaining.md).
   on the presenter's bar: against the mock-up first shown in this version's live session, or the version before.
 - `serve --no-open` leaves the default browser shut. `live done … --cr R-051` records a possible change request a
   comment carries beside its own outcome.
+- **The development backlog.** Say "write the backlog" once the requirements are signed. The new `backlog`
+  skill turns each requirement group into an epic and each requirement into a user story, written as the
+  user would say it, with acceptance criteria from the screens and status rules. It makes a workbook for
+  the team, a traceability sheet for the client (each requirement with its screens, stories, UAT scenarios
+  and change requests), and import files for Project Desk, Jira and Azure DevOps. Gaps it finds, such as
+  estimated work no requirement asks for, go into the register. The workbook and import files are in
+  `Internal – estimates and change requests`, the traceability sheet in `5 Requirements document`.
+- **Story points from the estimate.** Each story's points are worked out from the estimate lines it
+  delivers, with a story-point scale the lead developer sets once in `knowledge/building-blocks.md`. They
+  are never guessed: without the scale, a rate or an estimate, the story has no points and says why. New
+  workspaces have the table; for an existing one, `python -I tools/backlog.py scale` prints it to add.
+- **A roadmap** ([docs/roadmap.md](docs/roadmap.md)) of the documents that could come next across the
+  project lifecycle, in phases, with the decisions agreed so far.
 
 ### Changed
 - **Blueprint assumes no platform, rate or manday split.** It starts neutral: the company's name, currency

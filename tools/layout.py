@@ -261,6 +261,24 @@ def defect_log_xlsx(project):
     return uat_output(project) / DEFECT_LOG
 
 
+def backlog_source(project):
+    return machine(project) / "backlog"
+
+
+def backlog_outputs(project, source):
+    """The files made from a backlog source, by kind: the team's workbook and the import files with the other
+    internal files, the traceability sheet with the requirements document it traces (it is for the client).
+    In the old layout, all of them beside the source."""
+    stem = Path(source).stem
+    if is_new(project):
+        inside, client = Path(project) / INTERNAL, Path(project) / REQUIREMENTS
+    else:
+        inside = client = Path(source).parent
+    return {"internal": inside / f"{stem}.xlsx", "traceability": client / f"{stem} - traceability.xlsx",
+            "project_desk": inside / f"{stem} - Project Desk import.xlsx", "jira": inside / f"{stem} - Jira import.csv",
+            "ado": inside / f"{stem} - Azure DevOps import.csv"}
+
+
 def changes_source(project):
     return machine(project) / "changes"
 
@@ -744,6 +762,7 @@ def main():
                          ("workshop documents", workshops_output(p)), ("mock-up", mockup_dir(p)), ("screenshots", screenshots_dir(p)),
                          ("comments", feedback_file(p)), ("requirements documents", output_dir(p)), ("issued versions", issued_file(p)),
                          ("estimates (sources)", estimates_source(p)), ("estimates (Excel)", estimates_output(p)),
+                         ("backlog (sources)", backlog_source(p)),
                          ("UAT (sources)", uat_source(p)), ("UAT documents", uat_output(p)),
                          ("defect log", defect_log(p)), ("defect log (Excel)", defect_log_xlsx(p)), ("CR log", cr_log(p)),
                          ("CR notes", cr_notes_dir(p)), ("CR log (Excel)", cr_log_xlsx(p))):

@@ -229,6 +229,23 @@ requests`), and for a new CR `7 Change requests/CR-001 <title> - change request 
 would change, the timeline impact in weeks, and the price once the project lead has set it ("Quotation to
 follow" until then).
 
+### backlog
+
+**Ask:** "write the backlog", "user stories for the developers", "import the requirements into Project
+Desk / Jira / Azure DevOps", "traceability matrix"
+Turns what the client signed (the version issued last, or the current spec, and it says which) into the
+development backlog: an epic for each requirement group and a user story for each requirement, written as
+the user would say it, with acceptance criteria from the screens and status rules, and story points worked
+out from the estimate with the lead developer's story-point scale (never guessed: a story without them says
+why). Technical work becomes Tasks. Gaps found while writing (estimated work no requirement asks for, a
+screen no requirement covers, a story waiting on an open client question) go into the register. See
+[Development backlog](backlog.md).
+**Output:** the backlog workbook for the team (internal) and the import files in
+`Internal – estimates and change requests/`, a traceability
+sheet for the client (each requirement with its screens, stories, UAT scenarios and change requests, never
+points) in `5 Requirements document/`; import files for Project Desk, Jira and Azure DevOps; and the `.json`
+they are made from in `_blueprint/backlog/`.
+
 ### uat-scripts
 
 **Ask:** "prepare the UAT scripts", "write the test scenarios", "test cases for UAT", "get ready for UAT"
@@ -257,4 +274,5 @@ See [Maintaining](maintaining.md).
 
 ## Planned
 
-A Figma connection.
+A Figma connection. For the documents that could come next across the project lifecycle, see the
+[Roadmap](roadmap.md).

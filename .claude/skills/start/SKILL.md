@@ -64,8 +64,9 @@ closing a project, or what the platform can do, use the matching skill: `generat
 client), `platform-fit` (what is standard, custom work or not supported on the project's tech stack),
 `prep-workshop` (an agenda for the next client session), `mockup-design` (the mock-up's look: the client's
 logo, colours, font, menu), `client-answers` (the client answered the open
-questions: a returned register, an e-mail or call notes), `uat-scripts` (test scenarios for the client's
-testers), `change-request` (the client asked for something during development or UAT: in scope or a
+questions: a returned register, an e-mail or call notes), `backlog` (user stories and story points for the
+developers, a traceability sheet, imports for Project Desk, Jira or Azure DevOps), `uat-scripts` (test scenarios
+for the client's testers), `change-request` (the client asked for something during development or UAT: in scope or a
 change request?), `tour` (a guided first run), `close-project`. Recording that a document went to the client: `python -I tools/project.py issue <slug>`.
 If `python -I tools/project.py check` reports problems, offer to fix them with `--fix`.
 
