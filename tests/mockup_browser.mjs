@@ -819,5 +819,93 @@ await visit(`#/application-details?role=employee&record=${out.fresh.id}`);
 out.fresh.fields = await page.evaluate(() => Object.fromEntries(["reason", "leave_type", "from"].map((f) => [f, (document.querySelector(`[data-el="field:${f}"] .f-value`) || {}).textContent])));
 out.fresh.others = await page.evaluate(() => Mockup.data.applications.map((x) => ({ id: x.id, status: x.status, reason: x.reason })));
 
+// ---- a row action that opens a dialog: on that row's record, so its confirm button moves that row
+const staffRows = () => page.evaluate(() => [...document.querySelectorAll("#content tbody tr[data-row]")].filter((tr) => !tr.hidden)
+  .map((tr) => tr.innerText.replace(/\s+/g, " ").trim()));
+out.rowDialog = {};
+await open("#/staff?role=manager");
+out.rowDialog.link = await page.evaluate(() => { const a = document.querySelector('#content tbody tr[data-row] [data-el="action:Suspend"]');
+  return { go: a.dataset.go || null, dialog: a.dataset.dialog || null, record: a.dataset.record }; });
+await page.click('#content tbody tr[data-row] [data-el="action:Suspend"]');
+await page.waitForSelector(".modal");
+out.rowDialog.opened = await state();
+await page.click('.modal [data-el="button:Suspend"]');
+await page.waitForTimeout(200);
+out.rowDialog.after = { ...(await state()), first: (await staffRows())[0] };
+
+// ---- a filter whose values include the word All: "All" once, as no filter; the real value is a choice of its own
+out.allFilter = {};
+await open("#/staff?role=manager");
+out.allFilter.options = await page.evaluate(() => [...document.querySelectorAll('[data-filter="office"] option')].map((o) => [o.textContent, o.value]));
+await page.selectOption('[data-filter="office"]', "All");
+await page.click('[data-el="button:Search"]');
+out.allFilter.picked = (await staffRows()).map((row) => row.split(" ").slice(4, 5)[0]);
+await page.click('[data-el="button:Clear Filters"]');
+out.allFilter.cleared = { rows: (await staffRows()).length, value: await page.inputValue('[data-filter="office"]') };
+// A search box on a field that has no column: named in words, never by the field's id.
+out.searchName = await page.evaluate(() => [...document.querySelectorAll('[data-el^="search:"]')].map((s) => [s.dataset.el, s.querySelector("label").textContent]));
+
+// ---- the presenter's tools never cover what is on a page: everything can be scrolled clear of the bar and of the
+// open Feedback panel, at the bottom right too (the last buttons, the last row and its action), on a computer and a phone
+const covered = () => page.evaluate(() => {
+  window.scrollTo(0, document.documentElement.scrollHeight);
+  const parts = [...document.querySelectorAll("#content .btn, #content a.link, #content tbody tr[data-row]:last-of-type td")];
+  const seen = parts.filter((el) => { const r = el.getBoundingClientRect(); return r.width && r.height && r.top >= 0 && r.bottom <= window.innerHeight && r.left >= 0 && r.right <= window.innerWidth; });
+  const under = seen.filter((el) => { const r = el.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !hit || !!hit.closest(".fb-tools"); });
+  const label = (el) => el.dataset.el || el.textContent.trim();
+  const last = document.querySelector("#content .form-buttons .btn:last-child");
+  return { under: under.map(label), lastButtonSeen: !!last && seen.includes(last), panel: !document.getElementById("fb-panel").hidden };
+});
+// Comments enough for a long Feedback panel, as after a session (served for this page only: the room's file is not touched).
+const many = [...Array(8).keys()].map((n) => ({ id: `FB-9${n}`, screen: "staff", element: "column:Name", text: `A comment long enough to take two lines of the panel, number ${n}`,
+  author: "Someone", time: "2026-11-07T10:00:00", version: "0.1" }));
+many.push({ id: "FB-980", screen: "staff", element: "header:connection", text: "on the project's own part of the top bar", time: "2026-11-07T10:00:00", version: "0.1" });
+many.push({ id: "FB-981", screen: "staff", element: "search:staff_no", text: "saved under the field's id", time: "2026-11-07T10:00:00", version: "0.1" });
+const longPanel = (route) => (route.request().method() === "GET" ? route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(many) }) : route.continue());
+out.room = {};
+for (const [name, size] of [["desktop", { width: 1280, height: 800 }], ["phone", { width: 375, height: 812 }]]) {
+  await page.setViewportSize(size);
+  for (const hash of ["#/staff?role=manager", "#/application-details?role=employee"]) {
+    await open(hash);
+    out.room[`${name} ${hash}`] = await covered();
+  }
+  await page.route("**/api/feedback", longPanel);
+  await open("#/staff?role=manager");
+  await page.click("#fb-toggle");
+  await page.waitForTimeout(300);
+  out.room[`${name} feedback`] = await covered();
+  if (name === "desktop") {
+    // In Feedback mode the last row's action takes a comment like anything else.
+    const actions = page.locator('#content tbody tr[data-row] [data-el="action:Suspend"]');
+    await actions.last().click({ timeout: 5000 });
+    await page.waitForSelector(".fb-dialog");
+    out.actionComment = await page.textContent(".fb-title");
+    await page.keyboard.press("Escape");
+    // The Feedback panel names each comment by what it is about: a part the project's code added by its own name.
+    out.panelNames = await page.evaluate(() => [...document.querySelectorAll("#fb-panel .fb-el")].map((e) => e.textContent));
+    await page.click('[data-el="header:connection"]');
+    await page.waitForSelector(".fb-dialog");
+    out.connectionComment = await page.textContent(".fb-title");
+    await page.keyboard.press("Escape");
+  }
+  await page.unroute("**/api/feedback", longPanel);
+}
+
+// ---- a file field on a phone says what a phone does: take a photo or choose a file
+await page.setViewportSize({ width: 375, height: 812 });
+await open("#/new-application?role=employee");
+out.fakes.fileOnPhone = await fileText();
+await page.setViewportSize({ width: 1280, height: 800 });
+await page.addStyleTag({ content: ".content { flex: 0 0 390px !important; }" });  // a phone frame, drawn by a project's own code
+await page.evaluate(() => window.dispatchEvent(new Event("resize")));
+out.fakes.fileInPhoneFrame = await fileText();
+await open("#/new-application?role=employee");
+out.fakes.fileOnComputer = await fileText();
+
+// ---- the process flow: a step that names its role and status by id shows their names
+await open("#/__flow?role=manager");
+out.flow = await page.evaluate(() => [...document.querySelectorAll(".flow-step")].map((s) => [s.querySelector(".flow-role").textContent,
+  s.querySelector(".flow-status .chip").textContent, s.querySelector(".flow-status .chip").className]));
+
 await browser.close();
 console.log(JSON.stringify(out));

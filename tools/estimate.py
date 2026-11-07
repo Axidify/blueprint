@@ -451,8 +451,12 @@ def compute(est, project, kdir):
     counted = [l for l in lines if l["priced"] and not l["pct"]]  # percent lines only follow the build
     counted_high = sum(l["high"] for l in counted)
     share = sum(l["high"] for l in counted if not l.get("calibrated")) / counted_high if counted_high else 0
-    why = (f"{round(share * 100)}% of the priced mandays use low-confidence rates or the lead developer's figures for "
-           "this estimate, not rates calibrated from delivered projects.")
+    # Says where the figures that are not calibrated came from: the knowledge base's own, not yet backed by
+    # delivered projects, or the lead developer's for this estimate. It used to name both whatever was used.
+    uncalibrated = [l for l in counted if not l.get("calibrated")]
+    given = [l for l in uncalibrated if l["kind"] == "md" or l["rate_from"].startswith("provisional")]
+    sources = (["the knowledge base's low-confidence figures"] if len(given) < len(uncalibrated) else [])         + (["figures the lead developer gave for this estimate"] if given else [])
+    why = f"{round(share * 100)}% of the priced mandays rest on {' and '.join(sources)}, not rates calibrated from delivered projects."
     if share > 0.5:
         cap("low", why)
     elif share > 0.2:
@@ -738,7 +742,10 @@ def render_xlsx(est, res, out):
     steps = []
     ask = []
     if need:
-        ask.append(f"the rates on the Rates needed sheet ({plural(len(need), 'building block')})")
+        used_by = sum(len(v) for v in need.values())  # the lines are counted in blocks: say how the two numbers relate
+        ask.append(f"the rates of {plural(len(need), 'building block')} on the Rates needed sheet"
+                   + (f" (the {plural(used_by, 'line')} without a rate use {'it' if len(need) == 1 else 'them'})"
+                      if used_by != len(need) else ""))
     if other_unpriced:
         ask.append(f"the shares for {plural(len(other_unpriced), 'item')} of other work (Lines sheet)")
     if ask:

@@ -11,6 +11,44 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+### Fixed
+- **No team references reach the client.** The client's copy of the questions (`Questions for the client.xlsx`,
+  and the register's For client sheet) says "mock-up comment" and a screen's or dialog's title in the Where
+  column, instead of comment ids (FB-009) and spec ids (`pickup-dialog`); rendering warns about any such
+  reference left in a client item, and the internal sheets keep the ids. `mockup.py build` warns when text the
+  client reads in the mock-up names a register item (R-023) or a mock-up comment (FB-012), and says where. The
+  process flow diagram shows the names of roles and statuses written as ids (`role: security`), so the picture
+  in the requirements document matches its tables.
+- **UAT scripts follow the right record.** When a project has two kinds of record that share the statuses (a
+  daily plan approved on its own screen and the tasks in it), the draft gives each its own main process instead
+  of mixing them. Every status change is made with the button that makes it (on a screen, in a confirmation
+  window or on a list row), on the screen where it is, signed in as the role allowed to press it, including
+  the supervisor who approves. A record that already exists is opened from its list rather than made again
+  with New, and "no button in the mock-up does …" appears only when there really is none.
+- **A row action can open a dialog.** An action with `dialog` on a list row now opens its dialog on that row,
+  and the dialog's confirm button moves that row (`set_status`) and goes on with its record (`to`). It used to
+  be a link to the first screen, without a word from the build. A setting a row action does not use (`style`,
+  `creates`, `example`) is now listed among those the mock-up ignores.
+- **The presenter's tools no longer cover the page.** The bar, and the Feedback panel above it, used to lie
+  over the last buttons of a page and the last row of a list, so they could not be clicked or commented on.
+  The page now leaves as much room at its bottom as they take, on a computer and on a phone.
+- **Earlier work is found when the name is written differently.** Hyphens and dots no longer matter ("E-PASS"
+  is "EPASS"), and one distinctive word in common is enough even with other words around it. A new project
+  marks earlier work for the same client ("same client"), and `project.py find --client` lists that client's
+  projects first. Matching an inbox file finds an archived project from a distinctive word in the file name,
+  and no longer offers an unrelated project as the best guess because of words found on almost any mock-up
+  ("User", "Details").
+- **Smaller fixes in the mock-up.** A filter offers "All" only once (a value that is the word "All" makes the
+  first choice read "Any"). A search box on a field without a column is named by the field's label, never its
+  id, on screen, in comments, in `mockup.py feedback`, `live list` and the comments workbook. A comment on a part
+  of the top bar that the project's own code adds is named by that part, not "the Logout link". A file field on
+  a phone reads "Take a photo or choose a file".
+- **Smaller fixes in the documents.** The requirements document lists each requirement's screens once, in
+  document order, and suggests giving an item its own `screens` when its group lists several; the generator
+  warns when a process flow step names a role or status the spec does not have. The estimate's Overview says
+  where its uncalibrated figures come from (the knowledge base, the lead developer, or both) instead of always
+  naming both, and its next step relates the building blocks to the lines that need them.
+
 ## [1.4.0] - 2026-11-07
 
 ### Added

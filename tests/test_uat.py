@@ -369,3 +369,95 @@ def test_an_item_whose_audience_is_not_client_counts_as_internal(project, run):
     path.write_text(json.dumps(scripts), encoding="utf-8")
     errors, _ = uat.check(scripts, project)
     assert any("R-009" in e for e in errors), errors
+
+
+# ====================================================================== two kinds of record
+# tests/fixtures/two-records: a made-up batch of leave applications, approved on the batch's screen, whose
+# applications then move on their own screens. The spec has one list of statuses for both.
+TWO = support.ROOT / "tests" / "fixtures" / "two-records"
+
+
+@pytest.fixture
+def two(tmp_path):
+    folder = tmp_path / "leave-batch"
+    (folder / "spec").mkdir(parents=True)
+    shutil.copy(TWO / "spec" / "app.yaml", folder / "spec" / "app.yaml")
+    return folder
+
+
+def steps_on(case):
+    return [(s.get("role"), s["action"], s.get("screen")) for s in case["steps"]]
+
+
+def test_each_kind_of_record_has_its_own_main_process_on_its_own_screens(two, run):
+    _, scripts, _ = drafted(two, run)
+    batch, application = cases_of(scripts, "main process")
+    assert batch["title"] == "Main process: the batch, from Open to Closed"
+    assert application["title"] == "Main process: the application, from Waiting to Archived"
+    # the batch never goes to an application's screen, nor an application to the batch's
+    assert {s.get("screen") for s in batch["steps"]} <= {"login", "batches", "new-batch", "batch"}
+    assert {s.get("screen") for s in application["steps"]} <= {"login", "applications", "application"}
+    # every move is made with the button that makes it, nothing is left for Claude to find
+    assert "todo" not in batch
+    assert batch["source"] == "status rules: Open > Submitted > Approved > Closed"
+    actions = [a for _, a, _ in steps_on(batch)]
+    assert actions.index("Press Save batch") < actions.index("Press Submit to HR") < actions.index("Press Approve") \
+        < actions.index("Press Confirm approval") < actions.index("Press Close batch")
+
+
+def test_the_role_allowed_to_press_each_button_makes_the_move(two, run):
+    _, scripts, _ = drafted(two, run)
+    batch, application = cases_of(scripts, "main process")
+    assert batch["roles"] == ["officer", "manager"]  # the HR Manager approves: the process flow names roles by name
+    actions = [a for _, a, _ in steps_on(batch)]
+    assert actions.index("Sign in as HR Manager") < actions.index("Press Approve")
+    assert actions.index("Press Submit to HR") < actions.index("Sign in as HR Manager")
+    assert application["roles"] == ["clerk"]
+
+
+def test_a_record_that_exists_already_is_opened_from_its_list_not_made_again(two, run):
+    _, scripts, _ = drafted(two, run)
+    batch = cases_of(scripts, "main process")[0]
+    actions = [a for _, a, _ in steps_on(batch)]
+    # made once with New batch; submitted, approved and closed from the batch opened in its list
+    assert actions.count("Press New batch") == 1
+    submit = actions.index("Press Submit to HR")
+    assert actions[submit - 2:submit] == ["Open Batches from the side menu", "Find the batch and press Open"]
+    resubmit = next(c for c in cases_of(scripts, "status change") if c["title"] == "Submit to HR: from Returned to Submitted")
+    assert "Press New batch" not in [s["action"] for s in resubmit["steps"]]
+    assert "Find the batch and press Open" in [s["action"] for s in resubmit["steps"]]
+
+
+def test_a_later_kind_of_record_starts_from_a_sample_record_and_a_row_action_moves_it(two, run):
+    _, scripts, _ = drafted(two, run)
+    application = cases_of(scripts, "main process")[1]
+    assert application["preconditions"] == ["An application in Waiting, for example LV-101"]
+    assert "apart from the batch" in application["todo"]  # Claude says what the batch must be in
+    actions = [a for _, a, _ in steps_on(application)]
+    assert "Press Record in payroll" in actions and "Find LV-101 and press Archive" in actions
+
+
+def test_a_button_shown_in_a_status_wins_over_a_form_that_adds_a_record(two, run):
+    """A status move is made by the button shown in that status (in a dialog or a row too), never by the main
+    button of the form that adds a new record in the same status."""
+    _, scripts, _ = drafted(two, run)
+    titles = [c["title"] for c in cases_of(scripts, "status change")]
+    assert "Return: from Submitted to Returned" in titles  # confirmed in a dialog
+    late = next(c for c in cases_of(scripts, "status change") if c["title"] == "Accept late: from Late to Waiting")
+    assert late["roles"] == ["manager"] and "Add application" not in all_text(late)
+    assert [s["action"] for s in late["steps"]][-2:] == ["Find LV-104 and press View", "Press Accept late"]
+    assert not [c for c in scripts["cases"] if "no button" in str(c.get("todo"))]
+    assert "OK:" in run("check", two)
+
+
+def test_a_flow_step_no_button_makes_is_named_with_the_button_that_moves_it_elsewhere(two, run):
+    spec = support.load_spec(two)
+    batch_screen = next(s for s in spec["screens"] if s["id"] == "batch")
+    close = next(b for b in batch_screen["buttons"] if b["label"] == "Close batch")
+    close["when"] = {"status": "Submitted"}  # wrongly shown, so nothing closes an approved batch
+    support.write_spec(two, spec)
+    _, scripts, _ = drafted(two, run)
+    batch = cases_of(scripts, "main process")[0]
+    assert "no button in the mock-up moves a batch from Approved to Closed (Close batch on Leave Batch does it from Submitted)" \
+        in batch["todo"]
+    assert batch["steps"][-1]["expected"].endswith("Its status is Closed.")

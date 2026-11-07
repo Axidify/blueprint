@@ -319,6 +319,42 @@ def test_requirements_show_priority_screens_and_open_decisions(wide):
     assert table[3][1] == "System shall show the booking as specified in section 4.4."
 
 
+def test_requirement_screens_are_in_document_order_and_an_item_shows_its_own(tmp_path):
+    """A group listing its screens out of order printed them out of order on every item ("5.3, 5.5, 5.4")."""
+    spec = support.load_spec(support.EXAMPLE)
+    ids = [sc["id"] for sc in spec["screens"] if sc.get("type") != "login"]
+    group = spec["requirements"][0]
+    group["screens"] = [ids[3], ids[1], ids[2], ids[1]]
+    group["items"] = [group["items"][0], {"text": group["items"][1] if isinstance(group["items"][1], str) else group["items"][1]["text"],
+                                          "screens": [ids[2]]}] + group["items"][2:]
+    result = support.generate(support.make_project(tmp_path / "p", spec=support.changed(spec)))
+    table = rows(tables(support.split_at_headings(chapter(result.doc, TITLES["requirements"]), 2)[1][1])[0])
+    numbers = lambda cell: [x.strip() for x in cell.split(",")]
+    first = numbers(table[1][-1])
+    assert first == sorted(first, key=lambda x: [int(n) for n in x.split(".")]) and len(first) == 3, "document order, each once"
+    assert len(numbers(table[2][-1])) == 1, "an item's own screens replace its group's"
+    assert "list several screens" not in result.log, "the group has an item that says which screen it is about"
+    group["items"][1] = group["items"][1]["text"]
+    result = support.generate(support.make_project(tmp_path / "q", spec=support.changed(spec)))
+    assert f"{group['id']} lists several screens and none of its items says which it is about" in result.log
+
+
+def test_a_process_flow_step_gives_names_and_a_value_matching_nothing_is_reported(tmp_path):
+    """Steps written with a role's or status's id ("security", "in-progress") were drawn as those ids in the
+    process diagram, while the status table beside it gave the names."""
+    spec = support.load_spec(support.EXAMPLE)
+    role, status = spec["roles"][1], spec["statuses"][1]
+    spec["process_flow"] = {"steps": [{"name": "Review", "role": role["id"], "status": status["id"]},
+                                      {"name": "Archive", "role": "Nobody", "status": spec["statuses"][2]["name"]}]}
+    steps, problems = generate_requirements.flow_names(spec)
+    assert [(s_["role"], s_["status"]) for s_ in steps] == [(role["name"], status["name"]), ("Nobody", spec["statuses"][2]["name"])]
+    assert problems == [f"process flow, step Archive: role 'Nobody' is neither the name nor the id of a role in the spec, so "
+                        f"the diagram does not match the roles the document lists ({', '.join(r['name'] for r in spec['roles'])})"]
+    result = support.generate(support.make_project(tmp_path / "p", spec=spec))
+    assert "role 'Nobody' is neither the name nor the id" in result.log
+    assert "role '" + role["id"] + "'" not in result.log, "an id is a way to name a role, not a mistake"
+
+
 # ====================================================================== screens
 def test_one_section_per_screen_in_spec_order(built):
     number = next(h for h in support.headings(built.doc, 1) if h.endswith(" " + TITLES["screens"])).split(" ")[0]

@@ -44,6 +44,7 @@ import http.server
 import io
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -205,6 +206,8 @@ KNOWN_KEYS = {
     "field": {"id", "label", "type", "required", "readonly", "default", "length", "options", "options_from", "placeholder", "help",
               "source", "validation", "roles"},
     "button": {"label", "style", "to", "toast", "dialog", "roles", "when", "example", "access", "set_status", "also_move", "creates"},
+    # A row action is a link in each row: it has no style, and adds no record. `dialog` opens on that row's record.
+    "action": {"label", "to", "toast", "dialog", "roles", "when", "access", "set_status", "also_move"},
     "dialog": {"id", "title", "message", "fields", "list", "doc_table", "srs_table", "confirm"},
     "figure": {"label", "value", "count", "formula"},
     "process_flow": {"title", "steps", "reject", "notes"},
@@ -225,12 +228,13 @@ SHAPES = {
              "screenshots": ["screenshot"], "data": dict, "process_flow": "process_flow"},
     "process_flow": {"steps": ["flow step"], "notes": [str]},
     "screen": {"roles": [str], "stats": ["figure"], "list": "list", "buttons": ["button"], "sections": ["section"], "timeline": ["progress step"]},
-    "list": {"columns": ["column"], "filters": [str], "search": [str], "actions": ["button"], "toolbar": ["button"], "where": dict,
+    "list": {"columns": ["column"], "filters": [str], "search": [str], "actions": ["action"], "toolbar": ["button"], "where": dict,
              "where_by_role": dict, "where_record": dict},
     "status": {"auto": [str]},
     "section": {"fields": ["field"]},
     "field": {"options": [str]},
     "button": {"roles": [str], "when": dict},
+    "action": {"roles": [str], "when": dict},
     "dialog": {"fields": ["field"], "list": "list", "confirm": "button"},
     "also_move": {"copy": dict},
 }
@@ -272,7 +276,7 @@ def shape_errors(spec):
                 errors.append(f"{here} must be a set of settings (key: value), not {what(value)}")
             elif shape is not dict:
                 walk(", ".join(x for x in (where, key) if x), shape, value)
-        if kind == "button" and item.get("also_move") is not None:
+        if kind in ("button", "action") and item.get("also_move") is not None:
             links = item["also_move"] if isinstance(item["also_move"], list) else [item["also_move"]]
             for link in links:
                 if not isinstance(link, dict):
@@ -334,14 +338,26 @@ def status_moves(spec):
     def holds_record(screen):
         return screen.get("data") in data and screen.get("type") in ("detail", "form")
 
+    def row_sources(lst, a):
+        """The statuses a row action's row can be in: its `when`, or wherever the list shows it (its `where`,
+        and each role's own filter)."""
+        found = sources(a.get("when"))
+        if found is None:
+            shown = [sources(c) for c in [lst.get("where")] + list((lst.get("where_by_role") or {}).values()) if c]
+            found = None if not shown or any(x is None for x in shown) else [st for x in shown for st in x]
+        return found
+
     # A button that adds a record (see new_records) has that record to move: it starts in the button's status.
     creating = {(n["screen"], n["label"]): n["data"] for n in new_records(spec)}
+    # What opens each dialog, and the record its confirm button then moves: the screen's (a detail screen, a form
+    # on a record), or the row of a list whose action opened it.
     moves, openers = [], {}
     for s in spec.get("screens") or []:
         where = f"screen {s.get('id')}"
         for b in s.get("buttons") or []:
             if b.get("dialog"):
-                openers.setdefault(b["dialog"], []).append((s, b))
+                openers.setdefault(b["dialog"], []).append({"key": (s.get("id"), b.get("label")), "record": holds_record(s),
+                                                            "data": s.get("data"), "sources": sources(b.get("when"))})
             if b.get("set_status") is not None and not b.get("dialog"):
                 new = creating.get((s.get("id"), b.get("label")))
                 if new and not holds_record(s):
@@ -350,12 +366,10 @@ def status_moves(spec):
                     add(where, b.get("label"), b["set_status"], sources(b.get("when")), holds_record(s), s.get("data"), b.get("also_move"))
         lst = s.get("list") or {}
         for a in lst.get("actions") or []:
-            if a.get("set_status") is not None:
-                found = sources(a.get("when"))
-                if found is None:  # wherever the list shows it: its `where`, and each role's own filter
-                    shown = [sources(c) for c in [lst.get("where")] + list((lst.get("where_by_role") or {}).values()) if c]
-                    found = None if not shown or any(x is None for x in shown) else [st for x in shown for st in x]
-                add(where, a.get("label"), a["set_status"], found, True, lst.get("data"), a.get("also_move"))
+            if a.get("dialog"):
+                openers.setdefault(a["dialog"], []).append({"key": None, "record": True, "data": lst.get("data"), "sources": row_sources(lst, a)})
+            elif a.get("set_status") is not None:
+                add(where, a.get("label"), a["set_status"], row_sources(lst, a), True, lst.get("data"), a.get("also_move"))
         for b in lst.get("toolbar") or []:
             if b.get("set_status") is not None:
                 add(where, b.get("label"), b["set_status"], None, False, None, b.get("also_move"))
@@ -363,15 +377,15 @@ def status_moves(spec):
         confirm = d.get("confirm") or {}
         if confirm.get("set_status") is None:
             continue
-        opened = [(s, b) for s, b in openers.get(d.get("id"), []) if holds_record(s)]
-        known = [sources(b.get("when")) for _, b in opened]
-        new = [creating[(s.get("id"), b.get("label"))] for s, b in openers.get(d.get("id"), []) if (s.get("id"), b.get("label")) in creating]
+        opened = [o for o in openers.get(d.get("id"), []) if o["record"]]
+        known = [o["sources"] for o in opened]
+        new = [creating[o["key"]] for o in openers.get(d.get("id"), []) if o["key"] in creating]
         if new and not opened:  # confirmed on a new form: the record it adds starts in this status
             add(f"dialog {d.get('id')}", confirm.get("label"), confirm["set_status"], [], True, new[0], confirm.get("also_move"))
             continue
         add(f"dialog {d.get('id')}", confirm.get("label"), confirm["set_status"],
             None if not known or any(k is None for k in known) else [st for k in known for st in k],
-            bool(opened), opened[0][0].get("data") if opened else None, confirm.get("also_move"))
+            bool(opened), opened[0]["data"] if opened else None, confirm.get("also_move"))
     return moves
 
 
@@ -702,7 +716,10 @@ def validate(spec, warnings=None):
                 errors.append(f"{where}: where_by_role names '{role}', which is not a role" + (f" (did you mean '{close[0]}'?)" if close else ""))
             for field in cond:
                 in_data(where, name, f"'where_by_role' for {role}:", field)
-        for a in (lst.get("actions") or []) + (lst.get("toolbar") or []):
+        for a in lst.get("actions") or []:
+            misspelt(f"{where}, action {a.get('label', '?')}", "action", a)
+            check_target(where, a)
+        for a in lst.get("toolbar") or []:
             misspelt(f"{where}, button {a.get('label', '?')}", "button", a)
             check_target(where, a)
         for a in lst.get("actions") or []:
@@ -876,7 +893,7 @@ def validate(spec, warnings=None):
             continue
         if not move["record"]:
             errors.append(f"{w}: set_status has no record to move here. It works on a detail screen, on a form with data, "
-                          "on a row action of a list, and in a dialog opened from a detail screen or such a form")
+                          "on a row action of a list, and in a dialog opened from a detail screen, such a form or a row action")
             continue
         known = fields_of(move["data"])
         if known is not None and "status" not in known:
@@ -897,6 +914,117 @@ def validate(spec, warnings=None):
         if shot.get("record") is not None and target.get("data") in data:
             has_record(where, target["data"], shot["record"])
     return list(dict.fromkeys(errors))  # a button that serves several steps would say the same thing once for each
+
+
+def team_ids(spec):
+    """The text the client reads in the mock-up that names an id only the team can look up: a register item
+    (R-023) or a mock-up comment (FB-012), as [(where, what, id)]. The requirements document's generator warns
+    about the same ids in the document; in the mock-up the client saw them in session after session. Texts read
+    are what is drawn on the client's screens: titles, menus, labels, help, placeholders, notes, messages,
+    choices, figures, statuses, the process flow, and the sample data shown in lists and on records. Team
+    notes (keys that start with _) and the parts the build leaves out never reach the room and are not read."""
+    try:  # the generator's own patterns, so the two always agree
+        from generate_requirements import FEEDBACK_ID, REGISTER_ID
+    except Exception:  # the generator cannot be loaded (python-docx missing): the same patterns
+        FEEDBACK_ID, REGISTER_ID = re.compile(r"\bFB-\d+\b"), re.compile(r"\bR-\d{3,}\b")
+    shown = spec_for_the_room(spec)
+    found = []
+
+    def look(where, what, value):
+        if isinstance(value, (list, tuple)):
+            for v in value:
+                look(where, what, v)
+            return
+        if isinstance(value, dict) or value is None or isinstance(value, bool):
+            return
+        for pattern in (REGISTER_ID, FEEDBACK_ID):
+            for x in dict.fromkeys(pattern.findall(str(value))):
+                found.append((where, what, x))
+
+    def button(where, b):
+        if isinstance(b, dict):
+            look(f"{where}, button {b.get('label', '?')}", "label", b.get("label"))
+            look(f"{where}, button {b.get('label', '?')}", "message", b.get("toast"))
+
+    def fields(where, items):
+        for f in items or []:
+            if isinstance(f, dict):
+                for key in ("label", "help", "placeholder", "default", "options"):
+                    look(f"{where}, field {f.get('id', '?')}", key, f.get(key))
+
+    def a_list(where, lst):
+        if not isinstance(lst, dict):
+            return
+        look(where, "list title", lst.get("title"))
+        look(where, "empty-list text", lst.get("empty"))
+        for c in lst.get("columns") or []:
+            if isinstance(c, dict):
+                look(where, "column", c.get("label"))
+        for b in (lst.get("actions") or []) + (lst.get("toolbar") or []):
+            button(where, b)
+
+    for s in shown.get("screens") or []:
+        if not isinstance(s, dict):
+            continue
+        w = f"screen {s.get('id')}"
+        for key in ("title", "subtitle", "menu", "html"):
+            look(w, key, s.get(key))
+        for stat in s.get("stats") or []:
+            if isinstance(stat, dict):
+                look(f"{w}, figure {stat.get('label', '?')}", "label", stat.get("label"))
+                look(f"{w}, figure {stat.get('label', '?')}", "value", stat.get("value"))
+        a_list(w, s.get("list"))
+        for b in s.get("buttons") or []:
+            button(w, b)
+        for sec in s.get("sections") or []:
+            if isinstance(sec, dict):
+                for key in ("title", "page_title", "note"):
+                    look(f"{w}, section {sec.get('title', '?')}", key, sec.get(key))
+                fields(w, sec.get("fields"))
+        for line in s.get("timeline") or []:
+            if isinstance(line, dict):
+                for key in ("step", "status", "comment"):
+                    look(f"{w}, progress step {line.get('step', '?')}", key, line.get(key))
+    for d in shown.get("dialogs") or []:
+        if isinstance(d, dict):
+            w = f"dialog {d.get('id')}"
+            look(w, "title", d.get("title"))
+            look(w, "message", d.get("message"))
+            fields(w, d.get("fields"))
+            a_list(w, d.get("list"))
+            button(w, d.get("confirm"))
+    for st in shown.get("statuses") or []:
+        if isinstance(st, dict):
+            look(f"status {st.get('id') or st.get('name')}", "name", st.get("name"))
+    flow = shown.get("process_flow") if isinstance(shown.get("process_flow"), dict) else {}
+    look("process_flow", "title", flow.get("title"))
+    look("process_flow", "reject", flow.get("reject"))
+    look("process_flow", "note", flow.get("notes"))
+    for step in flow.get("steps") or []:
+        if isinstance(step, dict):
+            look(f"process_flow, step {step.get('name', '?')}", "name", step.get("name"))
+    for name, records in (shown.get("data") or {}).items() if isinstance(shown.get("data"), dict) else []:
+        for row in records if isinstance(records, list) else []:
+            if not isinstance(row, dict):
+                continue
+            first = next(iter(row.values()), "?")
+            for key, value in row.items():
+                if key == "timeline" and isinstance(value, list):
+                    for line in value:
+                        if isinstance(line, dict):
+                            look(f"data {name}, record {first}, progress", "step", list(line.values()))
+                else:
+                    look(f"data {name}, record {first}", f"'{key}'", value)
+    return list(dict.fromkeys(found))
+
+
+def team_id_notes(spec):
+    """team_ids as sentences for the build to print."""
+    notes = []
+    for where, what, x in team_ids(spec):
+        kind = "a register item" if x.startswith("R-") else "a mock-up comment"
+        notes.append(f"{where}, {what}: names {x}, {kind} the client cannot look up")
+    return notes
 
 
 def spec_warnings(spec):
@@ -1073,6 +1201,11 @@ def build(project):
     warnings = spec_warnings(spec)
     if warnings:
         print("Settings the mock-up ignores (check the spelling, or start a note of your own with _):\n  " + "\n  ".join(warnings))
+    named = team_id_notes(spec)
+    if named:
+        print("The client sees these in the mock-up, and they name ids only the team can look up. Say in words what is "
+              "agreed or still open (the open question stays in the register), or move the note to a key that starts with _:\n  "
+              + "\n  ".join(named))
     return spec
 
 
@@ -1939,6 +2072,41 @@ def live_session(project):
     return data
 
 
+def humanised(name):
+    """A field id in words, where the spec writes no label for it: 'unit_ref' -> 'Unit Ref' (as the mock-up says it)."""
+    text = re.sub(r"[_\s]+", " ", str(name)).strip()
+    return re.sub(r"\b\w", lambda m: m.group().upper(), text) or str(name)
+
+
+def field_labels(spec):
+    """{field id: the label it is shown under}: a list column's label, else the label of a field of a screen or a
+    dialog with that id. Used to name a filter or search box that was saved under its field's id."""
+    labels = {}
+    for s in spec.get("screens") or []:
+        if not isinstance(s, dict):
+            continue
+        lists = [s.get("list")] + [d.get("list") for d in spec.get("dialogs") or [] if isinstance(d, dict)]
+        for lst in lists:
+            for c in (lst or {}).get("columns") or [] if isinstance(lst, dict) else []:
+                if isinstance(c, dict) and c.get("field") is not None and c.get("label"):
+                    labels.setdefault(str(c["field"]), str(c["label"]))
+    fields = [f for s in spec.get("screens") or [] if isinstance(s, dict) for sec in s.get("sections") or [] if isinstance(sec, dict)
+              for f in sec.get("fields") or []]
+    fields += [f for d in spec.get("dialogs") or [] if isinstance(d, dict) for f in d.get("fields") or []]
+    for f in fields:
+        if isinstance(f, dict) and f.get("id") is not None and f.get("label"):
+            labels.setdefault(str(f["id"]), str(f["label"]))
+    return labels
+
+
+def list_box_name(labels, name):
+    """The name of a filter or search box: the mock-up names it by its field's label. One saved before it did
+    (by the field's id, 'unit_ref') is named by the label, or by the id in words, never by the bare id."""
+    if name in labels:
+        return labels[name]
+    return humanised(name) if re.fullmatch(r"[a-z0-9_]+", str(name)) and "_" in str(name) else name
+
+
 def in_words(spec, element):
     """What a comment is about, as the mock-up names it: "the Status column", not "column:Status"."""
     if not element:
@@ -1950,8 +2118,12 @@ def in_words(spec, element):
         return f"the {next((f.get('label') for f in fields if f.get('id') == name), name)} field"
     words = {"column": "column", "button": "button", "action": "action", "menu": "menu item", "stat": "figure", "section": "section",
              "filter": "filter", "search": "search box", "tab": "tab", "dialog": "dialog"}
+    if kind in ("filter", "search"):
+        name = list_box_name(field_labels(spec), name)
     if kind == "title":
         return "the page title"
+    if kind == "header":  # the engine's own two; anything else in the top bar was added by the project's code
+        return {"user": "the signed-in user", "logout": "the Logout link"}.get(name, f"the {name}" if name else "the header")
     if kind == "region":
         return f"the {name}"
     if kind == "row":
@@ -2716,7 +2888,7 @@ def readable_element(element, labels):
     kind, _, name = str(element or "").partition(":")
     if not kind:
         return "The screen"
-    name = labels.get(name, name).replace("|", ", ")
+    name = (list_box_name(labels, name) if kind in ("filter", "search") else labels.get(name, name)).replace("|", ", ")
     if kind == "region" and name:  # 'region:area above the list' -> 'Area above the list'
         return name[:1].upper() + name[1:]
     return f"{ELEMENT_WORDS.get(kind, kind.capitalize())}: {name}" if name else ELEMENT_WORDS.get(kind, kind.capitalize())
@@ -2748,6 +2920,8 @@ def write_comments_workbook(project):
             for f in (sec or {}).get("fields") or []:
                 if isinstance(f, dict) and f.get("id"):
                     labels.setdefault(str(f["id"]), str(f.get("label") or f["id"]))
+    for field, label in field_labels(spec).items():  # a search box saved under its field's id: a list column's label
+        labels.setdefault(field, label)
     number = lambda c: int(re.sub(r"\D", "", str(c["id"])) or 0)
     comments.sort(key=number)
 

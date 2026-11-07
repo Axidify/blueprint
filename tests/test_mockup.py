@@ -34,6 +34,16 @@ OWN_JS = """Mockup.onRender(function (view) {
   mark.textContent = "own code on " + view.screen + " as " + view.role;
   view.root.appendChild(mark);
 });
+// A part of the top bar the engine does not draw, as a project's own code adds one (a connection light).
+Mockup.onRender(function (view) {
+  var bar = view.root.querySelector(".topbar-right");
+  if (!bar || bar.querySelector('[data-el="header:connection"]')) return;
+  var light = document.createElement("span");
+  light.setAttribute("data-el", "header:connection");
+  light.setAttribute("data-custom", "no");  // not tagged as custom work: the custom-work test counts its own
+  light.textContent = "Online";
+  bar.insertBefore(light, bar.firstChild);
+});
 """
 
 
@@ -137,6 +147,32 @@ def mockup_spec():
     # A step still to come that the spec gives no word for: the mock-up says Waiting.
     next(r for r in spec["data"]["applications"] if r["id"] == "LV-T-1")["timeline"] = [
         {"step": "Submitted", "by": "Nur Aisyah", "at": "2026-11-05 09:12", "status": "Done"}, {"step": "Second check", "by": "Somebody Else", "at": ""}]
+    with_staff(spec)
+    return spec
+
+
+def with_staff(spec):
+    """A long list of staff (made up for the tests): a row action that opens a dialog on its row, an office
+    whose value is the word All, a search on a field that has no column, and buttons below the list, for the
+    presenter's tools that must never cover them."""
+    spec["statuses"] += [
+        {"id": "active", "name": "Active", "meaning": "Made up for the tests.", "color": "green", "next": ["suspended"]},
+        {"id": "suspended", "name": "Suspended", "meaning": "Made up for the tests.", "color": "red", "next": ["active"]}]
+    offices = ["HQ", "All", "North"]
+    spec["data"]["staff"] = [{"staff_id": f"S-{n:02d}", "name": f"Staff Member {n}", "office": offices[n % 3], "staff_no": f"E-{1000 + n}",
+                              "status": "Suspended" if n == 3 else "Active"} for n in range(1, 15)]
+    spec["dialogs"].append({"id": "suspend-dialog", "title": "Suspend Staff", "message": "They can no longer sign in.",
+                            "confirm": {"label": "Suspend", "style": "danger", "set_status": "suspended", "toast": "Suspended {id}"}})
+    spec["screens"].append({
+        "id": "staff", "type": "list", "title": "Staff", "menu": "Staff", "roles": ["manager"],
+        "list": {"data": "staff", "filters": ["office"], "search": ["staff_no"],
+                 "columns": [{"field": "staff_id", "label": "Staff ID"}, {"field": "name", "label": "Name"}, {"field": "office", "label": "Office"},
+                             {"field": "status", "label": "Status", "chip": True}],
+                 "actions": [{"label": "Suspend", "dialog": "suspend-dialog", "when": {"status": "Active"}}]},
+        "buttons": [{"label": "Export", "toast": "Exported"}, {"label": "Add Staff", "style": "primary", "toast": "Added"}]})
+    # A process flow whose steps name their role and status by id, as the format allows.
+    spec["process_flow"] = {"title": "Leave process", "steps": [{"name": "Apply", "role": "employee", "status": "pending"},
+                                                                {"name": "Suspend staff", "role": "manager", "status": "suspended"}]}
     return spec
 
 
@@ -576,6 +612,52 @@ def test_keys_the_format_does_not_know_are_warned_about_but_do_not_stop_the_buil
     assert "screen my-applications: 'ba_note' is not a screen setting, so the mock-up ignores it. Start it with _ if it is a note of your own" in warnings
     assert any("'ticket' is not a field setting" in w for w in warnings) and any("process_flow, step" in w and "'owner'" in w for w in warnings)
     assert len(warnings) == 3
+
+
+def test_a_row_action_may_open_a_dialog_and_says_what_it_ignores():
+    """`dialog` on a row action used to be accepted without a word and drawn as a link to nowhere. It now opens
+    its dialog on the row; a setting a row action does not use (it is a link, not a button) is warned about."""
+    spec = json.loads(json.dumps(support.load_spec(support.EXAMPLE), default=str))
+    listing(spec)["actions"].append({"label": "Reject now", "dialog": "reject-dialog", "style": "danger"})
+    assert mockup.validate(spec) == []
+    assert mockup.spec_warnings(spec) == ["screen approvals, action Reject now: 'style' is not an action setting, so the mock-up ignores it. "
+                                          "Start it with _ if it is a note of your own"]
+    listing(spec)["actions"][-1] = {"label": "Reject now", "dialog": "reject-dialgo"}
+    assert "screen approvals: unknown dialog 'reject-dialgo'" in mockup.validate(spec)
+    listing(spec)["actions"][-1] = {"label": "Reject now", "dialgo": "reject-dialog"}
+    assert any("'dialgo' is not an action setting (did you mean 'dialog'?)" in e for e in mockup.validate(spec))
+
+
+def test_a_dialog_a_row_action_opens_moves_that_row_by_the_status_rules():
+    """Its confirm button moves the row's record: from the statuses the list shows, by the status rules."""
+    spec = json.loads(json.dumps(support.load_spec(support.EXAMPLE), default=str))
+    spec["dialogs"].append({"id": "close-dialog", "title": "Close", "confirm": {"label": "Close it", "set_status": "draft"}})
+    listing(spec, "my-applications")["actions"].append({"label": "Close", "dialog": "close-dialog", "when": {"status": "Approved"}})
+    move = next(m for m in mockup.status_moves(spec) if m["where"] == "dialog close-dialog")
+    assert move["record"] and move["data"] == "applications" and [st["id"] for st in move["sources"]] == ["approved"]
+    assert any(e.startswith("dialog close-dialog, button Close it: moves a record from Approved to Draft, but in the status rules")
+               for e in mockup.validate(spec))
+
+
+def test_the_build_warns_of_team_ids_the_client_would_read_in_the_mockup(tmp_path, capsys):
+    """A field's help said "(R-023)" and the client read it in two sessions: the generator warned about such ids in
+    the document, the mock-up build did not."""
+    spec = json.loads(json.dumps(support.load_spec(support.EXAMPLE), default=str))
+    form(spec)["sections"][0]["fields"][0]["help"] = "The columns are to be confirmed (R-023)"
+    spec["dialogs"][0]["confirm"]["toast"] = "Approved as asked in FB-012"
+    spec["data"]["applications"][0]["reason"] = "See R-101"
+    form(spec)["sections"][0]["fields"][0]["_note"] = "R-023 is still open"  # a team's own note never reaches the room
+    notes = mockup.team_id_notes(spec)
+    assert notes == ["screen new-application, field employee, help: names R-023, a register item the client cannot look up",
+                     "dialog approve-dialog, button Confirm Approve, message: names FB-012, a mock-up comment the client cannot look up",
+                     "data applications, record LV-2026-014, 'reason': names R-101, a register item the client cannot look up"]
+    project = tmp_path / "leave-request"
+    support.write_spec(project, spec)
+    mockup.build(project)
+    out = capsys.readouterr().out
+    assert "The client sees these in the mock-up, and they name ids only the team can look up" in out
+    assert "screen new-application, field employee, help: names R-023" in out
+    assert mockup.team_id_notes(support.load_spec(support.EXAMPLE)) == [], "the sample names none"
 
 
 def test_a_note_of_ones_own_starts_with_an_underscore_and_is_not_warned_about():
@@ -1224,10 +1306,21 @@ def test_a_comment_that_follows_an_applied_one_is_read_with_it(session, capsys):
 @pytest.mark.parametrize("element, said", [
     ("region:side menu", "the side menu"), ("region:page background", "the page background"), ("row:LV-2026-011", "the row LV-2026-011"),
     ("cell:Status|LV-2026-011", "the Status cell of LV-2026-011"), ("column:Status", "the Status column"), ("field:reason", "the Reason field"),
-    ("", "the screen"),
+    ("", "the screen"), ("header:user", "the signed-in user"), ("header:logout", "the Logout link"),
+    ("header:connection", "the connection"), ("search:Employee", "the Employee search box"),
+    ("search:leave_type", "the Leave Type search box"), ("filter:unit_ref", "the Unit Ref filter"),
 ])
 def test_what_a_comment_is_about_is_named_in_words(element, said):
+    """A part of the top bar the project's code adds goes by its own name, and a filter or search box saved under
+    its field's id by the field's label (or the id in words), never by the bare id."""
     assert mockup.in_words(sample(), element) == said
+
+
+def test_the_comments_workbook_names_a_search_box_by_its_field_not_its_id():
+    labels = {**mockup.field_labels(sample())}
+    assert mockup.readable_element("search:leave_type", labels) == "Search: Leave Type"
+    assert mockup.readable_element("search:unit_ref", labels) == "Search: Unit Ref"
+    assert mockup.readable_element("search:Employee", labels) == "Search: Employee"
 
 
 def test_take_and_done_make_a_change_in_two_steps(session, capsys):
@@ -1711,9 +1804,20 @@ def test_a_button_that_is_not_the_main_one_does_not_check(browser):
 def test_a_file_field_takes_a_sample_file_and_gives_it_back(browser):
     """`browse` used to do nothing."""
     fakes = browser["fakes"]
-    assert fakes["fileBefore"] == "Drop file here or browse"
+    assert fakes["fileBefore"] == fakes["fileOnComputer"] == "Drop file here or browse"
     assert fakes["fileAttached"] == fakes["fileAfterStepChange"] == "sample-document.pdf Remove"
     assert fakes["fileRemoved"] == "Drop file here or browse"
+
+
+def test_the_process_flow_shows_the_names_of_roles_and_statuses_written_as_ids(browser):
+    """The picture in the requirements document read "in-progress" and "security" where the tables said "Picked up"."""
+    assert browser["flow"] == [["Employee", "Pending Approval", "chip warn"], ["Line Manager", "Suspended", "chip bad"]]
+
+
+def test_a_file_field_on_a_phone_says_take_a_photo(browser):
+    """A phone has no file to drop: the client read "Drop file here or browse" on a phone screen."""
+    fakes = browser["fakes"]
+    assert fakes["fileOnPhone"] == fakes["fileInPhoneFrame"] == "Take a photo or choose a file"
 
 
 def test_a_signature_field_signs_as_whoever_is_signed_in(browser):
@@ -1746,6 +1850,55 @@ def test_the_presenters_tools_are_together_and_not_in_the_systems_top_bar(browse
 def test_the_presenters_tools_do_not_cover_the_buttons_of_a_page(browser):
     """The Feedback button used to sit on top of the last buttons of a screen."""
     assert browser["tools"]["covered"] == []
+
+
+def test_everything_on_a_page_can_be_scrolled_clear_of_the_presenters_tools(browser):
+    """The page kept a fixed 88 pixels for the bar. In feedback mode the open panel above it is much taller, so it
+    lay over the buttons at the bottom right and the last row of a list, which could then neither be clicked nor
+    commented on; on a phone the bar alone covered them. The check above looked only at the bar, with Feedback
+    off, on a computer, at buttons that sit on the left."""
+    room = browser["room"]
+    assert set(room) == {f"{size} {where}" for size in ("desktop", "phone")
+                         for where in ("#/staff?role=manager", "#/application-details?role=employee", "feedback")}
+    for where, seen in room.items():
+        assert seen["under"] == [], where
+        assert seen["lastButtonSeen"], f"{where}: scrolled to the bottom, the last button is in view"
+    assert room["desktop feedback"]["panel"] and room["phone feedback"]["panel"], "checked with the Feedback panel open"
+
+
+def test_a_row_action_takes_a_comment_in_feedback_mode(browser):
+    """A pin on a row's action timed out and the comment went to the page title: the open panel lay over it."""
+    assert browser["actionComment"] == "Comment on the Suspend action"
+
+
+def test_a_part_the_projects_own_code_adds_is_named_by_its_own_name(browser):
+    """A pin on `header:connection` was listed in the Feedback panel as the Logout link."""
+    assert browser["connectionComment"] == "Comment on the connection"
+    assert "The connection" in browser["panelNames"] and "The Logout link" not in browser["panelNames"]
+
+
+def test_a_search_box_is_named_by_its_field_never_by_its_id(browser):
+    """A search on a field with no column was called "the unit_ref search box"."""
+    assert browser["searchName"] == [["search:Staff No", "Staff No"]]
+    assert "The Staff No search box" in browser["panelNames"], "a comment saved under the id reads in words too"
+
+
+def test_a_row_action_opens_its_dialog_on_that_row_and_the_confirm_moves_it(browser):
+    """`dialog` on a row action was not drawn: the link went to the first screen."""
+    dialog = browser["rowDialog"]
+    assert dialog["link"] == {"go": None, "dialog": "suspend-dialog", "record": "S-01"}
+    assert dialog["opened"]["dialog"] and dialog["opened"]["screen"] == "staff" and "row=S-01" in dialog["opened"]["hash"]
+    after = dialog["after"]
+    assert not after["dialog"] and after["screen"] == "staff" and after["toasts"] == ["Suspended S-01"]
+    assert after["first"].startswith("S-01 ") and " Suspended" in after["first"] and not after["first"].endswith("Suspend")
+
+
+def test_a_filter_offers_all_once_and_a_value_called_all_is_its_own_choice(browser):
+    """A record whose office is the word All showed a second "All", which then filtered nothing."""
+    found = browser["allFilter"]
+    assert found["options"] == [["Any", ""], ["All", "All"], ["North", "North"], ["HQ", "HQ"]]
+    assert found["picked"] and set(found["picked"]) == {"All"}
+    assert found["cleared"] == {"rows": 14, "value": ""}
 
 
 def test_view_as_a_role_that_starts_on_the_same_screen_shows_that_role(browser):
@@ -1941,7 +2094,7 @@ def test_a_filter_is_applied_by_search_and_removed_by_clear_filters(browser):
     assert picked["rows"] == before["rows"], "choosing a value does nothing until Search is pressed, as in the real system"
     assert filtered["rows"] and all(" Approved " in f" {row} " for row in filtered["rows"]) and len(filtered["rows"]) < total
     assert filtered["pager"] == f"Showing {len(filtered['rows'])} of {total} records"
-    assert cleared["rows"] == before["rows"] and browser["filterAfterClear"] == "All"
+    assert cleared["rows"] == before["rows"] and browser["filterAfterClear"] == "", "back on the first choice, All: no filter"
 
 
 def test_a_search_box_matches_part_of_the_text_in_any_letter_case(browser):

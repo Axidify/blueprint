@@ -295,6 +295,12 @@ def test_archive_never_moves_a_project_into_an_archived_one_of_the_same_name(pro
     ("Leave Requests", "Leave Request", "similar"),
     ("Leave Request System", "Courier Booking System", None),
     ("System", "Leave Request System", None),
+    ("E-PASS", "epass", "same"),
+    ("Acme E-PASS System", "Zeta EPASS", "similar"),
+    ("Zeta EPASS System", "e pass", "similar"),
+    ("Purchase Request System", "Leave Request System", None),
+    ("Room Booking", "Courier Booking System", None),
+    ("User Location Summary", "Asset Details Location", None),
 ])
 def test_system_names_are_compared_without_filler_words(a, b, how):
     assert project_tool.likeness(a, b) == how
@@ -321,6 +327,24 @@ def test_find_lists_active_archived_and_delivered_work_on_the_same_system(temp_w
     assert "change requests" in out
     assert "projects log row: Leave Request System | Joget DX | 1" in out and "Courier" not in out
     assert "No earlier project" in run("find", "Asset Tracking")
+
+
+def test_find_sees_a_distinctive_word_through_hyphens_and_extra_words(temp_workspace, projects, run):
+    """A made-up archived "Acme E-PASS System" was not found for "Zeta EPASS" or "Zeta EPASS System": the
+    hyphen split the word, and the extra words around it made the names neither the same nor a subset."""
+    p = new_project(projects, slug="e-pass")
+    reg = json.loads((p / "register.json").read_text(encoding="utf-8"))
+    reg.update(project="Acme E-PASS System", client="Made-up Motors Sdn. Bhd.")
+    (p / "register.json").write_text(json.dumps(reg), encoding="utf-8")
+    spec = support.load_spec(p)
+    spec["project"].update(name="Acme E-PASS System", client="Made-up Motors Sdn. Bhd.")
+    support.write_spec(p, spec)
+    run("archive", "e-pass")
+    for name in ("EPASS", "Zeta EPASS", "Zeta EPASS System"):
+        assert "archived project Acme E-PASS System (projects/_archive/e-pass" in run("find", name), name
+    out = run("find", "Zeta EPASS System", "--client", "Made-up Motors Sdn. Bhd.")
+    assert "similar name, same client" in out
+    assert "No earlier project" in run("find", "Zeta Request System")
 
 
 @pytest.fixture

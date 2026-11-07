@@ -37,7 +37,7 @@ def main():
     if (project_tool.ARCHIVE / a.slug).exists():
         sys.exit(f"An archived project is already called '{a.slug}' (projects/_archive/{a.slug}). To carry on with it: "
                  f"python -I tools/project.py restore {a.slug}. For a new phase, pick another name, e.g. {a.slug}-phase-2.")
-    earlier = project_tool.find_earlier(a.name)
+    earlier = project_tool.find_earlier(a.name, client=a.client)
     layout.create_new(project)
     layout.register_json(project).write_text(json.dumps(
         {"project": a.name, "client": a.client, "platform": a.platform, "items": []}, indent=2), encoding="utf-8")

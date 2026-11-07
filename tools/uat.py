@@ -8,7 +8,9 @@ Usage:
 
 draft    writes <date> uat scripts v<version>.json into the project's _blueprint/uat/ (uat/ in a project not yet
          moved to the new folder layout) from the spec, the same way every time:
-         the main process from start to end (each role in turn), every other status move, what each role
+         the main process from start to end (each role in turn: every move made with the button that makes it,
+         on its screen, by the role allowed to press it; one main process for each kind of record the statuses
+         belong to, such as a plan approved on its screen and its tasks on theirs), every other status move, what each role
          may NOT do in each status, the field checks of every form and dialog, what each role may not open,
          the dashboard figures, the notifications and integrations, and one case for every requirement no
          scenario covers yet. It works from the version issued to the client last (output/spec-v<version>.yaml),
@@ -183,6 +185,10 @@ class Model:
         co = workspace.company()
         self.names.update(company=str(co.get("name", "")), company_short=str(co.get("short_name") or co.get("name", "")))
         self.main = self.main_list()
+        self._movers = None
+        self.made = self.new_records()
+        # More than one kind of record carries the statuses (a plan and its tasks, say): each moves on its own screens.
+        self.several = len({k for s in self.statuses for k in self.kinds(s["id"], fallback=False)}) > 1
 
     # ---- words
     def text(self, value):
@@ -204,6 +210,37 @@ class Model:
 
     def role_name(self, rid):
         return str((self.role.get(rid) or {}).get("name") or rid)
+
+    def role_id(self, value):
+        """A role id from an id or a name (the process flow names roles either way), or None."""
+        if value is None:
+            return None
+        want = str(value).strip().lower()
+        return next((r["id"] for r in self.roles if want in (str(r["id"]).lower(), str(r.get("name") or "").strip().lower())), None)
+
+    def noun(self, kind=None):
+        """What a record is called in the scripts: "record", or the kind (plan, task) when there are several kinds."""
+        if not self.several or not kind:
+            return "record"
+        word = str(kind).replace("_", " ").replace("-", " ").strip()
+        if word.endswith("ies"):
+            return word[:-3] + "y"
+        if re.search(r"(ch|sh|ss|x)es$", word):
+            return word[:-2]
+        return word[:-1] if word.endswith("s") and not word.endswith("ss") else word
+
+    def a(self, kind=None):
+        """"a record", "a plan", "an application"."""
+        noun = self.noun(kind)
+        return f"{'an' if noun[:1].lower() in 'aeiou' else 'a'} {noun}"
+
+    def origin(self, kind):
+        """The status a record of that kind starts in: the first of its statuses no other status leads to, or None."""
+        if not kind:
+            return None
+        targets = {n for s in self.statuses for n in self.nexts(s["id"])}
+        return next((s["id"] for s in self.statuses if s["id"] not in targets and kind in self.kinds(s["id"], fallback=False)
+                     and not self.negative(s["id"])), None)
 
     def title(self, sid):
         return self.text((self.screen.get(sid) or {}).get("title") or sid)
@@ -263,46 +300,73 @@ class Model:
     def list_of(self, scr):
         return scr.get("data") or (scr.get("list") or {}).get("data")
 
-    def record(self, status_id):
-        """The id of a sample record in this status, or None."""
-        for r in self.data.get(self.main) or []:
-            if isinstance(r, dict) and self.sid(r.get("status")) == status_id:
-                return str(next(iter(r.values())))
+    def kinds(self, status_id, fallback=True):
+        """The data lists whose records can be in this status: those of the buttons that move a record into or out
+        of it, and of the sample records in it. With nothing to go by, the main list (unless fallback is False)."""
+        out = [x["data"] for x in self.movers() if x["data"] and status_id in (x["from"], x["to"])]
+        out += [name for name, rows in self.data.items() if isinstance(rows, list)
+                and any(isinstance(r, dict) and self.sid(r.get("status")) == status_id for r in rows)]
+        out = list(dict.fromkeys(out))
+        return out or ([self.main] if fallback and self.main else [])
+
+    def kind_of(self, status_id, prefer=None):
+        ks = self.kinds(status_id)
+        return prefer if prefer in ks else (ks[0] if ks else None)
+
+    def record(self, status_id, kind=None):
+        """The id of a sample record of that kind in this status, or None."""
+        for name in [kind] if kind else self.kinds(status_id):
+            for r in self.data.get(name) or []:
+                if isinstance(r, dict) and r and self.sid(r.get("status")) == status_id:
+                    return str(next(iter(r.values())))
         return None
 
-    def detail_for(self, rid):
-        """The screen a role opens a record of the main list on."""
-        for kind in ("detail", "form"):
+    def detail_for(self, rid, kind=None):
+        """The screen a role opens a record of that kind (by default the main list's) on."""
+        kind = kind or self.main
+        for stype in ("detail", "form"):
             for s in self.screens:
-                if s.get("type") == kind and s.get("data") == self.main and self.can_open(rid, s["id"]):
+                if s.get("type") == stype and s.get("data") == kind and self.can_open(rid, s["id"]) and not self.creates_on(s["id"]):
                     return s["id"]
         return None
 
-    def viewers(self):
-        return [r["id"] for r in self.roles if self.detail_for(r["id"])]
+    def creates_on(self, sid):
+        """True for a form opened empty, to add a record: it never shows one."""
+        return any(n["screen"] == sid for n in self.made)
+
+    def viewers(self, kind=None):
+        return [r["id"] for r in self.roles if self.detail_for(r["id"], kind)]
 
     def links_to(self, sid):
-        """(screen, label, roles) of every action or button that opens this screen."""
+        """(screen, label, roles, how) of every row action ("action"), toolbar button or other button that opens this
+        screen: a list with the screen's own records first, other lists next, then the rest (dashboards, forms)."""
         out = []
+        target = (self.screen.get(sid) or {}).get("data")
         for s in self.screens:
             lst = s.get("list") or {}
-            for b in (lst.get("actions") or []) + (lst.get("toolbar") or []) + (s.get("buttons") or []):
+            for b, how in ([(a, "action") for a in lst.get("actions") or []] + [(t, "toolbar") for t in lst.get("toolbar") or []]
+                           + [(b, "button") for b in s.get("buttons") or []]):
                 if isinstance(b, dict) and b.get("to") == sid and s["id"] != sid:
-                    out.append((s["id"], str(b.get("label", "")), as_list(b.get("roles"))))
-        return out
+                    rank = 0 if s.get("type") == "list" and lst.get("data") == target else 1 if s.get("type") == "list" else 2
+                    out.append((rank, len(out), (s["id"], str(b.get("label", "")), as_list(b.get("roles")), how)))
+        return [link for _, _, link in sorted(out)]
 
     def open_steps(self, sid, rid, rec=None, seen=()):
-        """The steps that take a role to a screen (on a record), as (action, expected, screen)."""
+        """The steps that take a role to a screen (on a record), as (action, expected, screen). A record is found in
+        its list and opened with the row's action; a toolbar or screen button is just pressed."""
         scr = self.screen.get(sid) or {}
         shows = f"{self.title(sid)} opens" + (f", showing {rec}" if rec and scr.get("type") in ("detail", "form") else "")
         if scr.get("menu") and self.can_open(rid, sid):
             return [(f"Open {self.text(scr['menu'])} from the side menu", shows, sid)]
-        for parent, label, roles in self.links_to(sid):
+        for parent, label, roles, how in self.links_to(sid):
             if parent in seen or (roles and rid not in roles) or not self.can_open(rid, parent):
                 continue
             before = self.open_steps(parent, rid, None, seen + (sid,))
             if before and before[0][0].startswith("Open ") and "side menu" in before[0][0]:
-                return before + [(f"Find {rec or 'the record'} and press {label}", shows, sid)]
+                if how == "action":
+                    kind = (self.screen[parent].get("list") or {}).get("data")
+                    return before + [(f"Find {rec or 'the ' + self.noun(kind)} and press {label}", shows, sid)]
+                return before + [(f"Press {label}", shows, sid)]
         return [(f"Open {self.title(sid)}", shows, sid)]
 
     def sign_in(self, rid):
@@ -316,50 +380,110 @@ class Model:
         return step
 
     # ---- what moves a record
+    def new_records(self):
+        """Every button that adds a record, as the mock-up finds them (tools/mockup.py new_records):
+        [{screen, button, data, status}], `data` the list the record joins and `status` the status it starts in."""
+        import mockup
+
+        out = []
+        for n in mockup.new_records(self.spec):
+            scr = self.screen.get(n.get("screen")) or {}
+            button = next((b for b in scr.get("buttons") or [] if isinstance(b, dict) and str(b.get("label", "")) == str(n.get("label", ""))), None)
+            if button is not None:
+                out.append({"screen": scr["id"], "button": button, "data": n.get("data"),
+                            "status": self.sid(n["status"]) if n.get("status") else None})
+        if not out:  # nothing ties a form to a list: a form opened empty, with a main button, still adds a record
+            for s in self.screens:
+                if s.get("type") != "form" or (s.get("data") and s.get("data") != self.main) or s.get("record"):
+                    continue
+                button = next((b for b in s.get("buttons") or [] if isinstance(b, dict) and b.get("style") == "primary"
+                               and not b.get("when")), None)
+                if button:
+                    out.append({"screen": s["id"], "button": button, "data": s.get("data"), "status": self.sid(button.get("set_status"))
+                                if isinstance(button.get("set_status"), (str, int)) else None})
+                    break
+        return out
+
     def movers(self):
-        """Every button or row action that moves a record: {from, to, screen, label, dialog, roles, toast}."""
+        """Every button, dialog confirm or row action that moves a record: {from, to, screen, label, dialog, roles,
+        toast, data, creates}. `data` is the list of the record it moves (the record kind): the screen's `data` for a
+        button on a detail screen or form, the list's for a row action; `creates` is True for a button that adds a
+        new record (its `from` is then None)."""
+        if self._movers is not None:
+            return self._movers
+        creating = {(n["screen"], str(n["button"].get("label", ""))): n for n in self.made}
         out = []
         for scr in self.screens:
             lst = scr.get("list") or {}
-            for b, kind in [(b, "button") for b in scr.get("buttons") or []] + [(a, "action") for a in lst.get("actions") or []]:
+            holds = scr.get("data") if scr.get("type") in ("detail", "form") and scr.get("data") in self.data else None
+            for b, how in [(b, "button") for b in scr.get("buttons") or []] + [(a, "action") for a in lst.get("actions") or []]:
                 if not isinstance(b, dict):
                     continue
                 dlg = self.dialog.get(b.get("dialog")) if b.get("dialog") else None
                 confirm = (dlg or {}).get("confirm") or {}
+                roles = [r for r in as_list(b.get("roles")) or self.openers(scr["id"]) if self.can_open(r, scr["id"])]
+                toast = confirm.get("toast") if dlg else b.get("toast")
+                new = creating.get((scr["id"], str(b.get("label", "")))) if how == "button" else None
+                if new:
+                    if new["status"]:
+                        out.append({"from": None, "to": new["status"], "screen": scr["id"], "label": str(b.get("label", "")),
+                                    "dialog": dlg, "roles": roles, "toast": toast, "data": new["data"], "creates": True})
+                    continue
                 target = b.get("set_status") or confirm.get("set_status")
                 if not target:
                     continue
                 when = b.get("when") if isinstance(b.get("when"), dict) else {}
                 froms = as_list(when.get("status"))
-                if not froms and kind == "action":
+                if not froms and how == "action":
                     froms = as_list((lst.get("where") or {}).get("status"))
                 froms = [self.sid(f) for f in froms if self.sid(f)] or [None]
-                roles = [r for r in as_list(b.get("roles")) or self.openers(scr["id"]) if self.can_open(r, scr["id"])]
                 pairs = ([(self.sid(k), self.sid(v)) for k, v in target.items()] if isinstance(target, dict)
                          else [(f, self.sid(target)) for f in froms])
                 for f, t in pairs:
                     if t:
                         out.append({"from": f, "to": t, "screen": scr["id"], "label": str(b.get("label", "")), "dialog": dlg,
-                                    "roles": roles, "toast": confirm.get("toast") if dlg else b.get("toast")})
+                                    "roles": roles, "toast": toast, "data": lst.get("data") if how == "action" else holds,
+                                    "creates": False, "row": how == "action"})
+        self._movers = out
         return out
 
-    def mover(self, frm, to):
-        for m in self.movers():
-            if m["to"] == to and (m["from"] == frm or (m["from"] is None and to in self.nexts(frm))):
-                return m
+    def mover(self, frm, to, kind=None):
+        """The button that moves a record (of that kind) from one status to the other: one shown in that status
+        first, then one shown in any status when the status rules allow the move. Never a button that adds a record."""
+        found = [x for x in self.movers() if not x["creates"] and x["to"] == to and (kind is None or x["data"] in (kind, None))]
+        return (next((x for x in found if x["from"] == frm), None)
+                or next((x for x in found if x["from"] is None and to in self.nexts(frm)), None))
+
+    def path(self, frm, to, kind=None):
+        """The shortest way through the buttons from one status to another, as [(from, to, mover)], without passing
+        through a rejection or cancellation; [] when they are the same, None when no buttons lead there."""
+        if frm == to:
+            return []
+        queue, seen = [(frm, [])], {frm}
+        while queue:
+            at, route = queue.pop(0)
+            ahead = self.nexts(at) + [x["to"] for x in self.movers() if x["from"] == at and not x["creates"]]
+            for nxt in dict.fromkeys(ahead):
+                mv = self.mover(at, nxt, kind) if nxt not in seen else None
+                if not mv:
+                    continue
+                if nxt == to:
+                    return route + [(at, nxt, mv)]
+                seen.add(nxt)
+                if not self.negative(nxt):
+                    queue.append((nxt, route + [(at, nxt, mv)]))
         return None
 
-    def creation(self):
-        """(form screen id, its main button, the role that fills it in) or None."""
-        for s in self.screens:
-            if s.get("type") != "form" or (s.get("data") and s.get("data") != self.main) or s.get("record"):
-                continue
-            button = next((b for b in s.get("buttons") or [] if isinstance(b, dict) and b.get("style") == "primary"
-                           and not b.get("when")), None)
-            if button:
-                roles = self.openers(s["id"])
-                return s["id"], button, roles[0] if roles else (self.roles[0]["id"] if self.roles else None)
-        return None
+    def creation(self, kind=None, status=None):
+        """{screen, button, data, status, role} of the form that adds a record (of that kind): the button that starts it
+        in that status if there is one, else the form's main button; None when nothing adds one."""
+        found = [n for n in self.made if kind is None or n["data"] in (kind, None)]
+        pick = (next((n for n in found if status and n["status"] == status), None)
+                or next((n for n in found if n["button"].get("style") == "primary"), None) or (found[0] if found else None))
+        if not pick:
+            return None
+        roles = self.openers(pick["screen"])
+        return dict(pick, role=roles[0] if roles else (self.roles[0]["id"] if self.roles else None))
 
     def form_fields(self, scr):
         return [f for sec in scr.get("sections") or [] if isinstance(sec, dict) for f in sec.get("fields") or [] if isinstance(f, dict)]
@@ -394,14 +518,16 @@ class Draft:
     def open(self, sid, rid, rec=None):
         return [self.step(a, e, s) for a, e, s in self.m.open_steps(sid, rid, rec)]
 
-    def press(self, mover, to, fill_note=True):
-        """Steps that press a moving button, through its dialog when it has one."""
+    def press(self, mover, to, rec=None, fill_note=True):
+        """Steps that press a moving button, through its dialog when it has one; a row action on the record's row."""
         m = self.m
         after = (f'A message like "{m.text(mover["toast"])}" appears. ' if mover.get("toast") else "") + f"The status is now {m.sname(to)}."
         dlg = mover.get("dialog")
+        action = (f"Find {rec or 'the ' + m.noun(mover.get('data'))} and press {mover['label']}" if mover.get("row")
+                  else f"Press {mover['label']}")
         if not dlg:
-            return [self.step(f"Press {mover['label']}", after, mover["screen"])]
-        steps = [self.step(f"Press {mover['label']}", f"The {m.text(dlg.get('title') or 'confirmation')} window opens", mover["screen"])]
+            return [self.step(action, after, mover["screen"])]
+        steps = [self.step(action, f"The {m.text(dlg.get('title') or 'confirmation')} window opens", mover["screen"])]
         required = [m.text(f.get("label") or f.get("id")) for f in dlg.get("fields") or [] if isinstance(f, dict) and f.get("required")]
         optional = [m.text(f.get("label") or f.get("id")) for f in dlg.get("fields") or [] if isinstance(f, dict) and not f.get("required")]
         if fill_note and (required or optional):
@@ -409,33 +535,37 @@ class Draft:
         steps.append(self.step(f"Press {m.text((dlg.get('confirm') or {}).get('label') or 'OK')}", after, mover["screen"]))
         return steps
 
-    def precondition(self, status_id):
+    def precondition(self, status_id, kind=None):
         m = self.m
-        rec = m.record(status_id)
+        kind = kind or m.kind_of(status_id)
+        rec = m.record(status_id, kind)
+        noun = m.noun(kind)
         if rec:
-            return f"A record in {m.sname(status_id)}, for example {rec}"
-        made = self.creation_note(status_id)
-        return f"A record in {m.sname(status_id)}" + (f" ({made})" if made else "")
+            return f"{m.a(kind).capitalize()} in {m.sname(status_id)}, for example {rec}"
+        made = self.creation_note(status_id, kind)
+        return f"{m.a(kind).capitalize()} in {m.sname(status_id)}" + (f" ({made})" if made else "")
 
-    def creation_note(self, status_id):
-        made = self.m.creation()
+    def creation_note(self, status_id, kind=None):
+        m = self.m
+        made = m.creation(kind, status_id)
         if not made:
             return ""
-        form, _, _ = made
-        draft = next((b for b in self.m.screen[form].get("buttons") or [] if isinstance(b, dict)
+        if made["status"] == status_id:
+            return f"fill in {m.title(made['screen'])} and press {made['button'].get('label')}"
+        draft = next((b for b in m.screen[made["screen"]].get("buttons") or [] if isinstance(b, dict)
                       and "draft" in str(b.get("label", "")).lower()), None)
-        if draft and "draft" in f"{status_id} {self.m.sname(status_id)}".lower():
-            return f"fill in {self.m.title(form)} and press {draft['label']}"
+        if draft and "draft" in f"{status_id} {m.sname(status_id)}".lower():
+            return f"fill in {m.title(made['screen'])} and press {draft['label']}"
         return ""
 
     # ---- (a) the main process
     def stages(self):
-        """[(status id or None, role hint, step name)] of the main process, the first being where a record starts."""
+        """[(status id or None, role id or None, step name)] of the main process, the first being where a record starts."""
         m = self.m
         flow = m.spec.get("process_flow") if isinstance(m.spec.get("process_flow"), dict) else {}
         steps = [s for s in flow.get("steps") or [] if isinstance(s, dict)]
         if steps:
-            return [(m.sid(s.get("status")), s.get("role") if s.get("role") in m.role else None, s.get("name")) for s in steps]
+            return [(m.sid(s.get("status")), m.role_id(s.get("role")), s.get("name")) for s in steps]
         if not m.statuses:
             return []
         targets = {n for s in m.statuses for n in m.nexts(s["id"])}
@@ -450,19 +580,52 @@ class Draft:
             path = path[1:]  # the main button sends a new record straight on; saving a draft is a case of its own
         return [(p, None, None) for p in path]
 
-    def main_process(self):
+    def chains(self, stages):
+        """The stages split by the kind of record they move: [(data list or None, stages)], in the order each kind
+        first comes up. A plan approved on its screen and its tasks done on theirs are two processes."""
         m = self.m
+        chains, current = OrderedDict(), None
+        for stage in stages:
+            st = stage[0]
+            ks = m.kinds(st) if st else []
+            if ks and current is None and None in chains:
+                chains[ks[0]] = chains.pop(None)
+                current = ks[0]
+            elif ks and current not in ks:
+                current = next((k for k in ks if k in chains), ks[0])
+            chains.setdefault(current, []).append(stage)
+        return list(chains.items())
+
+    def main_process(self):
         stages = self.stages()
         if not stages:
             return set()
-        steps, roles, keys, todo, moves = [], [], [], [], set()
-        made = m.creation()
-        first_status, first_role, first_name = stages[0]
-        creator = first_role or (made[2] if made else None) or (m.roles[0]["id"] if m.roles else None)
-        pre = []
+        chains = self.chains(stages)
+        moves = set()
+        for n, (kind, chain) in enumerate(chains):
+            moves |= self.process(kind, chain, n == 0, [k for k, _ in chains[:n]])
+        return moves
+
+    def process(self, kind, chain, first, before):
+        """One main process: a record of one kind from where it starts to the end, each move made with the button
+        that makes it, on its own screen, by the role allowed to press it."""
+        m = self.m
+        noun = m.noun(kind)
+        steps, roles, keys, todo, moves, pre = [], [], [], [], set(), []
+        start, start_role, _ = chain[0]
+        made = m.creation(kind, start)
+        begin = made["status"] if made and made["status"] else m.origin(kind)
+        if start and begin and begin != start and m.path(begin, start, kind):
+            chain = [(begin, None, None)] + list(chain)  # it starts in an earlier status and is moved on from there
+            start = begin
+        if made and start and made["status"] and made["status"] != start:
+            made = None
+        if not first:
+            made = None  # a record of a later kind is picked up where the first one's process leaves it
+        creator = start_role or (made["role"] if made else None)
+        actor, rec = None, None
         if made:
-            form, button, _ = made
-            creator = first_role or made[2]
+            form, button = made["screen"], made["button"]
             fields = m.form_fields(m.screen[form])
             required = [m.text(f.get("label")) for f in fields if f.get("required") and not f.get("readonly")]
             filled = [m.text(f.get("label")) for f in fields if f.get("readonly") and (f.get("default") or f.get("source"))]
@@ -472,42 +635,73 @@ class Draft:
                                    "Each value is accepted" + (f". {join_words(filled)} {'is' if len(filled) == 1 else 'are'} filled in already" if filled else ""),
                                    form))
             after = (f'A message like "{m.text(button["toast"])}" appears. ' if button.get("toast") else "")
-            after += f"The record is saved with status {m.sname(first_status)}" if first_status else "The record is saved"
+            saved = made["status"] or start
+            after += f"The {noun} is saved with status {m.sname(saved)}" if saved else f"The {noun} is saved"
             steps.append(self.step(f"Press {button.get('label', 'Submit')}", after, form))
             keys += [button.get("label"), m.title(form)]
-        elif first_status:
-            pre.append(self.precondition(first_status))
+            actor = creator
+        elif start:
+            pre.append(self.precondition(start, kind))
+            rec = m.record(start, kind)
+            if before:
+                todo.append(f"this {noun} moves on its own screens, apart from the {join_words([m.noun(k) for k in before])}: "
+                            f"say in the preconditions what that must be in for the {noun} to start")
         roles.append(creator)
-        for (frm, _, _), (to, role_hint, name) in zip(stages, stages[1:]):
-            mover = m.mover(frm, to) if frm and to else None
-            rid = role_hint or (mover["roles"][0] if mover and mover["roles"] else None) or self.rule_role(frm, to)
+        visited = [s for s in [start] if s]  # every status the record passes through, the ones in between too
+        for (frm, _, _), (to, hint, name) in zip(chain, chain[1:]):
+            route = m.path(frm, to, kind) if frm and to else None
+            if route:
+                for n, (a, b, mv) in enumerate(route):
+                    allowed = mv["roles"]
+                    if n == len(route) - 1 and hint and (not allowed or hint in allowed):
+                        rid = hint
+                    else:
+                        rid = (allowed[0] if allowed else None) or hint or self.rule_role(a, b)
+                    if rid != actor or not rid:
+                        steps.append(self.step(**m.sign_in(rid)) if rid else self.step("Sign in as the person who does the next step", "Signed in"))
+                        actor = rid
+                    steps += self.open(mv["screen"], rid, rec) + self.press(mv, b, rec)
+                    keys.append(mv["label"])
+                    roles.append(rid)
+                    moves.add((a, b))
+                    visited.append(b)
+                continue
+            rid = hint or self.rule_role(frm, to)
             roles.append(rid)
-            steps.append(self.step(**m.sign_in(rid)) if rid else self.step("Sign in as the person who does the next step", "Signed in"))
-            if mover:
-                steps += self.open(mover["screen"], rid) + self.press(mover, to)
-                keys += [mover["label"]]
-                moves.add((frm, to))
+            if rid != actor or not rid:
+                steps.append(self.step(**m.sign_in(rid)) if rid else self.step("Sign in as the person who does the next step", "Signed in"))
+                actor = rid
+            where = m.detail_for(rid, kind) if rid else None
+            if where:
+                steps += self.open(where, rid, rec)
+            steps.append(self.step(f"Complete the step '{name}'" if name else f"Send the {noun} on to {m.sname(to)}",
+                                   f"The status is now {m.sname(to)}" if to else "The step is recorded", where))
+            elsewhere = [x for x in m.movers() if to and x["to"] == to and not x["creates"] and (kind is None or x["data"] in (kind, None))]
+            if frm and elsewhere:
+                froms = join_words([m.sname(x["from"]) for x in elsewhere if x["from"]], "or") or "another status"
+                todo.append(f"no button in the mock-up moves {m.a(kind)} from {m.sname(frm)} to {m.sname(to)} "
+                            f"({elsewhere[0]['label']} on {m.title(elsewhere[0]['screen'])} does it from {froms}): write how it is done")
             else:
-                where = m.detail_for(rid) if rid else None
-                if where:
-                    steps += self.open(where, rid)
-                steps.append(self.step(f"Complete the step '{name}'" if name else f"Send the record on to {m.sname(to)}",
-                                       f"The status is now {m.sname(to)}" if to else "The step is recorded", where))
                 todo.append(f"no button in the mock-up does '{name or m.sname(to)}': write how it is done")
-                if frm and to:
-                    moves.add((frm, to))
-        last = stages[-1][0]
-        if creator and last and len(stages) > 1:
-            look = m.detail_for(creator)
-            steps.append(self.step(**m.sign_in(creator)))
+            if frm and to:
+                moves.add((frm, to))
+            if to:
+                visited.append(to)
+        last = chain[-1][0]
+        looker = creator or next((r for r in roles if r), None)
+        if looker and last and len(chain) > 1:
+            look = m.detail_for(looker, kind)
+            if looker != actor:
+                steps.append(self.step(**m.sign_in(looker)))
             if look:
-                steps += self.open(look, creator)
+                steps += self.open(look, looker, rec)
                 history = " Its history shows each step, who did it and when." if (m.screen[look].get("timeline")) else ""
                 steps[-1]["expected"] += f". Its status is {m.sname(last)}.{history}"
             else:
-                steps[-1]["expected"] += f". The record is listed with status {m.sname(last)}"
-        path = [m.sname(s) for s, _, _ in stages if s]
-        self.add(f"Main process: from {m.sname(stages[0][0]) if stages[0][0] else 'start'} to {m.sname(last) if last else 'end'}",
+                steps[-1]["expected"] += f". The {noun} is listed with status {m.sname(last)}"
+        path = [m.sname(s) for s in visited]
+        span = f"from {m.sname(chain[0][0]) if chain[0][0] else 'start'} to {m.sname(last) if last else 'end'}"
+        self.add(f"Main process: the {noun}, {span}" if m.several and kind else f"Main process: {span}",
                  "main process", roles, steps, "status rules: " + " > ".join(path) if path else "process flow", "High", pre,
                  todo="; ".join(todo) or None, keys=keys + path)
         return moves
@@ -529,83 +723,85 @@ class Draft:
             for to in m.nexts(frm):
                 if (frm, to) in done:
                     continue
+                kind = next((k for k in m.kinds(frm) if k in m.kinds(to)), m.kind_of(frm))
+                noun = m.noun(kind)
                 if to in [m.sid(a) for a in as_list(s.get("auto"))]:  # the system moves it on its own
-                    rec = m.record(frm)
-                    steps = [self.step(f"Wait for the condition that moves a record from {m.sname(frm)} to {m.sname(to)}",
+                    steps = [self.step(f"Wait for the condition that moves {m.a(kind)} from {m.sname(frm)} to {m.sname(to)}",
                                        f"The system moves it to {m.sname(to)} on its own, without anyone pressing a button"),
-                             self.step("Open the record", f"The status is {m.sname(to)}")]
+                             self.step(f"Open the {noun}", f"The status is {m.sname(to)}")]
                     self.add(f"Automatic: from {m.sname(frm)} to {m.sname(to)}", "status change", [], steps,
-                             f"status rules: {m.sname(frm)} moves to {m.sname(to)} automatically", "High", [self.precondition(frm)],
+                             f"status rules: {m.sname(frm)} moves to {m.sname(to)} automatically", "High", [self.precondition(frm, kind)],
                              todo=f"write the condition from the requirements (a date or event), and how the tester brings it about",
                              keys=[m.sname(frm), m.sname(to), "automatic"])
                     continue
-                mover = m.mover(frm, to)
+                mover = m.mover(frm, to, kind)
                 rid = (mover["roles"][0] if mover and mover["roles"] else None) or self.rule_role(frm, to)
-                rec = m.record(frm)
+                rec = m.record(frm, kind)
                 steps = [self.step(**m.sign_in(rid))] if rid else []
                 todo = None
                 if mover:
-                    steps += self.open(mover["screen"], rid, rec) + self.press(mover, to)
+                    steps += self.open(mover["screen"], rid, rec) + self.press(mover, to, rec)
                     title = f"{mover['label']}: from {m.sname(frm)} to {m.sname(to)}"
                 else:
-                    where = m.detail_for(rid) if rid else None
+                    where = m.detail_for(rid, kind) if rid else None
                     if where:
                         steps += self.open(where, rid, rec)
-                    steps.append(self.step(f"Move the record on to {m.sname(to)}", f"The status is now {m.sname(to)}", where))
+                    steps.append(self.step(f"Move the {noun} on to {m.sname(to)}", f"The status is now {m.sname(to)}", where))
                     title = f"From {m.sname(frm)} to {m.sname(to)}"
-                    todo = f"no button in the mock-up moves a record from {m.sname(frm)} to {m.sname(to)}: write the steps from the requirements"
+                    todo = f"no button in the mock-up moves {m.a(kind)} from {m.sname(frm)} to {m.sname(to)}: write the steps from the requirements"
                     if not rid:
                         todo += ", and who does it"
                 self.add(title, "status change", [rid], steps, f"status rules: {m.sname(frm)} next {m.sname(to)}", "High",
-                         [self.precondition(frm)], todo=todo, keys=[m.sname(frm), m.sname(to), (mover or {}).get("label")])
+                         [self.precondition(frm, kind)], todo=todo, keys=[m.sname(frm), m.sname(to), (mover or {}).get("label")])
 
     def allowed_actions(self):
         """A case for each status where a role may change or delete a record without moving it."""
         m = self.m
-        made = m.creation()
-        field = None
-        if made:
-            field = next((m.text(f.get("label")) for f in m.form_fields(m.screen[made[0]]) if not f.get("readonly")), None)
         for s in m.statuses:
             frm = s["id"]
+            kind = m.kind_of(frm)
+            made = m.creation(kind)
+            field = None
+            if made:
+                field = next((m.text(f.get("label")) for f in m.form_fields(m.screen[made["screen"]]) if not f.get("readonly")), None)
             for rule, action, expected in (
                     ("edit", f"Change {field or 'a field'} and save", f"The change is kept and the status stays {m.sname(frm)}"),
-                    ("delete", "Delete the record", "The record is removed and no longer listed")):
+                    ("delete", f"Delete the {m.noun(kind)}", f"The {m.noun(kind)} is removed and no longer listed")):
                 allowed = m.allowed(frm, rule) or set()
                 if not allowed:
                     continue
                 rid = next((r["id"] for r in m.roles if r["id"] in allowed), None)
                 if not rid:
                     continue
-                where = m.detail_for(rid)
-                steps = [self.step(**m.sign_in(rid))] + (self.open(where, rid, m.record(frm)) if where else [])
+                where = m.detail_for(rid, kind)
+                steps = [self.step(**m.sign_in(rid))] + (self.open(where, rid, m.record(frm, kind)) if where else [])
                 steps.append(self.step(action, expected, where))
                 verb = "changes" if rule == "edit" else "deletes"
-                self.add(f"{m.role_name(rid)} {verb} a record in {m.sname(frm)}", "status change", [rid], steps,
-                         f"status rules: {m.sname(frm)} {rule} {join_words(sorted(allowed))}", "High", [self.precondition(frm)],
+                self.add(f"{m.role_name(rid)} {verb} {m.a(kind)} in {m.sname(frm)}", "status change", [rid], steps,
+                         f"status rules: {m.sname(frm)} {rule} {join_words(sorted(allowed))}", "High", [self.precondition(frm, kind)],
                          keys=[m.sname(frm), rule])
 
     def not_allowed(self):
         m = self.m
-        viewers = m.viewers()
         verbs = {"edit": "change", "cancel": "cancel", "delete": "delete"}
         for s in m.statuses:
             frm = s["id"]
-            rec = m.record(frm)
+            kind = m.kind_of(frm)
+            rec = m.record(frm, kind)
             steps, roles = [], []
-            for rid in viewers:
+            for rid in m.viewers(kind):
                 barred = [verbs[rule] for rule in verbs if m.allowed(frm, rule) is not None and rid not in m.allowed(frm, rule)]
                 if not barred:
                     continue
-                where = m.detail_for(rid)
+                where = m.detail_for(rid, kind)
                 route = m.open_steps(where, rid, rec)
                 via = f" from {route[0][0][5:].replace(' from the side menu', '')}" if len(route) > 1 else ""
-                steps.append(self.step(f"Sign in as {m.role_name(rid)} and open {rec or 'a record in ' + m.sname(frm)}{via}",
+                steps.append(self.step(f"Sign in as {m.role_name(rid)} and open {rec or m.a(kind) + ' in ' + m.sname(frm)}{via}",
                                        f"It shows status {m.sname(frm)}. There is no way to {join_words(barred, 'or')} it", where, rid))
                 roles.append(rid)
             if steps:
                 self.add(f"{m.sname(frm)}: what each role may not do", "not allowed", roles, steps,
-                         f"status rules of {m.sname(frm)}: edit, cancel, delete", "High", [self.precondition(frm)],
+                         f"status rules of {m.sname(frm)}: edit, cancel, delete", "High", [self.precondition(frm, kind)],
                          keys=[m.sname(frm), "cancel", "delete"])
 
     # ---- (c) field checks

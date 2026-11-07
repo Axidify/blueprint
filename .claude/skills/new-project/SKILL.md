@@ -33,7 +33,7 @@ Never guess a client's name.
 
 ## 3. Check for earlier work on the same system
 
-Before creating anything: `python -I tools/project.py find "<System name>"`. It lists active and archived
+Before creating anything: `python -I tools/project.py find "<System name>" --client "<Client>"`. It lists active and archived
 projects with the same or a similar name, and systems delivered before (`knowledge/actuals/` and the
 projects log). If it finds something, say what and ask (AskUserQuestion) which they want:
 

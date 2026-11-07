@@ -6,7 +6,7 @@ Usage:
     python -I tools/project.py file     <slug> "<file>" --kind "<what it is>" [--responds-to 1.3] [--date YYYY-MM-DD] [--copy]
     python -I tools/project.py archive  <slug>
     python -I tools/project.py restore  <slug>
-    python -I tools/project.py find     "<system name>"
+    python -I tools/project.py find     "<system name>" [--client "<client>"]
     python -I tools/project.py match    "<file>" [--text <extracted text.md>] [--json]
     python -I tools/project.py hold     "<file>" --reason "<why it stays in the inbox>"
     python -I tools/project.py check    [<slug>] [--fix]
@@ -24,6 +24,9 @@ file     moves a document into the project's client documents ("1 Client documen
 archive  moves a delivered project to projects/_archive/ (out of the status list); restore brings it back.
 find     lists earlier work on the same or a similar system: active and archived projects, and delivered
          ones in the knowledge base (knowledge/actuals/ and the projects log). Run it before starting a project.
+         Names are compared without hyphens or dots ("E-PASS" is "EPASS"), and one distinctive word in common
+         is enough ("XYZ EPASS" finds "ABC E-PASS System"); words many systems share ("request", "booking")
+         are not. --client puts that client's own earlier projects first and says so.
 match    which active project a file (in the inbox, say) belongs to: every project scored on what in the file
          points to it, with the evidence, and a verdict: clear, likely or unknown. Archived projects and
          systems delivered before are listed apart, never as a place to file it. --text reads an extraction
@@ -85,6 +88,22 @@ def knowledge_dir():
 # Words that say nothing about which system it is: "Leave Request System" and "leave request" are the same.
 FILLER = {"system", "systems", "the", "a", "an", "of", "for", "and", "app", "application", "apps", "portal",
           "project", "phase", "module", "solution", "new", "online"}
+# Words many systems and screens share: on their own they never say which project something is about ("User",
+# "Location", "Summary", "Details" are on half the mock-ups there are, "Request" in half the system names).
+GENERIC = {"user", "users", "location", "locations", "summary", "details", "detail", "list", "lists", "home",
+           "dashboard", "profile", "settings", "setting", "search", "report", "reports", "history", "inbox",
+           "task", "tasks", "form", "forms", "request", "requests", "requester", "management", "manager", "admin",
+           "administrator", "approver", "approval", "approvals", "reviewer", "officer", "staff", "employee",
+           "employees", "status", "type", "types", "category", "categories", "name", "title", "description",
+           "remarks", "remark", "comment", "comments", "notes", "note", "attachment", "attachments", "date",
+           "time", "start", "end", "reference", "email", "phone", "address", "department", "company", "amount",
+           "quantity", "total", "reason", "priority", "action", "actions", "view", "edit", "create", "update",
+           "delete", "draft", "submitted", "pending", "approved", "rejected", "cancelled", "completed", "closed",
+           "open", "active", "inactive", "record", "records", "item", "items", "booking", "bookings", "tracking",
+           "claim", "claims", "service", "services", "information", "info", "data", "master", "setup", "config",
+           "configuration", "mobile", "web", "internal", "general", "main", "overview", "minutes", "meeting",
+           "workshop", "client", "document", "documents", "process", "workflow"}
+LINKED = re.compile(r"[a-z0-9]+(?:[-.'’][a-z0-9]+)+")
 
 
 def name_words(text):
@@ -92,16 +111,39 @@ def name_words(text):
     return [w for w in words if w not in FILLER and not re.fullmatch(r"v?\d+", w)]
 
 
+def name_keys(text, whole=True):
+    """The words of a name with the ways it is written evened out: "E-PASS", "E.PASS", "E PASS" and "EPASS" all
+    give "epass" (each word, each hyphen- or dot-linked word joined up, and the whole name joined up)."""
+    words = name_words(text)
+    keys = set(words)
+    for linked in LINKED.findall(str(text or "").lower()):
+        joined = re.sub(r"[^a-z0-9]", "", linked)
+        if joined not in FILLER and not re.fullmatch(r"v?\d+", joined):
+            keys.add(joined)
+    if whole and len(words) > 1:
+        keys.add("".join(words))
+    return keys
+
+
+def distinctive(text, whole=True):
+    """The words of a name that can say which system it is: not filler, not generic, not a number, 4+ letters.
+    whole=False leaves out the whole text joined up (for a document's text rather than a name)."""
+    return {k for k in name_keys(text, whole) if len(k) >= 4 and k not in GENERIC and not k.isdigit()}
+
+
 def likeness(a, b):
-    """"same" when two system names say the same thing, "similar" when one is part of the other or they are
-    spelled almost alike, otherwise None."""
+    """"same" when two system names say the same thing, "similar" when one is part of the other, they are
+    spelled almost alike or they share a distinctive word ("ABC E-PASS" and "XYZ EPASS System" both say
+    "epass"), otherwise None. Hyphens, dots and spaces inside a name do not count."""
     wa, wb = name_words(a), name_words(b)
     if not wa or not wb:
         return None
-    if wa == wb:
+    if wa == wb or "".join(wa) == "".join(wb):
         return "same"
     sa, sb = set(wa), set(wb)
     if sa <= sb or sb <= sa or difflib.SequenceMatcher(None, " ".join(wa), " ".join(wb)).ratio() >= 0.8:
+        return "similar"
+    if distinctive(a) & distinctive(b):
         return "similar"
     return None
 
@@ -119,10 +161,26 @@ def project_names(p):
     return [n for n in names if n]
 
 
-def find_earlier(name, skip=None):
+def project_clients(p):
+    """A project folder's client names (the spec's client and short name, the register's client) as flat text."""
+    names = []
+    try:
+        P = spec_project(p)
+        names += [P.get("client"), P.get("client_short")]
+        reg = layout.register_json(p)
+        if reg.exists():
+            names.append(json.loads(reg.read_text(encoding="utf-8")).get("client"))
+    except Exception:  # a damaged file must not stop the search
+        pass
+    return {flat(n).strip() for n in names if n and flat(n).strip()}
+
+
+def find_earlier(name, skip=None, client=None):
     """Earlier work on the same or a similar system, best match first: dicts with kind ("active",
-    "archived", "actuals", "log"), title, where and how alike ("same" or "similar")."""
+    "archived", "actuals", "log"), title, where, how alike ("same" or "similar") and same_client (a project
+    for the client named, when one is given). Of two equally alike, the same client's comes first."""
     found = []
+    client_key = flat(client).strip() if client else ""
 
     def best(names):
         found_ = [likeness(name, n) for n in names]
@@ -136,7 +194,8 @@ def find_earlier(name, skip=None):
             how = best(names)
             if how:
                 where = f"projects/{p.name}" if kind == "active" else f"projects/_archive/{p.name}"
-                found.append({"kind": kind, "slug": p.name, "title": names[-1], "where": where, "how": how})
+                found.append({"kind": kind, "slug": p.name, "title": names[-1], "where": where, "how": how,
+                              "same_client": bool(client_key) and client_key in project_clients(p)})
     kdir = knowledge_dir()
     for f in sorted((kdir / "actuals").glob("*.md")) if (kdir / "actuals").exists() else []:
         try:
@@ -145,7 +204,8 @@ def find_earlier(name, skip=None):
             heading = ""
         how = best([f.stem.replace("-", " "), heading])
         if how:
-            found.append({"kind": "actuals", "slug": f.stem, "title": heading or f.stem, "where": f"knowledge/actuals/{f.name}", "how": how})
+            found.append({"kind": "actuals", "slug": f.stem, "title": heading or f.stem, "where": f"knowledge/actuals/{f.name}",
+                          "how": how, "same_client": False})
     log = kdir / "projects-log.md"
     if log.exists():
         for line in log.read_text(encoding="utf-8").splitlines():
@@ -154,13 +214,14 @@ def find_earlier(name, skip=None):
                 continue
             how = likeness(name, cells[0])
             if how:
-                found.append({"kind": "log", "slug": "", "title": " | ".join(c for c in cells[:3] if c), "where": "knowledge/projects-log.md", "how": how})
-    return sorted(found, key=lambda f: f["how"] != "same")
+                found.append({"kind": "log", "slug": "", "title": " | ".join(c for c in cells[:3] if c),
+                              "where": "knowledge/projects-log.md", "how": how, "same_client": False})
+    return sorted(found, key=lambda f: (f["how"] != "same", not f["same_client"]))
 
 
 def describe(f):
     """One plain line for a match from find_earlier."""
-    alike = "same name" if f["how"] == "same" else "similar name"
+    alike = ("same name" if f["how"] == "same" else "similar name") + (", same client" if f.get("same_client") else "")
     if f["kind"] == "active":
         return f"active project {f['title']} ({f['where']}, {alike}): carry on there rather than starting again"
     if f["kind"] == "archived":
@@ -269,11 +330,15 @@ def read_only(path, on=True):
 #                                                                                           project has the id), at most 75
 #   an id only that project has, the words around it not matching its topic                 5, at most 15
 #   the system name / short name, only that project's                                       30 / 15
+#   not the whole name but a distinctive word of it ("EPASS" for "ABC E-PASS System")       10
 #   its role names, screen titles, status names, field labels (only that project's)         8 / 6 / 4 / 2 each,
-#                                                                                           halved for one word, at most 40
+#                                                                                           halved for one word, at most 40;
+#                                                                                           a word as common as "User" or
+#                                                                                           "Details" (GENERIC) never counts
 #   the client's name: 12 when only one project is for that client, otherwise 5
 #   names of its people (sample users, signatories, workshop attendees) / e-mail domains    4 / 12 each, at most 12 / 24
 #   the file name containing the system name, short name or folder name                     20
+#   ... or only a distinctive word of them (hyphens and dots evened out)                    15
 #   commented screens missing from its spec                                                 -10 each, at most -30
 #
 # Verdict: "clear" when the best project has at least CLEAR points, CLEAR_LEAD more than the next and at least
@@ -507,13 +572,20 @@ def score(prof, others, text, comments, file_name, contexts=None):
             ev.append((pts, f"{what} \"{value}\""))
     if prof["name"]:
         unique_phrase(prof["name"], 30, "system name")
+    # Not the whole name but a distinctive word of it ("EPASS" for "ABC E-PASS System"): a hint, not proof.
+    others_words = set().union(*(distinctive(o[k]) for o in others for k in ("name", "short", "slug"))) if others else set()
+    own_words = (distinctive(prof["name"]) | distinctive(prof["short"]) | distinctive(prof["slug"].replace("-", " "))) - others_words
+    if own_words and not any(w.startswith("system name") for _, w in ev):
+        said = sorted(own_words & distinctive(text, whole=False))
+        if said:
+            ev.append((10, f"a word of its system name: {', '.join(said[:3])}"))
     if len(prof["short"]) >= 2:
         unique_phrase(prof["short"], 15, "short name", case=True)
     got = 0
     hits = {}
     for key, (cat, label) in prof["terms"].items():
-        if key in other_terms or f" {key} " not in ftext:
-            continue
+        if key in other_terms or f" {key} " not in ftext or (" " not in key and key in GENERIC):
+            continue  # a word as common as "User" or "Details" says nothing about which project
         pts = TERM_WEIGHT[cat] if " " in key else (TERM_WEIGHT[cat] + 1) // 2
         pts = min(pts, 40 - got)
         if pts <= 0:
@@ -548,6 +620,10 @@ def score(prof, others, text, comments, file_name, contexts=None):
         if words_ and words_ <= stem_words and not any(set(name_words(o[k])) == words_ for o in others for k in ("name", "short", "slug")):
             ev.append((20, f"the file name has its {what} \"{value}\""))
             break
+    else:
+        named = sorted(own_words & distinctive(Path(file_name).stem))
+        if named:
+            ev.append((15, f"the file name has a word of its system name: {', '.join(named[:3])}"))
     return sorted(ev, key=lambda e: -e[0])
 
 
@@ -770,7 +846,7 @@ def cmd_restore(a):
 
 
 def cmd_find(a):
-    found = find_earlier(a.name)
+    found = find_earlier(a.name, client=a.client)
     if not found:
         print(f"No earlier project or delivered system matches '{a.name}': start it as a new project.")
         return
@@ -971,7 +1047,7 @@ def main():
     s.add_argument("--responds-to"); s.add_argument("--date"); s.add_argument("--copy", action="store_true")
     s = sub.add_parser("archive"); s.add_argument("slug")
     s = sub.add_parser("restore"); s.add_argument("slug")
-    s = sub.add_parser("find"); s.add_argument("name")
+    s = sub.add_parser("find"); s.add_argument("name"); s.add_argument("--client")
     s = sub.add_parser("match"); s.add_argument("file"); s.add_argument("--text"); s.add_argument("--json", action="store_true")
     s = sub.add_parser("hold"); s.add_argument("file"); s.add_argument("--reason", required=True)
     s = sub.add_parser("check"); s.add_argument("slug", nargs="?"); s.add_argument("--fix", action="store_true")

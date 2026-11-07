@@ -349,6 +349,32 @@ def document_errors(spec):
 
 
 # ====================================================================== low-level Word helpers
+def flow_names(spec):
+    """The process flow's steps with each role and status as the reader knows it, by its name: a step may give
+    the id buttons use ("in-progress", "security") or the name ("Picked up", "Gate security"). Returns
+    (steps, problems): a value that is neither a name nor an id is kept as written and listed as a problem."""
+    roles = {str(r.get("id")): str(r.get("name")) for r in spec.get("roles") or [] if isinstance(r, dict) and r.get("id") and r.get("name")}
+    statuses = {str(x.get("id")): str(x.get("name")) for x in spec.get("statuses") or [] if isinstance(x, dict) and x.get("id") and x.get("name")}
+    flow = spec.get("process_flow") if isinstance(spec.get("process_flow"), dict) else {}
+    steps, problems = [], []
+    for step in flow.get("steps") or []:
+        if not isinstance(step, dict):
+            continue
+        step = dict(step)
+        for key, known in (("role", roles), ("status", statuses)):
+            value = str(step.get(key) or "").strip()
+            if not value or value in known.values():
+                continue
+            if value in known:
+                step[key] = known[value]
+            elif known and value.lower() not in {n.lower() for n in known.values()}:
+                problems.append(f"process flow, step {step.get('name') or '?'}: {key} '{value}' is neither the name nor the id "
+                                f"of a {key} in the spec, so the diagram does not match the {key}s the document lists "
+                                f"({', '.join(known.values())})")
+        steps.append(step)
+    return steps, problems
+
+
 def rgb(hexstr):
     return RGBColor.from_string(hexstr.upper())
 
@@ -1485,6 +1511,7 @@ def build(project):
     chapters, refs = plan_sections(spec, fmt, items)
     labels = fmt["labels"]
     warnings = ["screenshots: " + problem for problem in mockup.screenshot_problems(project, spec)]
+    warnings += flow_names(spec)[1]
     notes = []  # worth knowing, but no reason to hold a version back
     roles = spec["roles"]
     role_ids = [r["id"] for r in roles]
@@ -2048,6 +2075,16 @@ def build(project):
             items_all = [i for g in groups for i in g["items"]]
             with_priority = sum(1 for g in groups for i in g["items"] if (isinstance(i, dict) and i.get("priority")) or g.get("priority"))
             priority_column = has_priority and with_priority * 2 >= len(items_all)
+            order = {sc["id"]: n for n, sc in enumerate(spec["screens"])}
+            screen_order = lambda sid: order.get(sid, len(order))
+            # A group that lists many screens and none on its items printed every screen on every item: the
+            # reader could not tell which screen an item is about.
+            broad = [g["id"] for g in groups if len(g.get("screens") or []) > 2
+                     and len(g["items"]) > 1 and not any(isinstance(i, dict) and i.get("screens") for i in g["items"])]
+            if broad and has_screens:
+                notes.append(f"{', '.join(broad)} list{'s' if len(broad) == 1 else ''} several screens and none of {'its' if len(broad) == 1 else 'their'} "
+                             "items says which it is about, so every item shows all of them: give an item its own `screens` "
+                             "(`{text, screens: [id]}`) to show only the screens it is about")
             for gi, g in enumerate(groups, 1):
                 w.heading(f"{ch}.{gi} {fill(g['title'], g['id'])}", 2, key=f"req:{g['id']}")
                 w.para([(g["id"], "mono")], after=4, keep=True)
@@ -2063,7 +2100,10 @@ def build(project):
                         tbc = str(d["tbc"]).strip()
                         cell += [("\n", ""), ("warning", "dot"), (labels["decision_needed"] + " ", "sec"),
                                  (tbc, "mono", f"reg:{tbc}") if REGISTER_ID.fullmatch(tbc) else (tbc, "mono")]
-                    iscreens = [(short(refs.get(f"screen:{sid}")), f"screen:{sid}") for sid in (d.get("screens") or g.get("screens") or [])
+                    # In the order the screens come in the document, each once: an item's own `screens` when it
+                    # has them, else its group's.
+                    iscreens = [(short(refs.get(f"screen:{sid}")), f"screen:{sid}")
+                                for sid in sorted(dict.fromkeys(d.get("screens") or g.get("screens") or []), key=screen_order)
                                 if refs.get(f"screen:{sid}")]
                     row = [[(f"{g['id']}.{i}", "mono")], cell]
                     pr = d.get("priority") or g.get("priority")
