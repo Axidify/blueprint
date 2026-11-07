@@ -173,6 +173,7 @@ def test_both_layouts_resolve(tmp_path):
         layout.estimates_output(new): "Internal – estimates and change requests", layout.uat_source(new): "_blueprint/uat",
         layout.uat_output(new): "6 UAT", layout.cr_log(new): "_blueprint/changes/crs.json", layout.cr_notes_dir(new): "7 Change requests",
         layout.cr_log_xlsx(new): "Internal – estimates and change requests/CR log (internal).xlsx",
+        layout.defect_log(new): "_blueprint/uat/defects/defects.json", layout.defect_log_xlsx(new): "6 UAT/Defect log.xlsx",
     }
     for path, rel in expected.items():
         assert layout.shown(new, path) == rel

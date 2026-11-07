@@ -36,6 +36,18 @@ See [docs/maintaining.md](docs/maintaining.md).
   (`[{"id": "R-012", "set": {"answer": "...", "status": "resolved"}}, ...]`), for answers that came by e-mail,
   instead of one command per answer. The whole file is checked first: one bad change and nothing is written.
   `--check` shows what would change. The client-answers skill uses it.
+- **Test data in the UAT scripts.** Every scenario now says what must be ready before it starts: a test account
+  for each role that signs in (with what it may see, so the test records fall in it), each record in its status
+  and how to get one ("fill in New Leave Application and press Submit, then Reject"), each file to upload, and the
+  mailboxes and connections notifications and integrations need. A move the system makes on its own asks for a
+  record prepared to meet the condition during UAT, so that case is no longer blocked on the day. The workbook has
+  a Test data sheet for the client to prepare and mark ready, and the Word document lists it too.
+- **A defect log.** Reading the testers' workbook (`uat.py results`) now puts each failed step into the project's
+  defect log, `6 UAT/Defect log.xlsx`, linked to its scenario, step and requirements. Each defect goes from open
+  to fixed, retest and closed, or ends as not a defect or a change request (`uat.py defect`, with a note and the
+  CR id); the next round's workbook closes the defects that now pass and opens again those that fail. The inbox
+  goes through the open defects with you: a bug for the developers, a new wish for `change-request`, or not a
+  defect.
 
 ### Changed
 - **The client sees first what still needs an answer.** In `Questions for the client.xlsx` and the register,
@@ -49,6 +61,12 @@ See [docs/maintaining.md](docs/maintaining.md).
 - **"recommendation" now means one thing.** In a workshop agenda your own view of an answer is
   `internal_view` (facilitator notes only, shown as "Our view (internal)"); in the register, a client item's
   `recommendation` goes to the client. Older agendas that say `recommendation` are still read as internal.
+- **A firmer UAT draft.** Requirements that plainly say what they are about now go straight into the scenario
+  that tests them (a field filled in or required, a reason required in a dialog, sending a record on to a role, a
+  button's action) or get a scenario of their own (an e-mail when a record reaches a status, saving a draft, what
+  a screen shows, adding and editing a list's entries). A process step is made with the button named after it, and
+  a draft or a rejected record goes on with its form's own button. The sample project's draft has no case left to
+  refine (12 before).
 
 ## [1.5.0] - 2026-11-07
 

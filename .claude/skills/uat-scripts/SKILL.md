@@ -12,8 +12,10 @@ tests need, so the draft is made from it; your job is to make it sharp, plain an
 It produces, in the project's `6 UAT` folder (the JSON in `_blueprint/uat/`):
 - `<date> uat scripts v<version>.json`: the scripts, Blueprint's own (the source of the other two);
 - `<same name>.xlsx`: the **workbook for the client's testers**, one row per step, with Actual result,
-  Pass/Fail, Tester, Date and Defect ref to fill in, and a summary of coverage and results;
-- `<same name>.docx`: the **test scripts for the client**, in the company's document format.
+  Pass/Fail, Tester, Date and Defect ref to fill in, a summary of coverage and results, and the **Test data**
+  sheet: everything the client prepares before UAT (TD-01 …), with a Ready column;
+- `<same name>.docx`: the **test scripts for the client**, in the company's document format, with the same
+  test data list and, in each scenario, the items it uses.
 
 ## 1. Draft
 
@@ -24,7 +26,12 @@ It produces, in the project's `6 UAT` folder (the JSON in `_blueprint/uat/`):
 2. Read what it printed and the JSON. The draft has, in this order: the main process (each role in turn),
    every other status move (reject, cancel, resubmit ...), what each role may not do in each status, the
    field checks of every form and dialog, what each role may not open, the dashboard figures, the
-   notifications and integrations, and one case for each requirement no scenario covers yet.
+   notifications and integrations. Each requirement that says plainly what it is about is already in the
+   scenario that tests it, or has one written for it (an e-mail when a record reaches a status, saving a
+   draft, what a screen shows, adding and editing a list's entries); one the draft could not tie for certain
+   has a case of its own (type `requirement`), and so does one waiting for an open decision.
+   Every case lists its `test_data`: the test accounts that sign in, the records its preconditions ask for
+   (with how to get one), the files to upload, mailboxes and connections.
    A project whose statuses belong to two kinds of record (a plan approved on its screen and its tasks on
    theirs) has a main process for each: "Main process: the plan, …", "Main process: the task, …". For the
    second, write in its preconditions what the first record must be in (its `todo` asks for it), and keep
@@ -36,6 +43,10 @@ It produces, in the project's `6 UAT` folder (the JSON in `_blueprint/uat/`):
 
 Edit the JSON. Keep ids `UAT-001` … in order (renumber when you remove or add a case).
 
+- **Check the links the draft made.** Read each scenario's `requirements` against its steps: the draft ties
+  a requirement only when its words name a field, a button, a status or a role of that scenario, but the
+  requirement may say more (a "before the leave starts" the steps do not try). Add the step that proves it,
+  or an edge case.
 - **Merge the requirement cases.** For each case of type `requirement`, put its id into the
   `requirements` of the scenario that really tests it (the main process covers routing to the approver;
   the reject case covers "a reason is required") and add the step or expected result that proves it, then
@@ -58,6 +69,11 @@ Edit the JSON. Keep ids `UAT-001` … in order (renumber when you remove or add 
   and one observable result per step. No ids of screens, no technical terms.
 - **Priority**: High for the main process, status rules and access; Medium for field checks and the rest;
   Low only for cosmetic checks.
+- **Test data for every case.** Keep `test_data` in step with the steps: each entry has a `kind`
+  (`account`, `record`, `file` or `other`), what is `need`ed in the client's words, and `how` to get it when
+  that is not obvious. A case that waits for something to happen (a date passing, a nightly job, an automatic
+  cancel) needs a record prepared to meet that condition during UAT: say what it is and how the testers bring
+  the condition about, or the case will be blocked. Write `"test_data": []` for a case that needs nothing.
 - **Every requirement covered.** One that cannot be tested in UAT (a retention period, a load figure) goes
   under `excluded` with a reason the client can read.
 - Nothing internal: no mandays, rates or cost, no internal register items, nothing from `platform_fit`,
@@ -87,6 +103,8 @@ beside the new one).
 Tell the user, in plain words:
 - **What was made and where**: the workbook and the test scripts in the project's `6 UAT` folder. Both are
   for the client's testers; the JSON is Blueprint's and stays with you.
+- **Test data**: how many items the client prepares before UAT (the Test data sheet), and the ones that
+  need someone outside the testers (an integration, a mailbox, a record that must fall due during UAT).
 - **Coverage**: how many scenarios and steps, how many requirements are covered (for example "all 10"),
   and each one not tested in UAT with its reason.
 - **Which version** the scripts follow (issued or not yet signed).
@@ -94,7 +112,10 @@ Tell the user, in plain words:
   workbook, one row per step. After UAT, drop the filled-in workbook into the inbox and say
   *process my inbox*."
 - **What Blueprint does with the results**: it reads the workbook (`python -I tools/uat.py results
-  projects/<slug> "<file>"`) and lists every failed and blocked step. A failure where the system does not
-  do what was signed is a defect for the developers. A failure that is really a new wish (the system does
-  what the expected result says, but the client wants it otherwise) goes to the `change-request` skill,
-  which checks it against the signed version and, if it is new, raises a change request.
+  projects/<slug> "<file>"`), lists every failed and blocked step, and puts each failed step into the
+  project's defect log (`6 UAT/Defect log.xlsx`), linked to its scenario and requirements. A failure where
+  the system does not do what was signed is a defect for the developers, followed through open, fixed,
+  retest and closed (`uat.py defect`); the next round's workbook closes the ones that now pass and opens
+  again the ones that fail. A failure that is really a new wish (the system does what the expected result
+  says, but the client wants it otherwise) is marked `change request` and goes to the `change-request`
+  skill, which checks it against the signed version and, if it is new, raises a change request.

@@ -77,11 +77,14 @@ def test_rejecting_is_a_case_of_its_own_through_the_dialog(project, run):
     assert reject["preconditions"] == ["A record in Pending Approval, for example LV-2026-014"]
     assert [s["action"] for s in reject["steps"]][-3:] == ["Press Reject", "Fill in Reason for rejection", "Press Confirm Reject"]
     assert "The status is now Rejected" in reject["steps"][-1]["expected"]
-    # every move the status rules allow has a case; one no button makes is left for Claude to write
+    # every move the status rules allow has a case; a rejected application the employee may change is sent again
+    # with the form's own button, since the form's records start in Pending Approval
     titles = [c["title"] for c in cases_of(scripts, "status change")]
     assert any("Pending Approval to Cancelled" in t for t in titles) and any("Approved to Cancelled" in t for t in titles)
-    resubmit = next(c for c in scripts["cases"] if c["title"] == "From Rejected to Pending Approval")
-    assert "no button" in resubmit["todo"]
+    resubmit = next(c for c in scripts["cases"] if c["title"] == "Submit: from Rejected to Pending Approval")
+    assert "todo" not in resubmit and resubmit["roles"] == ["employee"]
+    assert [s["action"] for s in resubmit["steps"]][-2:] == ["Open LV-2026-009 to change it", "Press Submit"]
+    assert resubmit["steps"][-1]["expected"] == "The status is now Pending Approval"
 
 
 def test_what_a_role_may_not_do_in_a_status_is_tested(project, run):
@@ -126,7 +129,7 @@ def test_notifications_become_cases(project, run):
     spec["notifications"] = [{"event": "Application approved", "recipient": "Employee", "template": "Approval e-mail"}]
     support.write_spec(project, spec)
     _, scripts, _ = drafted(project, run)
-    (note,) = cases_of(scripts, "notification")
+    note = next(c for c in cases_of(scripts, "notification") if c["title"].startswith("Notification:"))
     assert note["steps"][0]["expected"] == "Employee receives the notification as specified (Approval e-mail)"
 
 
@@ -134,9 +137,18 @@ def test_every_requirement_is_covered_and_the_draft_passes_the_check(project, ru
     _, scripts, _ = drafted(project, run)
     covered = {r for c in scripts["cases"] for r in c["requirements"]}
     assert covered == set(uat.requirement_ids(support.load_spec(support.EXAMPLE)))
-    stub = next(c for c in cases_of(scripts, "requirement") if c["requirements"] == ["FR-APP-002.2"])
-    assert "todo" in stub and stub["related"]  # Claude merges it into the scenario that already tests it
+    assert not cases_of(scripts, "requirement")  # every requirement of the sample is tied to a scenario that tests it
     assert "OK:" in run("check", project)
+
+
+def test_a_requirement_the_draft_cannot_tie_is_a_case_to_refine(project, run):
+    spec = support.load_spec(support.EXAMPLE)
+    spec["requirements"][0]["items"].append("System shall keep each application for seven years.")
+    support.write_spec(project, spec)
+    _, scripts, out = drafted(project, run)
+    (stub,) = cases_of(scripts, "requirement")
+    assert stub["requirements"] == ["FR-APP-001.6"] and "write real steps" in stub["todo"]
+    assert "Cases still to refine: 1" in out
 
 
 def test_a_second_draft_of_the_same_day_is_refused_unless_forced(project, run):
@@ -461,3 +473,199 @@ def test_a_flow_step_no_button_makes_is_named_with_the_button_that_moves_it_else
     assert "no button in the mock-up moves a batch from Approved to Closed (Close batch on Leave Batch does it from Submitted)" \
         in batch["todo"]
     assert batch["steps"][-1]["expected"].endswith("Its status is Closed.")
+
+
+def test_the_batch_and_the_application_requirements_go_to_the_process_that_makes_their_moves(two, run):
+    _, scripts, out = drafted(two, run)
+    batch, application = cases_of(scripts, "main process")
+    ret = next(c for c in scripts["cases"] if c["title"] == "Return: from Submitted to Returned")
+    # "approves or returns a batch": the batch's process (Approve) and the Return case; "an approved batch" is a status
+    assert "FR-BAT-001.1" in batch["requirements"] and "FR-BAT-001.1" in ret["requirements"]
+    assert application["requirements"] == ["FR-BAT-001.2"] and "FR-BAT-001.2" not in batch["requirements"]
+    assert not cases_of(scripts, "requirement")
+
+
+# ====================================================================== requirements tied to their scenarios
+def test_each_requirement_of_the_sample_goes_to_the_scenario_that_tests_it(project, run):
+    _, scripts, out = drafted(project, run)
+    by_req = {}
+    for c in scripts["cases"]:
+        for r in c["requirements"]:
+            by_req.setdefault(r, []).append(c)
+    titles = {r: [c["title"] for c in cases] for r, cases in by_req.items()}
+    assert titles["FR-APP-001.1"] == titles["FR-APP-001.2"] == titles["FR-APP-001.3"] == ["New Leave Application: field rules"]
+    assert titles["FR-APP-002.2"] == ["Reject Application: required fields"]  # the dialog's reason, not the form's
+    required = by_req["FR-APP-001.4"][0]
+    assert required["title"] == "New Leave Application: required fields"
+    assert required["steps"][-1]["action"] == "Choose Medical Leave in Leave Type, leave Supporting Document empty and press Submit"
+    main = by_req["FR-APP-002.1"][0]
+    assert main["type"] == "main process"
+    assert any("sent to them as the Line Manager" in s["expected"] and s["action"].startswith("Find") for s in main["steps"])
+    assert titles["FR-APP-003.1"] == ["Cancel Application: from Pending Approval to Cancelled", "Cancel Application: from Approved to Cancelled"]
+    assert titles["FR-APP-002.3"] == ["E-mail to the Employee: Approved", "E-mail to the Employee: Rejected"]
+    mail = by_req["FR-APP-003.2"][0]
+    assert mail["title"] == "E-mail to the Line Manager: Cancelled" and mail["type"] == "notification"
+    assert [s["action"] for s in mail["steps"]][-3:] == ["Press Cancel Application", "Press Yes, cancel it",
+                                                         "Open the mailbox of the Line Manager test account"]
+    draft = by_req["FR-APP-001.5"][0]
+    assert "leave the required fields empty and press Save as Draft" in draft["steps"][-1]["action"]
+    assert "saved with status Draft" in draft["steps"][-1]["expected"]
+    assert "Cases still to refine: 0" in out
+
+
+def test_a_requirement_waiting_for_a_decision_is_never_tied(project, run):
+    spec = support.load_spec(support.EXAMPLE)
+    spec["requirements"][1]["items"][1] = {"text": "System shall require a reason when rejecting.", "tbc": "R-004"}
+    support.write_spec(project, spec)
+    _, scripts, _ = drafted(project, run)
+    (stub,) = cases_of(scripts, "requirement")
+    assert stub["requirements"] == ["FR-APP-002.2"] and stub["preconditions"] == ["The open decision R-004 has been made"]
+    assert "FR-APP-002.2" not in next(c for c in scripts["cases"] if c["title"] == "Reject Application: required fields")["requirements"]
+
+
+def test_a_flow_step_is_made_with_the_button_named_after_it(tmp_path, run):
+    folder = tmp_path / "equipment"
+    shutil.copytree(support.WIDE / "spec", folder / "spec")
+    _, scripts, _ = drafted(folder, run)
+    (main,) = cases_of(scripts, "main process")
+    actions = [s["action"] for s in main["steps"]]
+    assert "Press Approve" in actions and "Press Confirm Approve" in actions and "Press Issue Equipment" in actions
+    assert main["todo"] == "no button in the mock-up does 'Record return': write how it is done"
+    shows = next(c for c in scripts["cases"] if c["title"] == "Booking Details: what it shows")
+    assert shows["requirements"] == ["FR-BKG-001.3"] and "It shows" in shows["steps"][-1]["expected"]
+    kept = next(c for c in scripts["cases"] if c["title"] == "Equipment: add and edit")
+    assert kept["requirements"] == ["FR-EQP-001.1"] and kept["roles"] == ["admin"]
+
+
+# ====================================================================== test data
+def test_each_scenario_lists_the_test_data_it_needs(project, run):
+    spec = project / "spec" / "app.yaml"
+    text = spec.read_text(encoding="utf-8").replace(
+        "    delete: none\n    next: [cancelled]\n", "    delete: none\n    next: [cancelled]\n    auto: [cancelled]\n", 1)
+    spec.write_text(text, encoding="utf-8")
+    _, scripts, _ = drafted(project, run)
+    case = {c["title"]: c for c in scripts["cases"]}
+    data = {c: {d["need"]: d for d in case[c]["test_data"]} for c in case}
+    reject = next(t for t in case if t.startswith("Reject:"))
+    assert set(data[reject]) == {
+        "A test account for Line Manager (what it sees: applications from their direct reports; set it up so the test records are among them)",
+        "A record in Pending Approval"}
+    assert data[reject]["A record in Pending Approval"]["how"] == "Fill in New Leave Application and press Submit"
+    rejected = data["Submit: from Rejected to Pending Approval"]["A record in Rejected"]
+    assert rejected["kind"] == "record" and rejected["how"] == "Fill in New Leave Application and press Submit, then Reject (as Line Manager)"
+    auto = data["Automatic: from Approved to Cancelled"]
+    assert any("will meet the condition for Cancelled during UAT" in n and auto[n]["kind"] == "record" for n in auto)
+    files = data["New Leave Application: field rules"]
+    assert "A file for Supporting Document that breaks its rule: File size must be less than 5 MB" in files
+    assert "A mailbox the testers can read for the Employee test account" in data["E-mail to the Employee: Approved"]
+    assert all(d["kind"] in uat.DATA_KINDS for c in scripts["cases"] for d in c["test_data"])
+
+
+def test_the_check_asks_for_test_data_and_refuses_a_malformed_entry(project, run):
+    path, scripts, _ = drafted(project, run)
+    del scripts["cases"][0]["test_data"]
+    scripts["cases"][1]["test_data"] = [{"kind": "person", "need": "Someone"}]
+    errors, warnings = checked(project, scripts)
+    assert any(w.startswith("UAT-001: no test data listed") for w in warnings)
+    assert any(e.startswith("UAT-002: each test_data entry needs a kind") for e in errors)
+
+
+def test_the_workbook_and_the_document_carry_the_test_data_list(rendered):
+    path, scripts, _ = rendered
+    wb = load_workbook(path.with_suffix(".xlsx"))
+    assert wb.sheetnames[:3] == ["Summary", uat.DATA_SHEET, uat.STEPS_SHEET] and wb.active.title == uat.STEPS_SHEET
+    rows = list(wb[uat.DATA_SHEET].iter_rows(values_only=True))
+    assert rows[0] == ("Ref", "Kind", "What is needed", "How to get it", "Scenarios", "Prepared by", "Ready", "Notes")
+    listed = {r[2]: r for r in rows[1:]}
+    assert listed["A record in Draft"][3] == "Fill in New Leave Application and press Save as Draft"
+    assert rows[1][0] == "TD-01" and rows[1][1] == "Test account"
+    steps = wb[uat.STEPS_SHEET]
+    header = [c.value for c in steps[1]]
+    first = [r for r in steps.iter_rows(min_row=2, values_only=True) if r[header.index("Step")] == 1]
+    assert all(r[header.index("Test data")].startswith("TD-") for r in first)
+    doc = Document(str(path.with_suffix(".docx")))
+    text = "\n".join(p.text for p in doc.paragraphs) + "\n".join(c.text for t in doc.tables for row in t.rows for c in row.cells)
+    assert "Test data to prepare before UAT" in text and "A record in Draft" in text and "Test data: TD-" in text
+
+
+# ====================================================================== the defect log
+def filled(path, marks, name="filled in.xlsx"):
+    """A copy of the testers' workbook with {row: (result, actual, defect ref)} filled in."""
+    wb = load_workbook(path.with_suffix(".xlsx"))
+    ws = wb[uat.STEPS_SHEET]
+    header = [c.value for c in ws[1]]
+    col = {n: header.index(n) + 1 for n in header}
+    for row, (result, actual, ref) in marks.items():
+        ws.cell(row=row, column=col["Pass/Fail"], value=result)
+        ws.cell(row=row, column=col["Actual result"], value=actual)
+        ws.cell(row=row, column=col["Defect ref"], value=ref)
+        ws.cell(row=row, column=col["Tester"], value="Tester A")
+    out = path.with_name(name)
+    wb.save(out)
+    return (out, [ws.cell(row=row, column=col["Case"]).value for row in marks],
+            [ws.cell(row=row, column=col["Requirements"]).value for row in marks])
+
+
+def test_failed_steps_become_defects_linked_to_their_case_and_requirements(rendered, run):
+    import layout
+
+    path, scripts, _ = rendered
+    project = path.parent.parent
+    workbook, (case,), (reqs,) = filled(path, {3: ("Fail", "The side menu also shows Leave Types", "T-1")})
+    out = run("results", project, workbook)
+    assert "1 new: D-001" in out
+    log = json.loads(layout.defect_log(project).read_text(encoding="utf-8"))
+    (d,) = log["defects"]
+    assert d["id"] == "D-001" and d["status"] == "open" and d["case"] == case and d["step"] == 2
+    assert d["actual"] == "The side menu also shows Leave Types" and d["client_ref"] == "T-1" and d["tester"] == "Tester A"
+    assert d["requirements"] == ([r.strip() for r in reqs.split(",")] if reqs else [])
+    assert d["priority"] == next(c["priority"] for c in scripts["cases"] if c["id"] == case)
+    assert layout.defect_log_xlsx(project).exists()
+    # reading the same workbook again changes nothing
+    assert "nothing new from this workbook" in run("results", project, workbook)
+    assert len(json.loads(layout.defect_log(project).read_text(encoding="utf-8"))["defects"]) == 1
+
+
+def test_a_defect_goes_through_its_statuses_and_a_retest_closes_or_reopens_it(rendered, run):
+    import layout
+
+    path, _, _ = rendered
+    project = path.parent.parent
+    first, _, _ = filled(path, {3: ("Fail", "Wrong menu", ""), 5: ("Fail", "No message", "")}, "round 1.xlsx")
+    run("results", project, first)
+    assert "D-001, D-002: retest" in run("defect", project, "D-001", "D-002", "retest", "--note", "fixed in build 14")
+    second, _, _ = filled(path, {3: ("Pass", "", ""), 5: ("Fail", "Still no message", "")}, "round 2.xlsx")
+    out = run("results", project, second)
+    assert "1 open again: D-002" in out and "1 closed: D-001" in out
+    log = {d["id"]: d for d in json.loads(layout.defect_log(project).read_text(encoding="utf-8"))["defects"]}
+    assert log["D-001"]["status"] == "closed" and log["D-002"]["status"] == "open" and log["D-002"]["actual"] == "Still no message"
+    assert [h["status"] for h in log["D-002"]["history"]] == ["open", "retest", "open"]
+    assert log["D-002"]["history"][1]["note"] == "fixed in build 14"
+    with pytest.raises(SystemExit, match="Say why it is not a defect"):
+        run("defect", project, "D-002", "not a defect")
+    with pytest.raises(SystemExit, match="not a defect status"):
+        run("defect", project, "D-002", "parked")
+    with pytest.raises(SystemExit, match="Not in the defect log: D-009"):
+        run("defect", project, "D-009", "fixed")
+    out = run("defect", project, "D-002", "change request")
+    assert "change-request skill" in out and "change_request.py scope" in out
+    run("defect", project, "D-002", "change request", "--cr", "CR-004")
+    log = {d["id"]: d for d in json.loads(layout.defect_log(project).read_text(encoding="utf-8"))["defects"]}
+    assert log["D-002"]["status"] == "change request" and log["D-002"]["cr"] == "CR-004"
+    out = run("defects", project)
+    assert "2 defects: 1 closed, 1 change request" in out and "-> CR-004" in out
+    rows = list(load_workbook(layout.defect_log_xlsx(project))["Defects"].iter_rows(values_only=True))
+    assert rows[0][:4] == ("Defect", "Status", "Priority", "Case") and [r[1] for r in rows[1:]] == ["closed", "change request"]
+
+
+def test_results_never_takes_the_defect_log_for_the_testers_workbook(rendered, run):
+    import layout
+
+    path, _, _ = rendered
+    project = path.parent.parent
+    workbook, _, _ = filled(path, {3: ("Fail", "Wrong", "")})
+    run("results", project, workbook)
+    workbook.unlink()
+    assert layout.defect_log_xlsx(project).exists()
+    out = run("results", project)
+    assert "UAT results in 2026-11-06 uat scripts v0.1.xlsx" in out

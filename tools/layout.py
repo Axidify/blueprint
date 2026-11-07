@@ -57,6 +57,7 @@ CLIENT_REGISTER_XLSX = "Questions for the client.xlsx"  # the client's items onl
 OVERVIEW = "Project overview.html"
 SHORTCUTS = ("Open the mock-up.cmd", "Open the mock-up.command")
 CR_LOG = "CR log (internal).xlsx"
+DEFECT_LOG = "Defect log.xlsx"
 SCREENSHOT_RECORD = "taken-from.json"
 SERVER_MARK = ".server.json"
 # The folders for people, in the order the overview and the documentation name them.
@@ -248,6 +249,16 @@ def uat_source(project):
 
 def uat_output(project):
     return _people(project, UAT, "uat")
+
+
+def defect_log(project):
+    """The project's defect log (tools/uat.py): every defect from the testers' results, with its status. In a
+    folder of its own, so it is never taken for a UAT scripts file."""
+    return uat_source(project) / "defects" / "defects.json"
+
+
+def defect_log_xlsx(project):
+    return uat_output(project) / DEFECT_LOG
 
 
 def changes_source(project):
@@ -733,7 +744,8 @@ def main():
                          ("workshop documents", workshops_output(p)), ("mock-up", mockup_dir(p)), ("screenshots", screenshots_dir(p)),
                          ("comments", feedback_file(p)), ("requirements documents", output_dir(p)), ("issued versions", issued_file(p)),
                          ("estimates (sources)", estimates_source(p)), ("estimates (Excel)", estimates_output(p)),
-                         ("UAT (sources)", uat_source(p)), ("UAT documents", uat_output(p)), ("CR log", cr_log(p)),
+                         ("UAT (sources)", uat_source(p)), ("UAT documents", uat_output(p)),
+                         ("defect log", defect_log(p)), ("defect log (Excel)", defect_log_xlsx(p)), ("CR log", cr_log(p)),
                          ("CR notes", cr_notes_dir(p)), ("CR log (Excel)", cr_log_xlsx(p))):
         print(f"  {label:24} {shown(p, where)}{'' if where.exists() else '  (not yet)'}")
 
