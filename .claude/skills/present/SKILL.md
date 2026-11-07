@@ -8,7 +8,8 @@ description: Open a project's mock-up to present it, or run a live session with 
 ## Open it
 
 - **Only the user is looking, or they are rehearsing:** if this app's browser pane is available (the
-  `mcp__Claude_Browser__*` tools), start the server (below) and open its address in the pane. They can then
+  `mcp__Claude_Browser__*` tools), start the server (below) with `--no-open`, so their default browser stays
+  shut, and open its address in the pane. They can then
   say here what should change, and you can see what they see. This is the quickest way and needs nothing else.
 - **For a session with the client:** run the server in the background (it must keep running) and give the
   user the address it prints. It opens in their own browser.
@@ -28,7 +29,8 @@ on; the walk-through is kept through reloads and shared with every laptop in the
 data** on the bar starts it again. Grey **Custom development** tags mark what is custom work on the
 platform; **Custom work** on the bar hides them. When the project changes, the bar offers **Update ready**:
 nothing reloads by itself, and the walk-through survives it. After it a **What changed** panel lists each change
-and the comments worked in; **Start** and **Next** take the room to each one with the element outlined. The window that started the mock-up must stay
+and the comments worked in; **Start** and **Next** take the room to each one with the element outlined. Someone
+who opens the page afresh (late, or after a reload) finds **What changed since v0.4** on the bar instead. The window that started the mock-up must stay
 open: if it is closed, the mock-up says in red that a comment was not saved and keeps it in the browser
 until the mock-up is started again and **Try again** is pressed in the Feedback panel. Opened straight from
 the mock-up's `index.html` (in `_blueprint/mockup`) without the server, comments are exported with a button instead.
@@ -86,9 +88,13 @@ they say **go**, you work through everything that is waiting.
      room keeps seeing the last good mock-up. Fix it and run `done` again, or `live undo`. If it lists settings
      the mock-up ignores, fix them before going on.
 5. **For the rest:** `live mark projects/<slug> <id> question|scope|declined --note "<why>"`, with a register
-   item for a question or a possible change request (`--register R-0xx`), as `apply-feedback` does. The note
-   and the word "scope" are internal: the mock-up only shows Received, Working on it, Applied or Noted for
-   follow-up.
+   item for a question or a possible change request (`--register R-0xx`), as `apply-feedback` does. A
+   decision (often not to build what was asked) is `decision`: the room reads **Decided**, never Applied. A
+   comment that is applied and also carries a possible change request (an export built, and fuel claims a CR)
+   is `done ... --cr R-0xx`, so the summary counts the CR half. The note and the word "scope" are internal: the
+   mock-up only shows Received, Working on it, Applied, Decided or Noted for follow-up. A comment someone
+   says aloud or e-mails about a screen goes in with
+   `python -I tools/mockup.py comment projects/<slug> --screen <id> --element <what> --text "..."`.
 6. Tell the user in one line how many updates are ready to press, and that new comments keep collecting.
 7. **"Put it back" / "undo that":** `live undo projects/<slug>` restores the spec and the project's own code
    as they were before the last change, and its comments read "Received" again, so the room never sees
@@ -123,7 +129,7 @@ they say **go**, you work through everything that is waiting.
   opening the mock-up, which version was shown and to whom.
 - **Where and for whom:** the new mock-up version (the one shown in the room is kept and can be shown
   again), **for the client**; the change note (in `2 Reviews`) and the reasons on each comment are
-  **internal**: the room only ever sees Received, Working on it, Applied or Noted for follow-up.
+  **internal**: the room only ever sees Received, Working on it, Applied, Decided or Noted for follow-up.
   `Project overview.html` lists the versions and the change note.
 - **Next step, in the words to say:** "apply the feedback" for comments still waiting; if the client
   answered open questions in the session, "the client answered"; if the project has a requirements

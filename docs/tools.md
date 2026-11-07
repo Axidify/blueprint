@@ -129,13 +129,19 @@ See [The register](register.md).
 
 ```bash
 python -I tools/mockup.py build       projects/<slug>
-python -I tools/mockup.py serve       projects/<slug> [--port 8765] [--lan]
+python -I tools/mockup.py serve       projects/<slug> [--port 8765] [--lan] [--no-open]
 python -I tools/mockup.py screenshots projects/<slug>
 python -I tools/mockup.py feedback    projects/<slug>
+python -I tools/mockup.py comment     projects/<slug> --screen <id> --text "..." [--element field:x] [--role <id>] [--author "..."] [--dialog <id>]
 python -I tools/mockup.py look        projects/<slug> [--try key=value ...]
 ```
 `serve` on a project whose mock-up is already open does not start a second server: it opens the running one
-and says where it is. `look` prints the look of the client's screens (theme, colour, data colours, text size, font, corners, side menu, top bar,
+and says where it is. `--no-open` leaves the default browser shut (to open the page yourself, in the browser
+you present from). `comment` saves a comment on a screen as the mock-up does, under the next number and with
+the spec's version, for something said aloud or sent by e-mail about a screen: `--element` names what it is
+about as the mock-up names it (`field:reason`, `button:Approve`, `column:Status`). It is safe while the mock-up
+is served, and in a live session the comment waits like any other. A comment posted to the server without the
+version it was made on takes the version the server is showing. `look` prints the look of the client's screens (theme, colour, data colours, text size, font, corners, side menu, top bar,
 logo and the project's own CSS), says when the current version was issued, and notes white words that are
 hard to read on the project's colour (below 4.5 to 1), a font the mock-up does not carry, an accent or data colour in `desk` that
 is close to a status colour or is violet or indigo, and a look that is custom work on a Joget platform.
@@ -157,7 +163,10 @@ An open mock-up follows its spec: when the spec changes it is built again and th
 screens, fields, buttons, list columns, figures, dialogs, statuses, roles, sample data and the look, each
 with the comments worked in for it, and the comments dealt with elsewhere. Click a change, or press **Start**
 and **Next**, to open its screen (as a role that can see it) with the element outlined; **What changed** on
-the bar opens the list again until the next update.
+the bar opens the list again until the next update. A page opened afresh (a reload, someone who joins late)
+never saw Update ready: its bar offers **What changed since v0.4**, against the mock-up the client was first
+shown in a live session of this version, or else the version before (from `mockup/versions/`), with the
+comments made on that one and dealt with since. Nothing opens by itself.
 The comparison is made in the page, from the spec it was opened with and the new one; text only the
 requirements document prints (descriptions, captions, requirements) is left out. A spec with a mistake
 keeps the last good mock-up on show.
@@ -175,8 +184,8 @@ and every count.
 python -I tools/mockup.py live start projects/<slug>
 python -I tools/mockup.py live list  projects/<slug>
 python -I tools/mockup.py live take  projects/<slug> <FB-id> [<FB-id> ...]
-python -I tools/mockup.py live done  projects/<slug> <FB-id> [--note "..."]
-python -I tools/mockup.py live mark  projects/<slug> <FB-id> <status> [--note "..."] [--register R-031]
+python -I tools/mockup.py live done  projects/<slug> <FB-id> [--note "..."] [--cr R-051]
+python -I tools/mockup.py live mark  projects/<slug> <FB-id> <status> [--note "..."] [--register R-031] [--cr R-051]
 python -I tools/mockup.py live undo  projects/<slug>
 python -I tools/mockup.py live end   projects/<slug>
 ```
@@ -193,11 +202,21 @@ outcome as a dot and a word, the note, the register item and the version it was 
 with a summary by outcome and by version. The project overview writes it too when the comments changed. `undo` puts the spec and the project's own code
 back as they were before the last change, and makes its comments wait again (Received); it does not touch
 the register, so register items made for that change are put back with `register.py update` (it names them).
-When the copy kept before the change is missing, `undo` stops and changes nothing. `end` closes the session and says what to release. (`wait`,
+When the copy kept before the change is missing, `undo` stops and changes nothing. `--cr R-051` records a possible
+change request a comment carries beside its own outcome (an export applied, and fuel claims a possible CR):
+internal, never sent to the mock-up. `end` closes the session and says what it did in lines that add up: the
+comments of this session (saved since it started) by what became of each, then how many changes were made to
+the spec for them (one per take or checkpoint, so one change can settle several comments), then the possible
+change requests comments carried beside their own outcome. Then it says what to release. (`wait`,
 which returns as soon as a comment arrives, and `checkpoint`, which keeps the project without marking a
 comment, are there for working on each comment at once.) The mock-up is only ever sent a
-comment's text and one of four words (Received, Working on it, Applied, Noted for follow-up): notes,
-register items and the word "scope" stay in the project.
+comment's text and one of five words (Received, Working on it, Applied, Decided, Noted for follow-up): notes,
+register items and the word "scope" stay in the project. A `decision` reads **Decided**, never Applied: a
+decision not to build something must not tell the client it was built.
+
+A new comment is linked (`follows`) to the earlier comments on the same screen about the same things: a
+comment on one thing follows those on that thing and the boxes drawn round it, and a box round several things
+follows only the boxes round all of them, never each comment on one of its things.
 
 Builds the mock-up from the spec (self-contained: `_blueprint/mockup/index.html` opens without a server), serves it
 with feedback capture, captures screenshots with Edge, or lists saved feedback by screen.
@@ -208,7 +227,7 @@ record), `build` says how many, lists the moves the status rules allow that no b
 moves the rules mark as made by the system on its own (`auto`). It says which theme it drew (`theme joget:
 the spec sets no theme, so it keeps joget` when the spec has none). It says
 which forms add a record when submitted (and to which list, in which status), and which main buttons only
-show their message, and how many parts of the mock-up carry a "Custom development" tag (from the spec's
+show their message, whether the screens of a custom build are left untagged, and how many parts of the mock-up carry a "Custom development" tag (from the spec's
 `platform_fit` and the project's own code). It also lists, as warnings, settings the mock-up ignores (a
 misspelling, a stray key from a comma in unquoted text, a `style`, `creates` or `example` on a row
 action), and text the client would read in the mock-up that names a register item (`R-…`) or a mock-up comment

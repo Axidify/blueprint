@@ -80,6 +80,25 @@ See [docs/maintaining.md](docs/maintaining.md).
 - **The requirements standard lists the new sections.** The starter knowledge base's
   `requirements-standard.md` now asks for Data migration, Reports, Audit trail, and Training and handover, with
   what each must include, so `review-requirements` checks a client's document for them too.
+- **Phone screens without code.** `device: phone` on a screen (or `project.device: phone` for all of them, with
+  `device: desktop` for a web page among them) draws it as a phone app: the phone, a tab bar at the bottom, Back
+  saying where it goes, a large title, lists as rows, one field per line, the main button full width, and dialogs
+  as sheets that slide up from the bottom. A web portal and a driver's app can be one mock-up, with no phone
+  frame copied into the project's own code.
+- **A camera field.** `type: camera` is a photo taken with the phone's camera: it reads **Take a photo**, never
+  "Drop file here or browse".
+- **A filter that opens on a value.** `filter_start: {site: North yard}` on a list opens it already filtered ("on
+  my own yard"), and `filter_start_by_role` gives a role its own start (a manager on every site). Clear Filters
+  still shows everything.
+- **One change moves the records that name it.** `also_move` with `named_by` moves every record of another list
+  that names this one, those its `where` lets through: cancelling a plan cancels its tasks still to do. The build
+  checks the move against those records' status rules.
+- **Add a comment from the command line.** `mockup.py comment <project> --screen … --text …` saves a comment as
+  the mock-up does, for something said aloud or sent by e-mail about a screen.
+- **What changed, on a page opened afresh.** Someone who reloads or joins late finds **What changed since v0.4**
+  on the presenter's bar: against the mock-up first shown in this version's live session, or the version before.
+- `serve --no-open` leaves the default browser shut. `live done … --cr R-051` records a possible change request a
+  comment carries beside its own outcome.
 
 ### Changed
 - **The client sees first what still needs an answer.** In `Questions for the client.xlsx` and the register,
@@ -99,6 +118,16 @@ See [docs/maintaining.md](docs/maintaining.md).
   a screen shows, adding and editing a list's entries). A process step is made with the button named after it, and
   a draft or a rejected record goes on with its form's own button. The sample project's draft has no case left to
   refine (12 before).
+- **A custom build tags nothing as custom work.** Where the platform calls itself custom (or
+  `project.custom_build: true`), the mock-up no longer tags every phone screen "Custom development": everything
+  there is custom work, and the build says so.
+- **A decision reads Decided in the mock-up**, never Applied: a decision not to build something no longer tells
+  the client it was built.
+- **The live session's summary adds up.** `live end` counts this session's comments by what became of each,
+  then the changes made to the spec for them (one change can settle several comments), then the possible change
+  requests comments carried beside their own outcome.
+- **A comment is linked to earlier ones by what it is about.** A box round several things follows only the boxes
+  round all of them, no longer each comment on one of its things or a comment from an earlier round nearby.
 
 ### Fixed
 - **The next step follows the project to the end.** Once a version has gone to the client, the start-up summary
@@ -110,6 +139,9 @@ See [docs/maintaining.md](docs/maintaining.md).
 - **Two figures with one caption: advice that works.** The generator's warning now suggests a caption for the
   extra screenshot that says what differs (the record, role, page or dialog it shows), and says not to use the
   screen's own `caption`, which both figures take. Following the old advice could leave the two still alike.
+- A comment posted to the mock-up server without its version takes the version being served, instead of
+  showing as "vNone" in `mockup.py feedback`.
+- The build no longer says "0 parts of the mock-up carry a tag …, and so does what the project's own code adds".
 
 ## [1.5.0] - 2026-11-07
 

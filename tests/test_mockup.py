@@ -1151,10 +1151,13 @@ def test_the_page_that_lists_every_mockup_is_never_shared_with_the_room(temp_wor
 
 def test_serve_without_a_project_opens_the_home_page(monkeypatch):
     called = []
-    monkeypatch.setattr(mockup, "serve_home", lambda port, lan: called.append((port, lan)))
+    monkeypatch.setattr(mockup, "serve_home", lambda port, lan, open_browser=True: called.append((port, lan, open_browser)))
     monkeypatch.setattr(sys, "argv", ["mockup.py", "serve", "--port", "9010"])
     mockup.main()
-    assert called == [(9010, False)]
+    assert called == [(9010, False, True)]
+    monkeypatch.setattr(sys, "argv", ["mockup.py", "serve", "--port", "9010", "--no-open"])
+    mockup.main()
+    assert called[-1] == (9010, False, False), "--no-open leaves the default browser shut"
     monkeypatch.setattr(sys, "argv", ["mockup.py", "build"])
     with pytest.raises(SystemExit):
         mockup.main()   # every other command needs a project
@@ -1233,7 +1236,7 @@ def test_the_room_is_not_sent_internal_notes(served):
         raw = answer.read().decode("utf-8")
     assert "possible CR" not in raw and "R-031" not in raw and "duplicate" not in raw and "renamed" not in raw and "scope" not in raw
     sent = json.loads(raw)
-    assert [c["state"] for c in sent] == ["noted", "applied", "working", "received", "noted", "applied", "noted"]
+    assert [c["state"] for c in sent] == ["noted", "applied", "working", "received", "noted", "decided", "noted"]
     assert sent[0] == {"id": "FB-001", "screen": "approvals", "text": "one", "author": "Ali", "state": "noted"}
     status, saved_comment = post(served, json.dumps({"text": "eight", "build": "123"}).encode())
     assert status == 200 and saved_comment["state"] == "received" and saved_comment["build"] == "123"
@@ -1440,7 +1443,7 @@ def test_ending_a_session_says_what_to_release_and_stops_listening(session, caps
     capsys.readouterr()
     mockup.live_end(session)
     out = capsys.readouterr().out
-    assert "1 change made to the spec: for FB-001." in out and "Comments: 1 applied, 0 questions, 0 possible change requests, 0 declined, 0 still waiting." in out
+    assert "1 comment in this session: 1 applied." in out and "1 change made to the spec for them, one per take or checkpoint: FB-001." in out
     assert "bump project.version" in out and "kept as mockup/versions/v0.1-presented-" in out
     assert not mockup.is_listening(session)
     with pytest.raises(SystemExit):
@@ -3148,3 +3151,186 @@ def test_a_second_server_on_one_project_points_to_the_first(tmp_path, monkeypatc
     monkeypatch.setattr(mockup.webbrowser, "open", lambda url: None)
     with pytest.raises(SystemExit, match="already open at http://localhost:8765/"):
         mockup.serve(project, 8766, False)
+
+
+# ---------------------------------------------------------------------- phones, and what the cold run found
+def phone_spec():
+    """The sample with the employee's screens as phone screens: a camera field on the form, the applications
+    filter opening on Pending Approval, and a plan whose cancelling cancels the applications still waiting in it."""
+    spec = sample()
+    spec["project"]["theme"] = "desk"
+    for s in spec["screens"]:
+        if s["id"] in ("my-applications", "new-application", "application-details"):
+            s["device"] = "phone"
+    lst = screen(spec, "my-applications")["list"]
+    lst["filter_start"] = {"status": "Pending Approval"}
+    lst["filter_start_by_role"] = {"hr": {"status": "All"}}
+    screen(spec, "new-application")["sections"][0]["fields"].append({"id": "photo", "label": "Photo", "type": "camera"})
+    spec["data"]["plans"] = [{"plan_no": "PL-1", "title": "Week 46", "status": "Pending Approval"}]
+    for a in spec["data"]["applications"]:
+        a["plan"] = "PL-1"
+    spec["screens"].append({"id": "plan", "type": "detail", "title": "Plan", "menu": "Plans", "roles": ["employee"], "device": "phone",
+                            "data": "plans", "sections": [{"title": "Plan", "fields": [{"id": "plan_no", "label": "Plan"}, {"id": "title", "label": "Title"}]}],
+                            "buttons": [{"label": "Cancel plan", "style": "danger", "set_status": "cancelled", "when": {"status": "Pending Approval"},
+                                         "also_move": {"data": "applications", "named_by": "plan", "where": {"status": "Pending Approval"},
+                                                       "set_status": "cancelled"}}]})
+    return spec
+
+
+def test_the_spec_can_say_phone_camera_filter_start_and_records_that_name_one():
+    spec = phone_spec()
+    warnings = []
+    assert mockup.validate(spec, warnings) == [] and warnings == []
+    bad = phone_spec()
+    bad["project"]["device"] = "tablet"
+    screen(bad, "plan")["device"] = "watch"
+    bad_list = screen(bad, "my-applications")["list"]
+    bad_list["filter_start"] = {"days": 2}
+    bad_list["filter_start_by_role"] = {"boss": {"status": "All"}}
+    screen(bad, "plan")["buttons"][0]["also_move"]["named_by"] = "plann"
+    errors = mockup.validate(bad)
+    assert "project: device 'tablet' must be one of phone, desktop (phone draws every screen as a phone app)" in errors
+    assert "screen plan: device 'watch' must be one of phone, desktop" in errors
+    assert any("filter_start sets 'days', which is not one of the list's filters" in e for e in errors)
+    assert any("filter_start_by_role names 'boss', which is not a role" in e for e in errors)
+    assert any("named_by 'plann' is not a field of the 'applications' data" in e for e in errors)
+
+
+def test_moving_the_records_that_name_one_is_checked_against_their_status_rules():
+    spec = phone_spec()
+    del screen(spec, "plan")["buttons"][0]["also_move"]["where"]  # every application of the plan, a rejected one too
+    errors = mockup.validate(spec)
+    assert any("moves the 'applications' record LV-2026-009" in e and "Rejected" in e for e in errors), errors
+    both = phone_spec()
+    screen(both, "plan")["buttons"][0]["also_move"]["link"] = "plan"
+    assert any("give 'link' (the record this one names) or 'named_by'" in e for e in mockup.validate(both))
+
+
+def test_a_custom_build_tags_nothing_as_custom_work(tmp_path, capsys):
+    spec = sample()
+    spec["platform_fit"] = PLATFORM_FIT
+    assert mockup.custom_work(spec)["tags"], "on a product, its custom parts are tagged"
+    spec["project"]["platform"] = "Custom Angular (web) + Android mobile app"
+    assert mockup.custom_build(spec) and mockup.custom_work(spec) == {"tags": [], "code": None, "custom_build": True}
+    spec["project"]["custom_build"] = False
+    assert not mockup.custom_build(spec), "the spec's own word wins"
+    project = tmp_path / "custom"
+    spec["project"]["custom_build"] = True
+    support.write_spec(project, spec)
+    (project / "spec" / "mockup.js").write_text("Mockup.onRender(function () {});\n", encoding="utf-8")
+    mockup.build(project)
+    out = capsys.readouterr().out
+    assert "everything is custom work, so the mock-up tags nothing" in out
+    assert '"custom_build": true' in (project / "mockup" / "build.js").read_text(encoding="utf-8")
+
+
+def test_the_build_message_about_custom_code_reads_right_with_no_tagged_parts(tmp_path, capsys):
+    project = tmp_path / "code"
+    support.write_spec(project, sample())
+    (project / "spec" / "mockup.js").write_text("Mockup.onRender(function () {});\n", encoding="utf-8")
+    mockup.build(project)
+    out = capsys.readouterr().out
+    assert "What the project's own mock-up code adds carries a \"Custom development\" tag while presenting" in out
+    assert "0 parts" not in out
+
+
+def test_a_decision_reads_decided_in_the_room_never_applied(session, capsys):
+    mockup.live_mark(session, "FB-001", "decision", "not built: costs extra")
+    assert 'reads "Decided"' in capsys.readouterr().out
+    assert mockup.for_the_room(comments(session))[0]["state"] == "decided"
+    assert mockup.room_state({"status": "applied"}) == "applied" and mockup.room_state({"status": "question"}) == "noted"
+
+
+def test_a_session_summary_adds_up_and_counts_a_change_request_a_comment_carries(session, capsys):
+    fb = session / "feedback" / "feedback.json"
+    for text in ("Add an export", "No drill-down", "Who resets passwords?"):
+        mockup.save_comment(fb, {"screen": "approvals", "element": "", "role": "manager", "text": text})
+    mockup.live_take(session, ["FB-001", "FB-002"])
+    mockup.live_done(session, ["FB-001"], "renamed the column")
+    mockup.live_done(session, ["FB-002"], "export added", cr="R-051")
+    mockup.live_mark(session, "FB-003", "decision", "not built")
+    mockup.live_mark(session, "FB-004", "question", register="R-049")
+    capsys.readouterr()
+    mockup.live_end(session)
+    out = capsys.readouterr().out
+    assert "4 comments in this session: 2 applied, 1 decided, 1 made a question for the client." in out
+    assert "1 change made to the spec for them, one per take or checkpoint: FB-001, FB-002." in out
+    assert "Also 1 possible change request carried by a comment beside its own outcome: FB-002 (R-051)." in out
+    assert "possible_cr" not in json.dumps(mockup.for_the_room(comments(session))), "internal: never told to the room"
+
+
+def test_a_comment_can_be_added_from_the_command_line(projects, monkeypatch, capsys):
+    project = projects / "leave-request"
+    monkeypatch.setattr(sys, "argv", ["mockup.py", "comment", str(project), "--screen", "approvals", "--element", "column:Employee",
+                                      "--author", "Ali", "--text", "Call this column Staff"])
+    mockup.main()
+    saved_ = comments(project)[-1]
+    assert {k: saved_[k] for k in ("screen", "element", "author", "text", "role", "version")} == {
+        "screen": "approvals", "element": "column:Employee", "author": "Ali", "text": "Call this column Staff", "role": "manager", "version": "0.1"}
+    assert f"{saved_['id']} saved on Pending Approvals, the Employee column, v0.1." in capsys.readouterr().out
+    with pytest.raises(SystemExit) as stop:
+        mockup.add_comment(project, "aprovals", "x")
+    assert "did you mean 'approvals'" in str(stop.value.code)
+
+
+def test_the_server_stamps_the_version_it_serves_on_a_comment_without_one(served):
+    status, answer = post(served, json.dumps({"screen": "approvals", "text": "No version sent"}).encode())
+    assert status == 200 and answer["version"] == "0.1" and saved(served)[-1]["version"] == "0.1"
+    status, answer = post(served, json.dumps({"screen": "approvals", "text": "Its own", "version": "0.0"}).encode())
+    assert answer["version"] == "0.0", "a version the page sent is kept"
+
+
+def test_a_build_names_the_earlier_mockup_a_fresh_page_compares_with(tmp_path):
+    project = tmp_path / "since"
+    spec = sample()
+    support.write_spec(project, spec)
+    quiet_build(project)
+    build = lambda: json.loads((project / "mockup" / "build.js").read_text(encoding="utf-8").split("=", 1)[1].strip().rstrip(";"))
+    assert build()["earlier"] is None, "nothing before the first version"
+    spec["project"]["version"] = "0.2"
+    screen(spec, "approvals")["title"] = "Waiting for me"
+    support.write_spec(project, spec)
+    quiet_build(project)
+    earlier = build()["earlier"]
+    assert earlier["label"] == "v0.1" and earlier["version"] == "0.1" and screen(earlier["spec"], "approvals")["title"] == "Pending Approvals"
+    assert mockup.version_key("0.10") > mockup.version_key("0.9")
+
+
+def test_phone_screens_in_the_browser(tmp_path):
+    """Drawn by the engine from the spec alone: no project code."""
+    node = shutil.which("node")
+    if not node or not (support.ROOT / "node_modules" / "playwright-core").is_dir():
+        pytest.skip("needs Node.js and the Node packages (run setup.cmd or ./setup.sh)")
+    project = tmp_path / "phone"
+    spec = phone_spec()
+    support.write_spec(project, spec)
+    quiet_build(project)  # v0.1, kept as a version
+    spec["project"]["version"] = "0.2"
+    screen(spec, "approvals")["title"] = "Waiting for me"
+    support.write_spec(project, spec)
+    quiet_build(project)
+    run = subprocess.run([node, str(support.ROOT / "tests" / "mockup_phone.mjs"), str(project / "mockup" / "index.html")],
+                         cwd=support.ROOT, capture_output=True, text=True, encoding="utf-8", timeout=120)
+    if run.returncode == 77:
+        pytest.skip(f"Microsoft Edge could not be started: {run.stderr.strip()[:200]}")
+    assert run.returncode == 0, run.stderr
+    seen = json.loads(run.stdout.strip().splitlines()[-1])
+    assert "failed" not in seen, seen.get("failed")
+    assert seen["errors"] == []
+    lst = seen["list"]
+    assert lst["phone"] and lst["width"] == 390 and not lst["topbar"] and not lst["sidebar"] and lst["bodyPhone"]
+    assert lst["tabs"] == ["My Applications", "New Application", "Plans"] and lst["on"] == "My Applications"
+    assert lst["heads"] == 0 and lst["filtersFolded"]
+    assert lst["filter"] == "Pending Approval" and lst["rows"] == ["LV-2026-014"], "the filter opens on its starting value"
+    assert seen["detail"] == {"back": "‹ My Applications", "screen": "application-details"}
+    sheet = seen["sheet"]
+    assert sheet["inPhone"] and sheet["width"] == sheet["phoneWidth"] - 20 and abs(sheet["bottom"] - 10) <= 1, sheet
+    assert seen["camera"] == "Take a photo" and "Drop file" not in seen["camera"]
+    assert seen["file"].startswith("Take a photo or choose a file"), "a file field on a phone"
+    assert seen["photo"].strip().startswith("photo-") and seen["photo"].strip().endswith(".jpg")
+    assert seen["desktop"] == {"phone": False, "topbar": True, "bodyPhone": False}
+    assert seen["cascade"] == {"plan": "Cancelled", "applications": {"LV-2026-014": "Cancelled", "LV-2026-013": "Approved",
+                                                                    "LV-2026-011": "Cancelled", "LV-2026-009": "Rejected"}}
+    assert seen["layers"] == {"boxOfThree": ["FB-003"], "boxOfTwo": ["FB-003"], "one": ["FB-001", "FB-003"], "boxOfFour": []}
+    assert seen["since"] == {"hidden": False, "label": "What changed since v0.1"}
+    assert "Title: Pending Approvals → Waiting for me" in seen["sinceList"] and "v0.1 → v0.2" in seen["sinceHead"]

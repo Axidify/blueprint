@@ -167,9 +167,11 @@ one hand), and shared or personal devices.
 
 ### What the mock-up can show today
 
-The engine draws every screen at desktop width; `desk` only tightens its spacing below 1100px. Phone screens
-are drawn in the project's own mock-up code (`mockup.js` and `mockup.css`): a phone frame 390px wide with the
-tab bar at the bottom, as a mobile project's spec can describe. Write what differs on a phone into the spec's
+The engine draws a screen at desktop width unless the spec marks it `device: phone` (or the project
+`device: phone`): it is then drawn as a mobile app, as this section says: a phone 390 × 844, the tab bar at the
+bottom, a large title, lists as rows, one field per row, the main button full width, dialogs as sheets from the
+bottom, and a `camera` field that only takes a photo (spec format: Phone screens). `desk` only tightens a desktop
+screen's spacing below 1100px; a web system opened on a phone (responsive) is not drawn. Write what differs on a phone into the spec's
 requirements too ("On a phone, a technician sees their jobs as a list of rows …"), since the requirements
 document is written from the spec. Screenshots are taken 1000px wide, so a phone screen sits in the middle of
 its picture.
@@ -291,8 +293,8 @@ Sentence case for buttons, titles, labels and menu items. Plain words, verb firs
 
 The `desk` theme follows this page, except for what has not been built yet:
 
-- No phone or tablet layout of its own: phone screens are drawn in the project's own mock-up code (see
-  Phones and tablets).
+- No tablet layout, and no responsive web screens on a phone: a phone app is drawn (`device: phone`), a web
+  page opened on a phone is not (see Phones and tablets).
 - Not drawn yet: icons, the focus card, tabs with counts, a type's colour square, charts, a header card on a
   record's page, empty states that invite.
 
