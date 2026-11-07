@@ -278,17 +278,29 @@
   // `also_move`: a record of another list that this one names (a loan's `car`) moves along with it, to its
   // own status, and may take values across (`copy: {field there: field here}`).
   // Returns the linked records it moved, as {list: [ids]}, for the walk-through to keep and share.
+  // With `named_by` it is the other way round: every record of the other list that names this one (a plan's
+  // tasks, by their `plan_no`) moves, those its `where` lets through (the tasks not yet done); `match` is the
+  // field of this record they name, its identifier when left out.
   function moveLinked(links, rec) {
     const moved = {};
     links.forEach((l) => {
       const list = (S.data || {})[l.data] || [];
-      const key = l.key || Object.keys(list[0] || {})[0];
-      const other = rec[l.link] == null ? null : list.find((x) => String(x[key]) === String(rec[l.link]));
+      const id = Object.keys(list[0] || {})[0];
       const to = findStatus(l.set_status);
-      if (!other || !to) return;
-      setStatus(other, to);
-      Object.entries(l.copy || {}).forEach(([there, here]) => { other[there] = rec[here]; });
-      (moved[l.data] = moved[l.data] || []).push(String(other[Object.keys(list[0] || {})[0]]));
+      if (!to) return;
+      let others;
+      if (l.named_by != null && l.named_by !== "") {
+        const mine = rec[l.match != null ? l.match : Object.keys(rec)[0]];
+        others = mine == null ? [] : list.filter((x) => String(x[l.named_by]) === String(mine) && matches(l.where, x));
+      } else {
+        const key = l.key || id;
+        others = rec[l.link] == null ? [] : list.filter((x) => String(x[key]) === String(rec[l.link])).slice(0, 1);
+      }
+      others.forEach((other) => {
+        setStatus(other, to);
+        Object.entries(l.copy || {}).forEach(([there, here]) => { other[there] = rec[here]; });
+        (moved[l.data] = moved[l.data] || []).push(String(other[id]));
+      });
     });
     return moved;
   }
@@ -479,6 +491,7 @@
         const opts = options(field);
         if (field.default != null && field.default !== "") v = field.default;
         else if (field.type === "file") v = "sample-document.pdf";
+        else if (field.type === "camera") v = samplePhoto();
         else if (field.type === "signature") v = role.user || role.name || "";
         else if (opts.length) v = field.type === "checkbox" ? (like != null && opts.map(String).includes(String(like)) ? like : "") : freeChoice(field, opts, like);
         else if (like != null) {
@@ -579,6 +592,66 @@
       </div>`;
   }
 
+  // ------------------------------------------------------------------ phone screens
+  const screenKind = { phone: false };  // the screen being drawn is a phone screen (set by render)
+  // A screen with `device: phone` (or every screen, with `project.device: phone`; a screen's own `device: desktop`
+  // keeps it a web page) is drawn as a phone app, after Apple's own apps (docs/design-language.md, Phones and
+  // tablets): a phone 390 × 844 on the page, its status bar, a top bar with Back on a screen opened from a list,
+  // a large title, the lists as rows, one field per line, the main button full width within thumb reach, and a
+  // tab bar at the bottom with the phone screens of the menu (at most five: more go under More). A dialog is a
+  // sheet that slides up from the bottom. The phone's own parts are how the mock-up is shown, never custom work.
+  const DEVICE = String(P.device || "").toLowerCase();
+  const isPhone = (screen) => String((screen && screen.device) || DEVICE).toLowerCase() === "phone";
+  const TAB_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/></svg>';
+  const MORE_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>';
+  const phoneTabs = (role) => S.screens.filter((s) => s.menu && isPhone(s) && canSee(s, role));
+  let cameFrom = null, shownScreen = null;  // the screen shown before this one (Back names it and goes back to it), and this one
+  function phoneShell(r, screen, body) {
+    const role = byId(S.roles, r.role) || { name: r.role };
+    const tabs = phoneTabs(r.role);
+    const shown = tabs.length > 5 ? tabs.slice(0, 4) : tabs;
+    const more = tabs.length > 5 ? tabs.slice(4) : [];
+    const onTab = tabs.some((s) => s.id === screen.id);
+    const from = cameFrom && cameFrom !== screen.id ? byId(S.screens, cameFrom) : null;
+    const backTo = from && isPhone(from) ? from : tabs[0];
+    const back = !onTab && backTo ? `<a href="#" class="p-back" data-back="${esc(backTo.id)}" data-el="button:Back">‹ ${esc(backTo.menu || backTo.title || "Back")}</a>` : "<span></span>";
+    const clean = r.q.clean ? "?clean=1" : "";
+    const tab = (s) => `<a class="p-tab${s.id === screen.id ? " on" : ""}" data-el="menu:${esc(s.menu)}" href="#/${s.id}${clean}">${TAB_ICON}<span>${esc(s.menu)}</span></a>`;
+    const moreOn = more.some((s) => s.id === screen.id);
+    return `
+      <div class="phone-stage">
+        <div class="phone" data-el="region:phone">
+          <div class="p-status" aria-hidden="true"><span>9:41</span><span class="p-signal"><i></i><i></i><i></i><i></i></span></div>
+          <header class="p-bar" data-el="region:header">${back}<span class="user" data-el="header:user">${role.user ? person(role.user) : esc(role.name)}</span><a class="logout" href="#/login" data-el="header:logout">${W.logout}</a></header>
+          <main class="content p-content" id="content" data-el="region:page background">${body}</main>
+          ${tabs.length ? `<nav class="p-tabs" data-el="region:tab bar">${shown.map(tab).join("")}${more.length ? `<a href="#" class="p-tab${moreOn ? " on" : ""}" data-more data-el="menu:More">${MORE_ICON}<span>More</span></a>` : ""}</nav>` : ""}
+          ${more.length ? `<div class="p-more" hidden data-el="region:more">${more.map((s) => `<a class="p-more-item" data-el="menu:${esc(s.menu)}" href="#/${s.id}${clean}">${esc(s.menu)}<span>›</span></a>`).join("")}</div>` : ""}
+          <div class="p-home" aria-hidden="true"></div>
+        </div>
+      </div>`;
+  }
+  // A list on a phone: a row per record, the first column on top, the next two under it in grey, the first
+  // status column on the right, and a chevron when the row opens a screen. The row's other actions are links.
+  function phoneRows(list, r, data, key) {
+    const cols = list.columns || [];
+    const chip = cols.find((c) => c.chip);
+    const [main, ...rest] = cols.filter((c) => !c.chip);
+    const details = rest.slice(0, 2);
+    const cell = (c, row, cls) => `<span class="${cls}" data-el="cell:${esc(c.label)}|${esc(row[key])}">${esc(row[c.field])}</span>`;
+    return data.map((row) => {
+      const acts = (list.actions || []).filter((a) => matches(a.when, row) && (!a.roles || a.roles.includes(r.role)));
+      const opener = acts.find((a) => a.to && !a.dialog && a.set_status == null);
+      const others = acts.filter((a) => a !== opener);
+      const text = `${main ? cell(main, row, "p-main") : ""}${details.length ? `<span class="p-details">${details.filter((c) => row[c.field] != null && row[c.field] !== "").map((c) => cell(c, row, "p-detail")).join('<span class="p-dot"> · </span>')}</span>` : ""}`;
+      const side = `${chip ? `<span class="p-side" data-el="cell:${esc(chip.label)}|${esc(row[key])}"><span class="chip ${statusClass(row[chip.field])}">${esc(row[chip.field])}</span></span>` : ""}${opener ? '<span class="p-chevron" aria-hidden="true">›</span>' : ""}`;
+      const body = opener
+        ? `<a href="#" class="p-row-link" data-el="action:${esc(opener.label)}" data-go="${esc(opener.to)}" data-record="${esc(row[key])}" data-list="${esc(list.data)}"${opener.toast ? ` data-toast="${esc(opener.toast)}"` : ""}><span class="p-text">${text}</span>${side}</a>`
+        : `<div class="p-row-link"><span class="p-text">${text}</span>${side}</div>`;
+      const links = others.length ? `<div class="p-actions" data-el="cell:${W.action}|${esc(row[key])}">${others.map((a) => rowAction(a, row, key, list)).join(" ")}</div>` : "";
+      return `<tr data-row="${esc(JSON.stringify(Object.fromEntries([...(list.filters || []), ...(list.search || [])].map((f) => [f, row[f] == null ? "" : String(row[f])]))))}" data-el="row:${esc(row[key])}"><td class="p-row">${body}${links}</td></tr>`;
+    }).join("");
+  }
+
   function renderLogin(screen) {
     return `
       <div class="login-wrap" data-el="region:sign-in page">
@@ -625,6 +698,16 @@
       + ` ${a.toast ? `data-toast="${esc(a.toast)}"` : ""}>${esc(a.label)}</a>`;
   }
 
+  // The values a list's filters open on, for the role signed in: {field: value}, or null. The word All (or
+  // nothing) is no filter, so a role can be given the whole list where the others open on a value.
+  function filtersStarted(list) {
+    const by = (list.filter_start_by_role || {})[route().role];
+    const start = by && typeof by === "object" ? by : list.filter_start;
+    if (!start || typeof start !== "object") return null;
+    const out = {};
+    Object.entries(start).forEach(([f, v]) => { if (v != null && String(v).trim() !== "" && !/^all$/i.test(String(v).trim())) out[f] = v; });
+    return Object.keys(out).length ? out : null;
+  }
   // `shown`: the record of the detail screen a related list is drawn on (see `where_record` in rows()).
   function renderList(list, r, shown) {
     if (!list) return "";
@@ -633,11 +716,16 @@
     // A filter's first choice, "All", is no filter: its value is empty, so a record whose value is the word
     // "All" (a user of all sites) cannot be taken for it. That choice is then "Any", so the list never offers
     // "All" twice, and the real value stays a choice of its own. A blank value is no choice.
+    // A filter may open on a value of its own (`filter_start`, or `filter_start_by_role` for a role): the list
+    // is then drawn already filtered, and Clear Filters still shows everything.
+    const start = filtersStarted(list) || {};
     const filters = (list.filters || []).map((f) => {
       const label = boxLabel(list, f);
       const vals = [...new Set(((S.data || {})[list.data] || []).map((x) => x[f]).filter((v) => v != null && v !== "").map(String))];
       const none = vals.some((v) => v.trim().toLowerCase() === "all") ? "Any" : "All";
-      return `<div class="filter" data-el="filter:${esc(label)}"><label>${esc(label)}</label><select class="f-input" data-filter="${esc(f)}"><option value="">${none}</option>${vals.map((v) => `<option value="${esc(v)}">${esc(v)}</option>`).join("")}</select></div>`;
+      const from = start[f] == null ? "" : String(start[f]);
+      if (from && !vals.includes(from)) vals.push(from);
+      return `<div class="filter" data-el="filter:${esc(label)}"><label>${esc(label)}</label><select class="f-input" data-filter="${esc(f)}"><option value="">${none}</option>${vals.map((v) => `<option value="${esc(v)}"${v === from ? " selected" : ""}>${esc(v)}</option>`).join("")}</select></div>`;
     }).join("");
     const search = (list.search || []).map((f) => {
       const label = boxLabel(list, f);
@@ -650,13 +738,16 @@
     const watchedValues = (row) => esc(JSON.stringify(Object.fromEntries(watched.map((f) => [f, row[f] == null ? "" : String(row[f])]))));
     // A column holds people when any of its values is a person: then every name in it gets its initials.
     const peopleCols = new Set(cols.filter((c) => !c.chip && data.some((row) => PEOPLE.has(String(row[c.field] == null ? "" : row[c.field]).trim().toLowerCase()))).map((c) => c.field));
-    const body = data.length ? data.map((row) => `<tr data-row="${watchedValues(row)}" data-el="row:${esc(row[key])}">${cols.map((c) => `<td ${shortClass(String(row[c.field] == null ? "" : row[c.field]))}data-el="cell:${esc(c.label)}|${esc(row[key])}">${c.chip ? `<span class="chip ${statusClass(row[c.field])}">${esc(row[c.field])}</span>` : person(row[c.field], peopleCols.has(c.field))}</td>`).join("")}${(list.actions || []).length ? `<td class="actions" data-el="cell:Action|${esc(row[key])}">${list.actions.filter((a) => matches(a.when, row) && (!a.roles || a.roles.includes(r.role))).map((a) => rowAction(a, row, key, list)).join(" ")}</td>` : ""}</tr>`).join("")
+    const body = data.length && screenKind.phone ? phoneRows(list, r, data, key) : data.length ? data.map((row) => `<tr data-row="${watchedValues(row)}" data-el="row:${esc(row[key])}">${cols.map((c) => `<td ${shortClass(String(row[c.field] == null ? "" : row[c.field]))}data-el="cell:${esc(c.label)}|${esc(row[key])}">${c.chip ? `<span class="chip ${statusClass(row[c.field])}">${esc(row[c.field])}</span>` : person(row[c.field], peopleCols.has(c.field))}</td>`).join("")}${(list.actions || []).length ? `<td class="actions" data-el="cell:Action|${esc(row[key])}">${list.actions.filter((a) => matches(a.when, row) && (!a.roles || a.roles.includes(r.role))).map((a) => rowAction(a, row, key, list)).join(" ")}</td>` : ""}</tr>`).join("")
       : `<tr><td colspan="${cols.length + 1}" class="empty">${esc(list.empty || "No records found")}</td></tr>`;
     // One block for the list: its toolbar row, the table and the count (the desk theme draws it as one card).
     return `<div class="list-block">
-      ${search || filters || toolbar ? `<div class="list-tools" data-el="region:area above the list">${search || filters ? `<div class="filters" data-el="region:filters">${search}${filters}<button class="btn small" data-el="button:Search" data-apply-filters>Search</button><button class="btn small" data-el="button:Clear Filters" data-clear-filters>${W.clear}</button></div>` : "<div></div>"}<div class="toolbar" data-el="region:list buttons">${toolbar}</div></div>` : ""}
-      <div class="table-wrap" data-el="region:list"><table class="datalist ${cols.length > 9 ? "dense" : ""}">
-        <thead><tr>${cols.map((c) => `<th data-el="column:${esc(c.label)}">${esc(c.label)}</th>`).join("")}${(list.actions || []).length ? `<th data-el="column:${W.action}">${W.action}</th>` : ""}</tr></thead>
+      ${search || filters || toolbar ? `<div class="list-tools" data-el="region:area above the list">${search || filters ? (screenKind.phone && filters
+        // On a phone the filters fold into one Filters button; the search boxes stay in view.
+        ? `<div class="filters" data-el="region:filters">${search}<details class="p-filters"${filtersStarted(list) ? " data-started" : ""}><summary class="btn small" data-el="button:Filters">Filters</summary><div class="p-filter-sheet">${filters}</div></details><button class="btn small" data-el="button:Search" data-apply-filters>Search</button><button class="btn small" data-el="button:Clear Filters" data-clear-filters>${W.clear}</button></div>`
+        : `<div class="filters" data-el="region:filters">${search}${filters}<button class="btn small" data-el="button:Search" data-apply-filters>Search</button><button class="btn small" data-el="button:Clear Filters" data-clear-filters>${W.clear}</button></div>`) : "<div></div>"}<div class="toolbar" data-el="region:list buttons">${toolbar}</div></div>` : ""}
+      <div class="table-wrap" data-el="region:list"><table class="datalist ${cols.length > 9 ? "dense" : ""}${screenKind.phone ? " p-list" : ""}">
+        ${screenKind.phone ? "" : `<thead><tr>${cols.map((c) => `<th data-el="column:${esc(c.label)}">${esc(c.label)}</th>`).join("")}${(list.actions || []).length ? `<th data-el="column:${W.action}">${W.action}</th>` : ""}</tr></thead>`}
         <tbody>${body}${data.length ? `<tr class="none-match" hidden><td colspan="${cols.length + 1}" class="empty">${esc(list.empty || "No records found")}</td></tr>` : ""}</tbody>
       </table></div>
       <div class="pager" data-el="region:record count" data-total="${data.length}">${W.showing(data.length, data.length)}</div></div>`;
@@ -688,6 +779,8 @@
       case "number": input = `<input class="f-input" type="number" value="${esc(v)}">`; break;
       // A file field and a signature field answer a click: a sample file is attached, the signed-in person signs.
       case "file": input = ro ? `<div class="f-value">${esc(v) || "-"}</div>` : `<div class="file-drop" data-fake="file"><input type="hidden"><span class="fake-view">${fileHint()}</span></div>`; break;
+      // A camera field takes a photo with the phone's camera: no file to drop or browse for.
+      case "camera": input = `<div class="file-drop camera" data-fake="camera"><input type="hidden"><span class="fake-view">${CAMERA_HINT}</span></div>`; break;
       case "signature": input = ro ? `<div class="signature">${v ? `<span class="sig-ink">${esc(v)}</span>` : "Sign here"}</div>` : `<div class="signature" data-fake="signature"><input type="hidden"><span class="fake-view">Sign here</span></div>`; break;
       // A user field offers people: those of its `roles` (each role's `user`), or, without roles, everyone the
       // spec names (the roles' users and a `users` list in the data); `options` or `options_from` win.
@@ -888,6 +981,8 @@
     });
     const content = document.getElementById("content");
     if (content && content.querySelector("[data-filter], [data-search]")) applyFilters(content);
+    const inDialog = app.querySelector(".modal-body");
+    if (inDialog && inDialog.querySelector("[data-filter] option[selected]")) applyFilters(inDialog);  // a filter that opens on a value
   }
 
   // ------------------------------------------------------------------ file and signature fields
@@ -895,18 +990,25 @@
   // An empty file field says what a person does there: on a computer drop a file or browse for one, on a phone
   // take a photo or choose a file (a phone has no files to drop). The mock-up is on a phone when the window is
   // as narrow as one, or when the page is: a project's own code may draw a phone screen inside a phone frame.
+  // A camera field (type: camera) only ever takes a photo, on a phone or a computer.
   const PHONE_WIDTH = 480, PHONE_PAGE = 440;
   function onPhone() {
     const content = document.getElementById("content");
-    return window.innerWidth <= PHONE_WIDTH || (!!content && content.clientWidth > 0 && content.clientWidth <= PHONE_PAGE);
+    return document.body.classList.contains("on-phone") || window.innerWidth <= PHONE_WIDTH || (!!content && content.clientWidth > 0 && content.clientWidth <= PHONE_PAGE);
   }
   const fileHint = () => (onPhone() ? 'Take a photo or <span class="link">choose a file</span>' : 'Drop file here or <span class="link">browse</span>');
+  const CAMERA_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>';
+  const CAMERA_HINT = `<span class="camera-take">${CAMERA_ICON}<span>Take a photo</span></span>`;
+  const samplePhoto = () => { const d = new Date(); return `photo-${d.getFullYear()}${two(d.getMonth() + 1)}${two(d.getDate())}-${two(d.getHours())}${two(d.getMinutes())}.jpg`; };
   function syncFakes() {
     app.querySelectorAll("[data-fake]").forEach((box) => {
       const value = box.querySelector("input[type=hidden]").value;
-      box.querySelector(".fake-view").innerHTML = box.dataset.fake === "file"
+      const kind = box.dataset.fake;
+      box.querySelector(".fake-view").innerHTML = kind === "file"
         ? (value ? `<span class="file-name">${esc(value)}</span> <a href="#" class="link" data-fake-clear>Remove</a>` : fileHint())
-        : (value ? `<span class="sig-ink">${esc(value)}</span>` : "Sign here");
+        : kind === "camera"
+          ? (value ? `<span class="file-name">${CAMERA_ICON} ${esc(value)}</span> <a href="#" class="link" data-fake-clear>Retake</a>` : CAMERA_HINT)
+          : (value ? `<span class="sig-ink">${esc(value)}</span>` : "Sign here");
     });
   }
 
@@ -996,14 +1098,21 @@
       return;
     }
     const screen = byId(S.screens, r.screen) || byId(S.screens, "login") || { type: "login" };
-    if (screen.type === "login" || !r.role) {
-      app.innerHTML = renderLogin(screen);
+    const signIn = screen.type === "login" || !r.role;
+    // The sign-in page is a phone's when its screen says so, or when the project's screens are all phones.
+    const phone = screenKind.phone = signIn ? isPhone(screen.type === "login" ? screen : byId(S.screens, "login") || {}) : isPhone(screen);
+    document.body.classList.toggle("on-phone", phone);
+    if ((screen.id || "login") !== shownScreen) { cameFrom = shownScreen; shownScreen = screen.id || "login"; }
+    const frame = (inner) => (phone ? phoneShell(r, screen, inner) : shell(r, inner));
+    if (signIn) {
+      app.innerHTML = phone ? `<div class="phone-stage"><div class="phone p-sign-in" data-el="region:phone"><div class="p-status" aria-hidden="true"><span>9:41</span><span class="p-signal"><i></i><i></i><i></i><i></i></span></div>${renderLogin(screen)}<div class="p-home" aria-hidden="true"></div></div></div>` : renderLogin(screen);
     } else if (!canSee(screen, r.role)) {
-      app.innerHTML = shell(r, `<div class="denied">You do not have access to this page.</div>`);
+      app.innerHTML = frame(`<div class="denied">You do not have access to this page.</div>`);
     } else {
-      app.innerHTML = shell(r, renderScreen(screen, r));
+      app.innerHTML = frame(renderScreen(screen, r));
     }
-    if (r.q.dialog) app.insertAdjacentHTML("beforeend", renderDialog(r.q.dialog));
+    // On a phone a dialog is a sheet from the bottom of the phone.
+    if (r.q.dialog) (phone && app.querySelector(".phone") || app).insertAdjacentHTML("beforeend", renderDialog(r.q.dialog));
     app.dataset.screen = screen.id || "login";
     fitLists();
     restoreTyped();
@@ -1054,9 +1163,18 @@
       const input = fake.querySelector("input[type=hidden]");
       const role = byId(S.roles, route().role) || {};
       const clear = e.target.closest("[data-fake-clear]") || (fake.dataset.fake === "signature" && input.value);
-      input.value = clear ? "" : fake.dataset.fake === "file" ? "sample-document.pdf" : role.user || role.name || "Signed";
+      input.value = clear ? "" : fake.dataset.fake === "file" ? "sample-document.pdf" : fake.dataset.fake === "camera" ? samplePhoto() : role.user || role.name || "Signed";
       syncFakes();
       if (typed.required) markRequired();
+      return;
+    }
+    const back = e.target.closest("[data-back]");
+    if (back) { e.preventDefault(); return go(back.dataset.back); }
+    const more = e.target.closest("[data-more]");
+    if (more) {  // the phone screens past the fifth tab
+      e.preventDefault();
+      const sheet = app.querySelector(".p-more");
+      if (sheet) sheet.hidden = !sheet.hidden;
       return;
     }
     const el = e.target.closest("[data-go],[data-toast],[data-dialog],[data-close],[data-page],[data-role-login],[data-apply-filters],[data-clear-filters],[data-status],[data-status-by],[data-create],[data-save]");
@@ -1158,14 +1276,16 @@
   }
   // What became of a comment, in the words the room reads (the server's ROOM_WORDS in tools/mockup.py says
   // the same: change both together).
-  const STATE_WORDS = { received: "Received", working: "Working on it", applied: "Applied", noted: "Noted for follow-up" };
+  // A decision (often not to build what was asked) reads Decided, never Applied.
+  const STATE_WORDS = { received: "Received", working: "Working on it", applied: "Applied", decided: "Decided", noted: "Noted for follow-up" };
   // Why a comment has no mark on the page (see place.of), said on its card in the panel.
   const AWAY = { hidden: "In a part of the screen that is folded away or hidden: open it to see the mark.",
     gone: "Not on this screen now (changed or removed since), so it has no mark.",
     role: "Made while viewing as {role}: what it is about may be on this screen for that role only. View as {role} to see it." };
-  // A comment worked through (applied, or noted for follow-up) is history: it steps back from the page, to a Done
+  // A comment worked through (applied, decided, or noted for follow-up) is history: it steps back from the page, to a Done
   // part of the panel, so the marks on the page are only those still open. Show on the screen brings its marks back, faded.
-  const isDone = (c) => c.state === "applied" || c.state === "noted";
+  const DONE_STATES = ["applied", "decided", "noted"];
+  const isDone = (c) => DONE_STATES.includes(c.state);
   // Where a comment's marks sit, in pixels. A pin overlaps the top-right corner of what it is about (in from the
   // right, up from the top); pins on the same thing sit side by side, this far apart. A box's pin sits on its
   // top-right corner. A box drawn round several things leaves this much room round them.
@@ -1242,6 +1362,17 @@
       return { x: b.x, y: b.y, w: b.w, h: b.h };
     },
   };
+
+  // The comments a new one about `elements` is a layer on (see feedback.earlierOn).
+  function layerOn(comments, elements) {
+    const named = (elements || []).filter((e) => e && e !== "region:page background");
+    if (!named.length) return [];
+    return comments.filter((c) => {
+      const about = Array.isArray(c.elements) && c.elements.length ? c.elements : [c.element];
+      return named.every((e) => about.includes(e));
+    });
+  }
+  window.MockupLayerOn = layerOn;  // for the tests
 
   const feedback = {
     active: false,
@@ -1722,11 +1853,12 @@
           time: new Date().toISOString(), version: P.version, ...(live.stamp ? { build: live.stamp } : {}) });
       });
     },
-    // The comments already made on any of these things on this screen, oldest first: a new one is a layer on top.
+    // The earlier comments on this screen a new one is a layer on, oldest first: those about the same things,
+    // by what they are about, not where they sit. A comment on one thing follows the comments on that thing and
+    // the boxes drawn round it; a box round several things follows only the boxes round all of them, not each
+    // comment on one of its things (a box round seven figures is not a layer on a comment about one of them).
     earlierOn(elements) {
-      const named = elements.filter((e) => e && e !== "region:page background");
-      if (!named.length) return [];
-      return this.forScreen().filter((c) => named.includes(c.element) || (Array.isArray(c.elements) && c.elements.some((x) => named.includes(x))));
+      return layerOn(this.forScreen(), elements);
     },
     // The comment box: a new comment (with the writer's name and the earlier comments on the same thing), or an
     // earlier one to edit. Resolves to the text, or null when it was closed without saving.
@@ -1808,6 +1940,8 @@
   });
   window.addEventListener("hashchange", render);
   window.addEventListener("resize", () => { feedback.renderPins(); custom.draw(); });
+  // A phone screen scrolls inside the phone: the pins and tags follow it.
+  document.addEventListener("scroll", (e) => { if (screenKind.phone && e.target && e.target.id === "content") { feedback.renderPins(); custom.draw(); } }, true);
   // The page changing size by itself (a section folded or unfolded, the project's own code run after drawing):
   // the pins and boxes follow, and those of things now hidden or shown again go or come back.
   if (window.ResizeObserver) {
@@ -2071,7 +2205,9 @@
         mark(scope.matches(sel) ? scope : [...scope.querySelectorAll(sel)].find((el) => this.visible(el)), t.label, t.title);
       });
       const code = BUILD.custom_code || null;
-      app.querySelectorAll("[data-custom]").forEach((el) => {
+      // A custom build (BUILD.custom_build): everything is custom work, so nothing is tagged, not even what the
+      // project's own code marks with Mockup.custom.
+      if (!BUILD.custom_build) app.querySelectorAll("[data-custom]").forEach((el) => {
         const how = el.dataset.custom;
         if (how === "no" || (how === "auto" && !code)) return;
         mark(el, (code || CUSTOM_DEFAULT).label, el.dataset.customNote || (code || CUSTOM_DEFAULT).title);
@@ -2242,7 +2378,7 @@
   const screenName = (id) => (byId(S.screens, id) || {}).title || (id === "__flow" ? "Process flow" : id);
   const changes = {
     list: [], at: -1, from: null, to: null, shown: false, doneAtOpen: null,
-    dealtWith: () => feedback.items.filter((c) => c.id && (c.state === "applied" || c.state === "noted")).map((c) => c.id),
+    dealtWith: () => feedback.items.filter((c) => c.id && isDone(c)).map((c) => c.id),
     remember() {
       // Pressing Update ready: keep what the room was looking at, to compare once the page has reloaded.
       return styleAtOpen.then((style) => {
@@ -2259,19 +2395,40 @@
       if (!before || !before.spec) return;
       const list = whatChanged(JSON.parse(before.spec), JSON.parse(SPEC_AS_OPENED));
       if (before.style && (await styleAtOpen) !== before.style && !list.some((c) => c.look)) list.unshift({ text: "Look: the mock-up's styles", look: true });
-      // The comments worked in since: beside the change on their screen, or as a line of their own.
-      const done = feedback.items.filter((c) => c.id && !c.withdrawn && (c.state === "applied" || c.state === "noted") && !(before.done || []).includes(c.id));
+      // The comments worked in since: those dealt with now that were not when the page was opened.
+      this.withComments(list, feedback.items.filter((c) => c.id && !c.withdrawn && isDone(c) && !(before.done || []).includes(c.id)));
+      this.list = list;
+      this.from = before.version != null ? `v${before.version}` : null;
+      this.to = P.version;
+      this.button("What changed");
+      if (list.length) this.open();
+    },
+    // The comments worked in: beside the change on their screen, or as a line of their own.
+    withComments(list, done) {
       for (const c of done) {
         const said = { id: c.id, state: c.state };
         const on = list.find((x) => x.screen === c.screen);
         if (on) (on.comments = on.comments || []).push(said);
         else list.push({ text: `“${c.text}”`, screen: c.screen, element: c.element, role: c.role, comments: [said], ...(c.box ? { boxOf: c.id } : {}) });
       }
+    },
+    button(label) {
+      const b = document.getElementById("fb-changes-btn");
+      b.textContent = label;
+      b.hidden = !this.list.length;
+    },
+    // A page opened afresh (a reload, someone joining late) never saw Update ready: the bar offers what changed
+    // since the earlier mock-up the build names (BUILD.earlier: the live session's first showing of this version,
+    // or the version before), with the comments made on that one and dealt with since. Nothing opens by itself.
+    sinceEarlier() {
+      const e = BUILD.earlier;
+      if (!e || !e.spec || typeof e.spec !== "object") return;
+      const list = whatChanged(e.spec, JSON.parse(SPEC_AS_OPENED));
+      this.withComments(list, feedback.items.filter((c) => c.id && !c.withdrawn && isDone(c) && e.version && String(c.version) === String(e.version)));
       this.list = list;
-      this.from = before.version;
+      this.from = e.label || (e.version ? `v${e.version}` : null);
       this.to = P.version;
-      document.getElementById("fb-changes-btn").hidden = !list.length;
-      if (list.length) this.open();
+      this.button(`What changed since ${this.from || "the last version"}`);
     },
     open() {
       if (feedback.active) feedback.toggle();
@@ -2290,10 +2447,10 @@
       document.getElementById("fb-changes-btn").classList.toggle("on", this.shown && !this.mini);
       if (!this.shown || this.mini) return;
       const n = this.list.length;
-      const versions = this.from != null && String(this.from) !== String(this.to) ? ` · v${esc(this.from)} → v${esc(this.to)}` : "";
+      const versions = this.from != null && String(this.from) !== `v${this.to}` ? ` · ${esc(this.from)} → v${esc(this.to)}` : "";
       const where = (c) => (c.screen ? `${screenName(c.screen)}${c.dialog ? " · dialog" : ""}` : c.look ? "Every screen" : "Not on one screen");
       panel.innerHTML = `<div class="fb-panel-head"><span>What changed${versions}</span><span><button class="fb-wc-x" id="wc-mini" type="button" aria-label="Minimise" title="Minimise: What changed on the bar brings it back">\u2013</button><button class="fb-wc-x" id="wc-close" aria-label="Close" title="Close">×</button></span></div>
-        ${this.list.map((c, i) => `<button type="button" class="fb-item fb-wc-item${i === this.at ? " on" : ""}" data-wc="${i}" ${c.screen ? "" : "disabled"}><span class="fb-num">${i + 1}</span><span class="fb-body"><span class="fb-text">${esc(c.text)}</span><span class="fb-el">${esc(where(c))}</span>${(c.comments || []).map((x) => `<span class="fb-st ${x.state === "applied" ? "applied" : ""}">${esc(x.id)} ${x.state === "applied" ? "applied" : "noted for follow-up"}</span>`).join("")}</span></button>`).join("")}
+        ${this.list.map((c, i) => `<button type="button" class="fb-item fb-wc-item${i === this.at ? " on" : ""}" data-wc="${i}" ${c.screen ? "" : "disabled"}><span class="fb-num">${i + 1}</span><span class="fb-body"><span class="fb-text">${esc(c.text)}</span><span class="fb-el">${esc(where(c))}</span>${(c.comments || []).map((x) => `<span class="fb-st ${x.state === "applied" || x.state === "decided" ? x.state : ""}">${esc(x.id)} ${(STATE_WORDS[x.state] || STATE_WORDS.noted).toLowerCase()}</span>`).join("")}</span></button>`).join("")}
         <div class="fb-wc-nav"><button type="button" class="fb-btn quiet" id="wc-prev" ${this.at <= 0 ? "disabled" : ""}>Previous</button><span class="fb-count">${this.at >= 0 ? `${this.at + 1} of ${n}` : `${n} change${n === 1 ? "" : "s"}`}</span><button type="button" class="fb-btn solid" id="wc-next" ${this.at >= n - 1 ? "disabled" : ""}>${this.at < 0 ? "Start" : "Next"}</button></div>`;
       panel.onclick = (e) => {
         const item = e.target.closest("[data-wc]");
@@ -2388,6 +2545,7 @@
     follow();
     // After Update ready: say what changed, or that it is the mock-up as the spec is now.
     if (updated) changes.work().then(() => { if (!changes.list.length) toast("Updated: this is the mock-up as the spec is now."); });
+    else changes.sinceEarlier();
   });
   setInterval(() => feedback.sync(), 5000);
   setInterval(follow, 2500);

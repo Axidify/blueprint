@@ -46,7 +46,9 @@ so every decision put into the spec shows up in both. Format: `docs/spec-format.
    `creates: true` with `set_status: draft` where drafts are shown (`docs/spec-format.md`, New records). The
    build says which forms add a record and which main buttons only show their message. Where the move also changes a record of another list that this one names (approving
    a loan puts its courtesy car on loan), add `also_move` on the same button (`docs/spec-format.md`, Status
-   moves), so the dashboard of the other list follows too. The build refuses a move the status rules do not allow, and lists the
+   moves), so the dashboard of the other list follows too; where it changes the records that name this one
+   (cancelling a plan cancels its tasks), `also_move` with `named_by` and a `where` that keeps the records
+   already done as they are. The build refuses a move the status rules do not allow, and lists the
    allowed moves no button makes: decide for each whether the client should be able to see it. Where each
    role has a task list, make it show every role the records waiting for it: `where: {waiting_for_me:
    true}` when the sample records carry their approval progress (`timeline`) and the roles a `user`,
@@ -58,7 +60,12 @@ so every decision put into the spec shows up in both. Format: `docs/spec-format.
    (a car's loans, a customer's orders), give the detail screen a `list` with `where_record`; where a
    drop-down should offer only some records (the cars available), use `options_from: {list, field, where}`.
    A form in steps shows its main button on the last step only, with Next and Previous before it. Every list
-   gets explicit columns and filters (GP-05). Every figure on a dashboard says what it counts
+   gets explicit columns and filters (GP-05); where a list should open filtered ("on my own yard"), give it
+   `filter_start` (and `filter_start_by_role` for a role that starts on everything).
+   **Screens used on a phone** (a field app, a driver's app) get `device: phone` (or `project.device: phone`
+   when every screen is one): the engine draws the phone, its tab bar, lists as rows and dialogs as sheets
+   from the bottom (`docs/spec-format.md`, Phone screens), so no project code is needed for that. A photo
+   taken on the phone is a `camera` field. Write what differs on the phone into `requirements` too. Every figure on a dashboard says what it counts
    (GP-03): use `count` where it can be counted from the screen's list (the document then describes it),
    and give a typed-in `value` a `formula` in words. Leave the formula out when the client has not defined
    the figure, and add a register question for it.
@@ -75,7 +82,8 @@ so every decision put into the spec shows up in both. Format: `docs/spec-format.
    when a browser genuinely cannot show it, and tell the user what and why. What is custom work or not
    supported on the platform is tagged in the mock-up while presenting (step 3.3 records it); the project's
    own code is tagged as custom unless you mark a part `Mockup.custom(el, false)` because the platform sheet
-   says it is standard. The tags never show mandays, cost or "change request".
+   says it is standard. On a custom build (a platform that calls itself custom, or `project.custom_build:
+   true`) nothing is tagged: everything there is custom work. The tags never show mandays, cost or "change request".
 
 ## 3. Build and check
 

@@ -60,6 +60,9 @@ for (const shot of shots) {
   // short picture. The login card and an open dialog are centred in a window just tall enough for them.
   const height = await page.evaluate(() => {
     const bottom = (el) => el.getBoundingClientRect().bottom + window.scrollY;
+    // A phone screen (`device: phone`): the whole phone, its tab bar and an open sheet included.
+    const phone = document.querySelector(".phone");
+    if (phone) return Math.ceil(bottom(phone) + 24);
     const card = document.querySelector(".login-card");
     if (card) return Math.ceil(card.getBoundingClientRect().height + 160);
     const flow = document.querySelector(".flow");

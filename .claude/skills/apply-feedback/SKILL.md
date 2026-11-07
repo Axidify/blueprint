@@ -52,7 +52,8 @@ Record the outcome on each comment, one command per comment with its own note, w
 (add `--register R-031` where a register item was created). The status is `applied`, `question`,
 `decision`, `scope` or `declined`. Use the command rather than editing `feedback.json` by hand: a mock-up
 that is open may be saving a comment at that moment. The note and the status are internal: the mock-up
-only shows the client Applied or Noted for follow-up.
+only shows the client Applied, Decided (a `decision`, never Applied) or Noted for follow-up. A comment
+that was applied and also carries a possible change request gets `--cr R-0xx` as well.
 
 To act on comments while the client is still in the room, use the `present` skill's live session.
 

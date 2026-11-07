@@ -200,6 +200,7 @@ body.fb-active #fb-toggle { background: var(--fb-ink); color: #1d1d1f; }
 .fb-st::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--fb-neutral); }
 .fb-st.working { color: var(--fb-prog-text); } .fb-st.working::before { background: var(--fb-mark); animation: fb-pulse 1.2s ease-in-out infinite; }
 .fb-st.applied { color: var(--fb-done); } .fb-st.applied::before { background: var(--fb-done); }
+.fb-st.decided { color: var(--fb-done); } .fb-st.decided::before { background: var(--fb-done); }
 .fb-empty { color: var(--fb-sub); margin: 4px 0 0; }
 .fb-state { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; padding-top: 12px; border-top: 1px solid var(--fb-hair); color: var(--fb-sub); font-size: 12px; }
 .fb-state.ok::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--fb-done); }

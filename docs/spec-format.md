@@ -9,7 +9,7 @@ It is `_blueprint/spec/app.yaml` in the project folder (`spec/app.yaml` in a pro
 
 | Key | Purpose |
 |---|---|
-| `project` | `name`, `short_name` (shown in the logo box), `client`, `client_short`, `version`, `platform`, `stack` (the other products the system is built with: a database, a directory, a cloud service), `theme` (see [Themes](#themes)), `primary_color`, `text_size` (`normal`, `large` or `larger`: the text of the client's screens, in the mock-up and so in the document's pictures), `data_colors`, `logo`, `font`, `font_file`, `corners`, `menu`, `header` (see [The client's look](#the-clients-look)), `prepared_by`, `reviewed_by`, `approved_by`, `date`, `status` (shown on the cover and in the page header, e.g. "Draft for client review", "Signed off"), `history: [{version, date, author, changes}]` (document version history table) |
+| `project` | `name`, `short_name` (shown in the logo box), `client`, `client_short`, `version`, `platform`, `stack` (the other products the system is built with: a database, a directory, a cloud service), `theme` (see [Themes](#themes)), `primary_color`, `text_size` (`normal`, `large` or `larger`: the text of the client's screens, in the mock-up and so in the document's pictures), `data_colors`, `logo`, `font`, `font_file`, `corners`, `menu`, `header` (see [The client's look](#the-clients-look)), `device` (`phone` draws every screen as a phone app; see [Phone screens](#phone-screens)), `custom_build` (`true` when the whole system is custom work; see [Platform fit](#platform-fit)), `prepared_by`, `reviewed_by`, `approved_by`, `date`, `status` (shown on the cover and in the page header, e.g. "Draft for client review", "Signed off"), `history: [{version, date, author, changes}]` (document version history table) |
 | `overview` | List of paragraphs for the start of document section 1.0 |
 | `roles` | `id`, `name`, `description`, `scope` (data scope, e.g. "Own branch only"), `user` (sample person shown in the mock-up header) |
 | `scope` | `{in_scope: [...], out_of_scope: [...], assumptions: [...]}`, each a list of sentences. Becomes the chapter "Scope and assumptions"; left out when the spec has none. Write what the client might otherwise expect to get under `out_of_scope` |
@@ -159,7 +159,7 @@ mandays, rates, cost or prices either: the generator refuses them, because they 
 
 ## Screens
 
-Every screen has `id`, `type`, `title`, and optionally `screenshot_role` (role used for its screenshot; default the first in `roles`), `menu` (label in the side menu; omit for screens
+Every screen has `id`, `type`, `title`, and optionally `device` (`phone` or `desktop`, see [Phone screens](#phone-screens)), `screenshot_role` (role used for its screenshot; default the first in `roles`), `menu` (label in the side menu; omit for screens
 reached by links), `roles` (who can open it; omit for everyone), `description` (document text under the
 screenshot) and `caption`.
 
@@ -184,6 +184,10 @@ whose waiting step is handled by whoever is signed in (see [Status moves](#statu
 the value as a coloured status), `filters: [field, ...]` (the first choice, All, is no filter; when a value is the word All it reads Any, and
 All is a choice of its own; a filter or search box is labelled by its column, else by the field's label on a
 screen, else by the field's name in words),
+`filter_start: {field: value}` (the value a filter opens on: the list is drawn already filtered, as "open on my own
+yard", and **Clear Filters** still shows everything; the field must be one of its `filters`),
+`filter_start_by_role: {role: {field: value}}` (a role's own starting values; `All` opens that role on everything, so
+a manager can start on every site while a supervisor starts on theirs),
 `actions: [{label, to | toast | dialog, when, roles, set_status, also_move}]` (per row; `to` opens a screen with that row's record;
 `dialog` opens that dialog on the row's record, and its confirm button's `set_status` moves that row and its `to`
 goes on with the row's record; `when:
@@ -215,7 +219,7 @@ the first **Previous**. The other buttons (Cancel, Save as Draft) are on every s
 steps keep all their buttons.
 
 **Fields:** `id`, `label`, `type` (`text`, `textarea`, `select`, `radio`, `checkbox`, `date`,
-`datetime`, `number`, `file`, `signature`, `user`), `required`, `readonly`, `default`, `length`,
+`datetime`, `number`, `file`, `camera`, `signature`, `user`), `required`, `readonly`, `default`, `length`,
 `options` or `options_from`, `placeholder`, `help`, `source` and `validation` (both go into
 the requirements document data requirement table). `options_from: cars.reg_no` offers every value of that
 field in the sample data; with a filter, `options_from: {list: cars, field: reg_no, where: {status:
@@ -232,7 +236,8 @@ whichever step of the form they are (on a form in steps the button stays on the 
 the step that holds them, marked with a dot), and the second press goes on without them, saying on screen
 that only the mock-up does: the real system would not send the form. A read-only field is never
 asked for. A `file` field takes a sample file when clicked (on a phone, or in a page as narrow as one, it reads "Take a
-photo or choose a file") and a `signature` field signs as the signed-in
+photo or choose a file"), a `camera` field (a photo taken with the phone's camera: no file to drop or browse for) reads
+**Take a photo** and takes a sample photo, and a `signature` field signs as the signed-in
 role's `user`. None of this is in a screenshot.
 
 **Buttons:** `{label, style (primary | danger), to, toast, dialog, roles, when, example, set_status, also_move, creates}`. With a
@@ -244,6 +249,40 @@ records on detail screens and on forms opened on a record; `set_status` moves th
 and `also_move` a record it names in another list with it (see [Status moves](#status-moves)). Put a label that starts with Yes, No, On or Off in quotes (`label: "Yes,
 cancel it"`): YAML otherwise reads it as true or false, and the build stops. Primary, danger and dialog buttons appear as actions in the requirements document access matrix,
 except `example: true` buttons (demo-only buttons that open a dialog for screenshots).
+
+## Phone screens
+
+`device: phone` on a screen draws it as a phone app; `project.device: phone` draws every screen so, and a screen's
+own `device: desktop` keeps it a web page (a web portal and a driver's app in one mock-up). The engine draws it
+after `docs/design-language.md` (Phones and tablets), with no code of the project's own:
+
+- a phone 390 × 844 in the middle of the page, its status bar and home indicator left free;
+- a top bar with **Back** on a screen opened from a list, saying where it goes back to, and the signed-in person;
+- a large title, body text 17px, one field per line with its label above, and the main button full width at
+  the bottom of the form;
+- lists as rows: the first column (that is not a status) on top, the next two under it in grey, the first
+  status column on the right, and a chevron when the row's first `to` action opens a record; the row's other
+  actions are links under it. The filters fold into one **Filters** button; the search boxes stay in view;
+- a tab bar at the bottom with the phone screens of the menu the role can see (at most five: past five, the
+  fourth and the rest go under **More**);
+- a dialog as a sheet that slides up from the bottom of the phone, its buttons full width at the bottom;
+- the sign-in page as a phone's when the `login` screen (or the project) says `device: phone`.
+
+The page inside the phone scrolls; a screenshot shows the whole phone as it opens (the requirements document cuts
+the phone from the page and prints it at phone size). The phone's own parts are how the mock-up is shown, never
+custom work. Write what differs on a phone into the spec's requirements too ("The driver sees today's tasks as a
+list …"): the requirements document is written from the spec.
+
+```yaml
+project: {name: Delivery Tracking, device: phone}   # every screen a phone screen, unless it says otherwise
+screens:
+  - {id: plans, type: list, title: Daily plans, menu: Daily plans, device: desktop, list: {data: plans, ...}}
+  - id: my-tasks
+    type: list
+    title: My tasks
+    menu: My tasks
+    list: {data: tasks, filters: [site], filter_start: {site: North yard}, columns: [...]}
+```
 
 ## Dialogs
 
@@ -305,7 +344,19 @@ Give those buttons a `when`, or Approve stays on an application that is already 
   `data` is the linked list, `link` the field of this record that names the linked one, `key` the field of
   the linked list it is matched against (default: the list's first field, its identifier), `set_status` the
   status the linked record moves to (one status), and the optional `copy` takes values across: `{field
-  there: field here}`. Give a list of them to move several. Everything drawn from the linked record follows
+  there: field here}`. Give a list of them to move several.
+- **The records that name it move along.** The other way round: cancelling a plan cancels every task of the
+  plan. `named_by` is the field of the other list's records that names this record, `match` the field of this
+  record they name (default: its identifier), and `where` keeps to the records it lets through (same form as a
+  list's `where`), so tasks already done stay done:
+
+  ```yaml
+  - label: Cancel plan
+    set_status: cancelled
+    also_move: {data: tasks, named_by: plan_no, where: {status: [Planned, Assigned]}, set_status: cancelled}
+  ```
+
+  Give `link` or `named_by`, not both. Everything drawn from the linked record follows
   (the car shows Loaned Out on the dashboard). Its progress is not filled in. The build checks each part
   against the data and the statuses, and the move against the linked records' status rules (`next`): where a
   linked record is comes from the sample data, the records linked from those the button can act on.
@@ -419,6 +470,12 @@ unless the platform check found that code standard or configuration. Only the la
 takes reach the mock-up: never the sheet row, the building block or the source, and never mandays or cost.
 **Custom work** on the presenter's bar hides the tags (the choice is remembered); they are never in a
 screenshot or the requirements document.
+
+**A custom build.** Where the whole system is custom work (a custom web portal and a phone app, with no product
+whose standard features could be told apart), the tags would only say the same thing everywhere: the mock-up
+tags nothing, not even what the project's own code marks with `Mockup.custom`, and the build says so. A
+`project.platform` that calls itself custom ("Custom Angular (web) + Android mobile app") counts as one;
+`project.custom_build: true` or `false` says so outright.
 
 ## The project's own mock-up code
 

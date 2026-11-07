@@ -2,9 +2,10 @@
 
 Usage:
     python -I tools/mockup.py build        <project_dir>
-    python -I tools/mockup.py serve        [<project_dir>] [--port 8765] [--lan]
+    python -I tools/mockup.py serve        [<project_dir>] [--port 8765] [--lan] [--no-open]
     python -I tools/mockup.py screenshots  <project_dir>
     python -I tools/mockup.py feedback     <project_dir>
+    python -I tools/mockup.py comment      <project_dir> --screen <id> --text "..." [--element field:x] [--role id] [--author name]
     python -I tools/mockup.py look         <project_dir> [--try key=value ...]
     python -I tools/mockup.py live <start|list|take|done|mark|undo|end|wait|checkpoint> <project_dir> ...
 
@@ -22,11 +23,13 @@ serve        An open mock-up follows its spec: when the spec changes, the mock-u
              <project_dir>/feedback/feedback.json. --lan lets others on the network open it and comment.
              --version 0.2 serves a saved earlier version (every build keeps one in mockup/versions/).
              It stops with a message when the port is already taken (another mock-up is still open):
-             close that one, or pick another port with --port.
+             close that one, or pick another port with --port. --no-open leaves the default browser shut.
 screenshots  builds, then captures every screen (and extra shots from the spec) with Microsoft Edge into
              <project_dir>/mockup/screenshots/ ("4 Mock-up screenshots" in the new layout), listed in shots.json. It notes which screens they show, so the
              document generator can warn when the spec's screens have changed since.
 feedback     prints the saved comments, grouped by screen.
+comment      saves a comment on a screen, as the mock-up does (the next number, the spec's version): for what was said
+             aloud or sent by e-mail about a screen. --element names what it is about, as the mock-up names it.
 look         shows the look of the client's screens (theme, colour, font, corners, menu, top bar, logo), and notes
              white words that are hard to read on the project's colour or a look the platform does not give.
              --try key=value ... builds a scratch copy with those settings and captures the sign-in page and the
@@ -193,14 +196,16 @@ def project_code(project):
     folder = layout.spec_dir(project)
     return {name: folder / name for name in PROJECT_CODE if (folder / name).is_file()}
 STATUS_COLORS = ("green", "amber", "red", "grey")  # "gray" is accepted too
-FIELD_TYPES = {"text", "textarea", "select", "radio", "checkbox", "date", "datetime", "number", "file", "signature", "user"}
+FIELD_TYPES = {"text", "textarea", "select", "radio", "checkbox", "date", "datetime", "number", "file", "camera", "signature", "user"}
+DEVICES = ("phone", "desktop")  # what a screen is drawn as (`device`, or `project.device` for every screen)
 # The keys the spec format knows, by where they are written. A key that is not one of these but nearly spells
 # one ("colums") is an error; any other unknown key is a warning, since the mock-up ignores it. A key that
 # starts with an underscore (`_note`) is a team's own note and is never warned about.
 KNOWN_KEYS = {
     "screen": {"id", "type", "title", "subtitle", "menu", "roles", "description", "caption", "screenshot_role", "screenshot_pages",
-               "stats", "list", "buttons", "sections", "data", "record", "fields_from", "timeline", "html"},
-    "list": {"data", "where", "where_by_role", "where_record", "title", "columns", "filters", "actions", "toolbar", "search", "sort", "empty"},
+               "stats", "list", "buttons", "sections", "data", "record", "fields_from", "timeline", "html", "device"},
+    "list": {"data", "where", "where_by_role", "where_record", "title", "columns", "filters", "filter_start", "filter_start_by_role", "actions",
+             "toolbar", "search", "sort", "empty"},
     "column": {"field", "label", "chip"},
     "section": {"title", "page", "page_title", "note", "fields"},
     "field": {"id", "label", "type", "required", "readonly", "default", "length", "options", "options_from", "placeholder", "help",
@@ -216,7 +221,7 @@ KNOWN_KEYS = {
     "role": {"id", "name", "description", "scope", "user"},
     "status": {"id", "name", "meaning", "color", "edit", "cancel", "delete", "next", "auto"},
     "screenshot": {"screen", "role", "record", "page", "dialog", "name", "caption"},
-    "also_move": {"data", "link", "key", "set_status", "copy"},
+    "also_move": {"data", "link", "key", "named_by", "match", "where", "set_status", "copy"},
     "options_from": {"list", "field", "where"},
 }
 # Where the spec must hold a list or a set of settings. Written otherwise (a single text where a list belongs)
@@ -229,14 +234,14 @@ SHAPES = {
     "process_flow": {"steps": ["flow step"], "notes": [str]},
     "screen": {"roles": [str], "stats": ["figure"], "list": "list", "buttons": ["button"], "sections": ["section"], "timeline": ["progress step"]},
     "list": {"columns": ["column"], "filters": [str], "search": [str], "actions": ["action"], "toolbar": ["button"], "where": dict,
-             "where_by_role": dict, "where_record": dict},
+             "where_by_role": dict, "where_record": dict, "filter_start": dict, "filter_start_by_role": dict},
     "status": {"auto": [str]},
     "section": {"fields": ["field"]},
     "field": {"options": [str]},
     "button": {"roles": [str], "when": dict},
     "action": {"roles": [str], "when": dict},
     "dialog": {"fields": ["field"], "list": "list", "confirm": "button"},
-    "also_move": {"copy": dict},
+    "also_move": {"copy": dict, "where": dict},
 }
 
 
@@ -404,15 +409,28 @@ def linked_key(spec, also):
     return next(iter(rows_[0])) if rows_ else None
 
 
+def matches_where(row, cond):
+    """The engine's `where` test: {field: value} or {field: [value, ...]}."""
+    return all((str(row.get(k)) in [str(x) for x in v]) if isinstance(v, list) else str(row.get(k)) == str(v) for k, v in (cond or {}).items())
+
+
 def linked_sources(spec, move, also):
     """The statuses the linked records are in when the button moves them along: those of the records of the
-    sample data that are linked from the records the button can act on. [(status or None, linked record)]."""
+    sample data that are linked from the records the button can act on (`link`), or that name them (`named_by`,
+    those its `where` lets through). [(status or None, linked record)]."""
     data = spec.get("data") or {}
     acted_on = [r for r in data.get(move["data"]) or [] if isinstance(r, dict)]
     if move["sources"] is not None:
         acted_on = [r for r in acted_on if find_status(spec, r.get("status")) in move["sources"]]
-    key = linked_key(spec, also)
     found = []
+    if also.get("named_by") not in (None, ""):
+        for row in acted_on:
+            mine = row.get(also["match"]) if also.get("match") is not None else next(iter(row.values()), None)
+            for other in data.get(also.get("data")) or []:
+                if isinstance(other, dict) and mine is not None and str(other.get(also["named_by"])) == str(mine) and matches_where(other, also.get("where")):
+                    found.append((find_status(spec, other.get("status")), other))
+        return found
+    key = linked_key(spec, also)
     for row in acted_on:
         for other in data.get(also.get("data")) or []:
             if isinstance(other, dict) and row.get(also.get("link")) is not None and str(other.get(key)) == str(row.get(also.get("link"))):
@@ -704,6 +722,25 @@ def validate(spec, warnings=None):
         for key in ("filters", "search"):
             for field in lst.get(key) or []:
                 in_data(where, name, f"{key[:-1] if key == 'filters' else key} field", field)
+        # The value a filter opens on (`filter_start`, and `filter_start_by_role` for a role): a field of its filters.
+        starts = [("filter_start", lst.get("filter_start"))]
+        by_start = lst.get("filter_start_by_role")
+        if by_start is not None:
+            if not isinstance(by_start, dict) or not all(isinstance(v, dict) for v in by_start.values()):
+                errors.append(f"{where}: filter_start_by_role gives each role the values its filters open on, for example "
+                              "{manager: {site: All}}")
+            else:
+                for role, start in by_start.items():
+                    if role not in roles:
+                        close = difflib.get_close_matches(str(role), sorted(roles), 1, 0.6)
+                        errors.append(f"{where}: filter_start_by_role names '{role}', which is not a role" + (f" (did you mean '{close[0]}'?)" if close else ""))
+                    starts.append((f"filter_start_by_role for {role}", start))
+        for said, start in starts:
+            for field in start or {}:
+                if field not in (lst.get("filters") or []):
+                    errors.append(f"{where}: {said} sets '{field}', which is not one of the list's filters"
+                                  + (f" ({', '.join(map(str, lst.get('filters')))})" if lst.get("filters") else " (it has none)")
+                                  + ": add it to 'filters'")
         for field in lst.get("where") or {}:
             in_data(where, name, "'where'", field)
         by_role = lst.get("where_by_role") or {}
@@ -761,8 +798,13 @@ def validate(spec, warnings=None):
             errors.append(f"{where}, button {item.get('label', '?')}: also_move moves a linked record along with this one, "
                           "so it needs set_status on the same button")
 
+    device = spec["project"].get("device")
+    if device is not None and str(device).lower() not in DEVICES:
+        errors.append(f"project: device '{device}' must be one of {', '.join(DEVICES)} (phone draws every screen as a phone app)")
     for s in spec["screens"]:
         w = f"screen {s['id']}"
+        if s.get("device") is not None and str(s["device"]).lower() not in DEVICES:
+            errors.append(f"{w}: device '{s['device']}' must be one of {', '.join(DEVICES)}")
         if s.get("type") not in SCREEN_TYPES:
             errors.append(f"{w}: type must be one of {sorted(SCREEN_TYPES)}")
         for r in s.get("roles", []) or []:
@@ -853,20 +895,38 @@ def validate(spec, warnings=None):
                           f"Change {change}, or the status's 'next'")
 
     def check_also(w, move, also):
-        """A linked record moved along with the record the button acts on (see "Status moves" in docs/spec-format.md)."""
-        missing = [k for k in ("data", "link", "set_status") if also.get(k) in (None, "")]
+        """A linked record moved along with the record the button acts on (see "Status moves" in docs/spec-format.md):
+        the one this record names (`link`), or every one that names this record (`named_by`)."""
+        reverse = also.get("named_by") not in (None, "")
+        if reverse and also.get("link") not in (None, ""):
+            errors.append(f"{w}: give 'link' (the record this one names) or 'named_by' (the records that name this one), not both")
+            return
+        missing = [k for k in ("data", "set_status") if also.get(k) in (None, "")] + ([] if reverse or also.get("link") not in (None, "") else ["link"])
         if missing:
             errors.append(f"{w}: needs {', '.join(missing)} (data: the linked list, link: the field of this record that names the "
-                          "linked one, set_status: the status the linked record moves to)")
+                          "linked one, or named_by: the field of the linked records that names this one, set_status: the status the "
+                          "linked records move to)")
             return
         other = also["data"]
         if other not in data:
             close = difflib.get_close_matches(str(other), sorted(map(str, data)), 1, 0.6)
             errors.append(f"{w}: data '{other}' is not in data" + (f" (did you mean '{close[0]}'?)" if close else ""))
             return
-        in_data(w, move["data"], "link", also["link"])
-        if also.get("key") is not None:
-            in_data(w, other, "key", also["key"])
+        if reverse:
+            in_data(w, other, "named_by", also["named_by"])
+            if also.get("match") is not None:
+                in_data(w, move["data"], "match", also["match"])
+            for field in also.get("where") or {}:
+                in_data(f"{w}, where", other, "field", field)
+            if also.get("key") is not None:
+                errors.append(f"{w}: 'key' goes with 'link'; with named_by, 'match' names the field of this record the linked records name")
+        else:
+            in_data(w, move["data"], "link", also["link"])
+            for extra in ("match", "where"):
+                if also.get(extra) is not None:
+                    errors.append(f"{w}: '{extra}' goes with named_by (the records that name this one), not with link")
+            if also.get("key") is not None:
+                in_data(w, other, "key", also["key"])
         for target, source in (also.get("copy") or {}).items():
             in_data(f"{w}, copy", other, "field", target)
             in_data(f"{w}, copy", move["data"], "field", source)
@@ -1038,7 +1098,7 @@ def spec_warnings(spec):
 INDEX = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
-<link rel="stylesheet" href="assets/base.css">{fonts_css}<link rel="stylesheet" href="assets/theme.css"><link rel="stylesheet" href="assets/look.css">{project_css}
+<link rel="stylesheet" href="assets/base.css">{fonts_css}<link rel="stylesheet" href="assets/theme.css"><link rel="stylesheet" href="assets/look.css"><link rel="stylesheet" href="assets/phone.css">{project_css}
 </head><body><div id="app"></div>
 <script src="spec.js"></script><script src="build.js"></script><script src="assets/app.js"></script>{project_js}
 </body></html>
@@ -1064,13 +1124,30 @@ CUSTOM_CODE = {"label": CUSTOM_LABEL, "title": "Built in the project's own mock-
                                                "so it needs custom work"}
 
 
+CUSTOM_WORD = re.compile(r"\b(custom|bespoke|tailor-?made)\b", re.I)
+
+
+def custom_build(spec):
+    """The whole system is custom work (a custom Angular portal and Android app, say): there is no product whose
+    standard features the mock-up could tell apart, so it tags nothing. `project.custom_build: true` or `false`
+    says so outright; otherwise a platform that calls itself custom ("Custom Angular (web) + Android app") is one."""
+    p = spec.get("project") if isinstance(spec.get("project"), dict) else {}
+    said = p.get("custom_build")
+    if isinstance(said, bool):
+        return said
+    return bool(CUSTOM_WORD.search(str(p.get("platform") or "")))
+
+
 def custom_work(spec, project=None):
     """What the mock-up tags as custom development, while presenting: {tags: [{screen | dialog, element, label,
     title}], code: {label, title} or None}. From the spec's `platform_fit` (tools/platform_fit.py apply): every
     feature that is custom work or not supported, at the elements it names (or at the heading of the screen
     it is used on, for a platform_fit written before it named them). `code`: what the project's own mock-up
     code adds is tagged too, unless the platform check found it standard or configuration. Only the label,
-    what the feature is and what it takes reach the mock-up: never the sheet row, building block or source."""
+    what the feature is and what it takes reach the mock-up: never the sheet row, building block or source.
+    On a custom build (custom_build) nothing is tagged: everything there is custom work."""
+    if custom_build(spec):
+        return {"tags": [], "code": None, "custom_build": True}
     fit = spec.get("platform_fit") if isinstance(spec.get("platform_fit"), dict) else {}
     stack = [str(x) for x in fit.get("stack") or []] or [str((spec.get("project") or {}).get("platform") or "the platform")]
     dialogs = {d.get("id"): d for d in spec.get("dialogs") or [] if isinstance(d, dict)}
@@ -1117,11 +1194,41 @@ def build_inputs(project):
     kinds = {kind for kinds in LOOK_FILES.values() for kind in kinds}
     look = sorted(f for f in layout.spec_dir(project).glob("*") if f.is_file() and f.suffix.lower() in kinds)
     files = [layout.spec_file(project), *sorted(project_code(project).values()), *look, Path(__file__).resolve(),
-             ENGINE / "app.js", ENGINE / "base.css", ENGINE / "look.css", *sorted((ENGINE / "themes").glob("*.css"))]
+             ENGINE / "app.js", ENGINE / "base.css", ENGINE / "look.css", ENGINE / "phone.css", *sorted((ENGINE / "themes").glob("*.css"))]
     value = hashlib.sha256()
     for f in files:
         value.update(f.name.encode() + b"\0" + f.read_bytes() + b"\0")
     return value.hexdigest()
+
+
+def version_key(version):
+    """A version for comparing: 0.10 after 0.9; a word sorts before any number."""
+    return [(1, int(x)) if x.isdigit() else (0, x) for x in re.split(r"[.\-]", str(version)) if x != ""]
+
+
+def earlier_version(project, spec):
+    """The saved mock-up a page opened afresh says what changed since: the one the client was first shown in a
+    live session of this version (v0.4-presented-…), else the newest saved version before this one. {label,
+    spec} with the spec as the room saw it, or None when there is none or nothing differs."""
+    version = str(spec["project"].get("version", "draft"))
+    saved = layout.versions_dir(project)
+    if not saved.is_dir():
+        return None
+    folders = [f for f in saved.iterdir() if f.is_dir() and (f / "spec.js").is_file()]
+    presented = sorted((f for f in folders if f.name.startswith(f"v{version}-presented-") and presented_at(f.name)), key=lambda f: presented_at(f.name))
+    before = sorted((f for f in folders if "-presented-" not in f.name and f.name.startswith("v")
+                     and version_key(f.name[1:]) < version_key(version)), key=lambda f: version_key(f.name[1:]))
+    pick = presented[-1] if presented else before[-1] if before else None
+    if pick is None:
+        return None
+    try:
+        text = (pick / "spec.js").read_text(encoding="utf-8")
+        old = json.loads(text[text.index("=") + 1:].strip().rstrip(";"))
+    except (OSError, ValueError):
+        return None
+    if json.dumps(old, sort_keys=True, default=str) == json.dumps(spec_for_the_room(spec), sort_keys=True, default=str):
+        return None
+    return {"label": version_label(pick.name), "version": str((old.get("project") or {}).get("version", "")), "spec": old}
 
 
 def build(project):
@@ -1136,6 +1243,7 @@ def build(project):
     shutil.copy(ENGINE / "app.js", out / "assets" / "app.js")
     shutil.copy(ENGINE / "base.css", out / "assets" / "base.css")
     shutil.copy(ENGINE / "look.css", out / "assets" / "look.css")
+    shutil.copy(ENGINE / "phone.css", out / "assets" / "phone.css")  # phone screens (`device: phone`)
     theme_text = theme_css(theme_file)
     (out / "assets" / "theme.css").write_text(theme_text, encoding="utf-8")
     fonts, fonts_missing = look_css(spec, project, theme_text)
@@ -1153,8 +1261,10 @@ def build(project):
     custom = custom_work(spec, project)
     # What the build worked out for the engine: the buttons that add a record, and what to tag as custom work.
     made = {"theme": theme, "creates": [{k: n[k] for k in ("screen", "label", "dialog", "confirm", "data", "status")} for n in creating],
-            "custom": custom["tags"], "custom_code": custom["code"],
-            "logo": f"assets/logo{logo.suffix.lower()}" if logo is not None else None}
+            "custom": custom["tags"], "custom_code": custom["code"], "custom_build": bool(custom.get("custom_build")),
+            "logo": f"assets/logo{logo.suffix.lower()}" if logo is not None else None,
+            # The saved mock-up a page opened afresh offers "What changed since" (the live session's first showing, or the version before).
+            "earlier": earlier_version(project, spec)}
     (out / "spec.js").write_text("window.SPEC = " + json.dumps(shown, indent=1, ensure_ascii=False) + ";\n", encoding="utf-8")
     (out / "build.js").write_text("window.MOCKUP_BUILD = " + json.dumps(made, indent=1, ensure_ascii=False) + ";\n", encoding="utf-8")
     own = project_code(project)
@@ -1194,10 +1304,18 @@ def build(project):
     automatic = automatic_moves(spec)
     if automatic:
         print("Made by the system on its own (auto), so no button makes them: " + "; ".join(automatic) + ".")
-    if custom["tags"] or custom["code"]:
-        print(f"{len(custom['tags'])} part{'s' if len(custom['tags']) != 1 else ''} of the mock-up carr{'y' if len(custom['tags']) != 1 else 'ies'} "
-              f"a \"{CUSTOM_LABEL}\" tag while presenting" + (", and so does what the project's own mock-up code adds" if custom["code"] else "")
-              + " (never in screenshots; \"Custom work\" on the presenter's bar hides them).")
+    if custom.get("custom_build"):
+        print(f"A custom build ({spec['project'].get('platform') or 'project.custom_build'}): everything is custom work, so the mock-up tags "
+              f"nothing as \"{CUSTOM_LABEL}\".")
+    elif custom["tags"] or custom["code"]:
+        n = len(custom["tags"])
+        tag = f"a \"{CUSTOM_LABEL}\" tag while presenting"
+        if not n:  # only the project's own code: "0 parts … and so does what the code adds" read as nonsense
+            said = f"What the project's own mock-up code adds carries {tag}"
+        else:
+            said = (f"{n} part{'s' if n != 1 else ''} of the mock-up carr{'y' if n != 1 else 'ies'} {tag}"
+                    + (", and so does what the project's own mock-up code adds" if custom["code"] else ""))
+        print(said + " (never in screenshots; \"Custom work\" on the presenter's bar hides them).")
     warnings = spec_warnings(spec)
     if warnings:
         print("Settings the mock-up ignores (check the spelling, or start a note of your own with _):\n  " + "\n  ".join(warnings))
@@ -1285,12 +1403,14 @@ def feedback_lock(fb_file):
 ROOM_FIELDS = ("id", "screen", "role", "element", "elements", "box", "text", "author", "x", "y", "time", "received", "version", "build", "edited",
                "follows")
 # The mock-up says the same (STATE_WORDS in tools/mockup/app.js): change both together.
-ROOM_WORDS = {"received": "Received", "working": "Working on it", "applied": "Applied", "noted": "Noted for follow-up"}
+# A decision (often not to build what was asked) reads Decided: never Applied, which would tell the client it was built.
+ROOM_WORDS = {"received": "Received", "working": "Working on it", "applied": "Applied", "decided": "Decided", "noted": "Noted for follow-up"}
 
 
 def room_state(comment):
     status = comment.get("status")
-    return "received" if not status else status if status == "working" else "applied" if status in ("applied", "decision") else "noted"
+    return ("received" if not status else status if status == "working" else "applied" if status == "applied"
+            else "decided" if status == "decision" else "noted")
 
 
 def for_the_room(comments):
@@ -1466,6 +1586,27 @@ def comment_in(request):
     return item if isinstance(item, dict) and str(item.get("text") or "").strip() else None
 
 
+def served_version(mock):
+    """The spec version of the mock-up built in `mock` (its spec.js), as text, or None."""
+    try:
+        text = (Path(mock) / "spec.js").read_text(encoding="utf-8")
+        spec = json.loads(text[text.index("=") + 1:].strip().rstrip(";"))
+    except (OSError, ValueError):
+        return None
+    version = (spec.get("project") or {}).get("version") if isinstance(spec, dict) else None
+    return None if version is None else str(version)
+
+
+def stamped(item, mock):
+    """A comment as it is saved: one sent without the version it was made on (posted by hand, or by an older
+    page) takes the version of the mock-up the server is showing, so it never reads "vNone"."""
+    if item.get("version") in (None, "", "None"):
+        version = served_version(mock)
+        if version is not None:
+            item["version"] = version
+    return item
+
+
 def save_comment(fb_file, item):
     """Add a comment to a project's feedback file under the next number. Returns it as saved."""
     fb_file = Path(fb_file)
@@ -1556,7 +1697,7 @@ def make_server(mock, fb_file, host, port, project=None):
             if item is None:
                 # Answer, so the mock-up can tell the comment was not saved and keep it in the browser.
                 return self._json({"error": "a comment is a JSON object with a 'text'"}, 400)
-            return self._json(for_the_room([save_comment(fb_file, item)])[0])
+            return self._json(for_the_room([save_comment(fb_file, stamped(item, mock))])[0])
 
     return MockupServer((host, port), Handler)
 
@@ -1579,15 +1720,23 @@ def lan_addresses():
     return ([main] if usable(main) else []) + sorted(a for a in others if usable(a) and a != main)
 
 
-def serve(project, port, lan, version=None):
+def open_page(url, wanted=True):
+    """Open `url` in the default browser, unless --no-open said not to (a session that opens the page itself, in
+    the browser the presenter uses, or a test)."""
+    if not wanted:
+        return
+    try:
+        webbrowser.open(url)
+    except Exception:
+        pass
+
+
+def serve(project, port, lan, version=None, open_browser=True):
     running = layout.server_running(project)
     if running:
         # Two servers on one project would each keep their own mark and their own idea of where comments go.
         url = f"http://localhost:{running['port']}/"
-        try:
-            webbrowser.open(url)
-        except Exception:
-            pass
+        open_page(url, open_browser)
         sys.exit(f"This project's mock-up is already open at {url} (started {running.get('started', '')}): use that one. "
                  "To start it again, close its window first.")
     if not version:
@@ -1618,10 +1767,7 @@ def serve(project, port, lan, version=None):
             print(f"Others on the same network open http://<this machine's address>:{port}/ "
                   "(the address could not be worked out: look it up in your network settings).")
     print(f"Feedback is saved to {fb_file}. Press Ctrl+C to stop.")
-    try:
-        webbrowser.open(url)
-    except Exception:
-        pass
+    open_page(url, open_browser)
     with server_mark(project, port):
         try:
             server.serve_forever()
@@ -1981,12 +2127,13 @@ def make_home(projects, host, port):
             item = comment_in(self)
             if item is None:
                 return self._send(json.dumps({"error": "a comment is a JSON object with a 'text'"}), 400, "application/json")
-            return self._send(json.dumps(for_the_room([save_comment(layout.feedback_file(where[0]), item)])[0], ensure_ascii=False), kind="application/json")
+            return self._send(json.dumps(for_the_room([save_comment(layout.feedback_file(where[0]), stamped(item, where[1]))])[0], ensure_ascii=False),
+                              kind="application/json")
 
     return MockupServer((host, port), Handler)
 
 
-def serve_home(port, lan=False):
+def serve_home(port, lan=False, open_browser=True):
     """Open the page that lists every mock-up on this machine."""
     import project as project_tool
 
@@ -2001,10 +2148,7 @@ def serve_home(port, lan=False):
     url = f"http://localhost:{port}/"
     print(f"Your mock-ups are at {url} (this computer only). Press Ctrl+C to stop.")
     print("Comments are saved to the project they are made in. Keep this window open while you present.")
-    try:
-        webbrowser.open(url)
-    except Exception:
-        pass
+    open_page(url, open_browser)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -2207,9 +2351,11 @@ def live_wait(project, timeout):
         time.sleep(1)
 
 
-def live_mark(project, comment, status, note=None, register=None):
+def live_mark(project, comment, status, note=None, register=None, cr=None):
     """Record what became of a comment. `received` clears it, so it waits again. Works outside a live
-    session too: it is the safe way to write to the feedback file while a mock-up may be saving comments."""
+    session too: it is the safe way to write to the feedback file while a mock-up may be saving comments.
+    `cr`: the register item of a possible change request the comment also carries, beside its own outcome (an
+    export applied, and fuel claims a possible CR): internal, counted in the session's summary."""
     project = Path(project)
     if status not in LIVE_STATUSES:
         sys.exit(f"'{status}' is not one of {', '.join(LIVE_STATUSES)}")
@@ -2237,6 +2383,8 @@ def live_mark(project, comment, status, note=None, register=None):
             found["note"] = note
         if register:
             found["register_id"] = register
+        if cr:
+            found["possible_cr"] = cr
         write_feedback(fb_file, items)
     live_alive(project)
     refresh_comments_workbook(project)
@@ -2307,7 +2455,7 @@ def live_take(project, comments):
         print("  (One done for them all writes the same note on each: only when it says what was done for every one.)")
 
 
-def live_done(project, comments, note=None):
+def live_done(project, comments, note=None, cr=None):
     """Finish a change: build it, and mark the comments applied. A change with a mistake is refused, and the
     room keeps seeing the last good mock-up."""
     project = Path(project)
@@ -2319,7 +2467,7 @@ def live_done(project, comments, note=None):
         sys.exit(f"Not applied: the change has a mistake, so the room still sees the last good mock-up.\n{problem}\n"
                  f"Fix it and run done again, or put it back: python -I tools/mockup.py live undo {project.as_posix()}")
     for c in ids:
-        live_mark(project, c, "applied", note)
+        live_mark(project, c, "applied", note, cr=cr)
     if note and len(ids) > 1:
         print(f"The same note was written on {', '.join(ids)}.")
     print("Built and checked. Every open mock-up now offers Update ready.")
@@ -2369,17 +2517,41 @@ def live_undo(project):
           f"an item added for it: python -I tools/register.py update {project.as_posix()} <R-id> --set status=wont-fix")
 
 
+def plural(n, one, many=None):
+    return f"{n} {one if n == 1 else many or one + 's'}"
+
+
+def session_summary(data, items):
+    """What a live session did, in lines that add up: the comments of this session (saved since it started, or
+    taken in one of its changes), each counted once by what became of it, then the changes made to the spec for
+    them, and the possible change requests, also those a comment carries beside its own outcome."""
+    started = str(data.get("started") or "")
+    changes = data.get("changes") or []
+    taken = {c for ch in changes for c in ch.get("comments") or []}
+    mine = [c for c in items if str(c.get("received") or "") >= started or c.get("id") in taken]
+    outcome = lambda c: c.get("status") if c.get("status") in ("applied", "decision", "question", "scope", "declined") else "waiting"
+    counts = {k: sum(1 for c in mine if outcome(c) == k) for k in ("applied", "decision", "question", "scope", "declined", "waiting")}
+    words = [("applied", "applied"), ("decision", "decided"), ("question", "made a question for the client"),
+             ("scope", "possible change requests"), ("declined", "declined"), ("waiting", "still waiting")]
+    parts = [f"{counts[k]} {w if k != 'scope' or counts[k] != 1 else 'possible change request'}" for k, w in words if counts[k]]
+    lines = [f"{plural(len(mine), 'comment')} in this session" + (": " + ", ".join(parts) if parts else "") + "."]
+    if changes:  # one change (live take … done) can settle several comments, so this is not a count of comments
+        lines.append(f"{plural(len(changes), 'change')} made to the spec for them, one per take or checkpoint: "
+                     + "; ".join(ch["for"] for ch in changes) + ".")
+    halves = [c for c in mine if c.get("possible_cr") and c.get("status") != "scope"]
+    if halves:
+        lines.append(f"Also {plural(len(halves), 'possible change request')} carried by a comment beside its own outcome: "
+                     + ", ".join(f"{c['id']} ({c['possible_cr']})" for c in halves) + ".")
+    return lines
+
+
 def live_end(project):
     project = Path(project)
     data = live_session(project)
     data["ended"] = dt.datetime.now().isoformat(timespec="seconds")
     live_write(project, data)
     items = standing(read_feedback(layout.feedback_file(project)))
-    count = lambda *statuses: sum(1 for c in items if c.get("status") in statuses)
-    print(f"Live session closed. {len(data.get('changes') or [])} change{'s' if len(data.get('changes') or []) != 1 else ''} made to the spec"
-          + (": for " + ", ".join(c["for"] for c in data["changes"]) if data.get("changes") else "") + ".")
-    print(f"Comments: {count('applied', 'decision')} applied, {count('question')} questions, {count('scope')} possible change requests, "
-          f"{count('declined')} declined, {sum(1 for c in items if not c.get('status') or c.get('status') == 'working')} still waiting.")
+    print("Live session closed. " + "\n".join(session_summary(data, items)))
     print(f"What the client first saw is kept as mockup/versions/{data.get('kept')}.")
     if data.get("changes"):
         print("Now release it, so the document matches what was agreed on screen: bump project.version in the spec, take the screenshots, "
@@ -2404,6 +2576,8 @@ def live_main(argv):
     ap.add_argument("--note", help="done, mark: what was done or why (internal: never shown in the mock-up). With several ids the same "
                                    "note goes on each: run done once per comment to give each its own")
     ap.add_argument("--register", help="mark: the register item made for this comment, for example R-031")
+    ap.add_argument("--cr", help="done, mark: the register item of a possible change request this comment also carries beside its own "
+                                 "outcome (internal), for example R-051")
     ap.add_argument("--timeout", type=int, default=3600, help="wait: seconds before giving up (0: never)")
     a = ap.parse_args(argv)
     if not Path(a.project).is_dir():
@@ -2420,11 +2594,11 @@ def live_main(argv):
         if a.action == "take":
             live_take(a.project, a.rest)
         else:
-            live_done(a.project, a.rest, a.note)
+            live_done(a.project, a.rest, a.note, a.cr)
     elif a.action == "mark":
         if len(a.rest) != 2:
             ap.error("mark needs a comment id and a status, for example: live mark projects/x FB-003 applied --note \"renamed the column\"")
-        live_mark(a.project, a.rest[0], a.rest[1], a.note, a.register)
+        live_mark(a.project, a.rest[0], a.rest[1], a.note, a.register, a.cr)
     elif a.action == "checkpoint":
         live_checkpoint(a.project, " ".join(a.rest) or "a change")
     elif a.action == "undo":
@@ -2999,6 +3173,37 @@ def refresh_comments_workbook(project):
         return None
 
 
+def add_comment(project, screen, text, element=None, role=None, author=None, dialog=None):
+    """Save a comment on a project's mock-up from the command line, as the page would: the next number, the
+    spec's version, and the same lock, so it is safe while the mock-up is served and saving comments too. For
+    comments said aloud or sent by e-mail that belong on a screen, and for tests. Returns the comment saved."""
+    project = Path(project)
+    spec = load_spec(project)
+    screens = {s["id"]: s for s in spec["screens"]}
+    roles = {r["id"]: r for r in spec["roles"]}
+    if screen not in screens and screen != "__flow":
+        close = difflib.get_close_matches(str(screen), sorted(screens), 1, 0.6)
+        sys.exit(f"No screen '{screen}'" + (f" (did you mean '{close[0]}'?)" if close else f". The screens are: {', '.join(screens)}"))
+    if role is not None and role not in roles:
+        sys.exit(f"No role '{role}'. The roles are: {', '.join(roles)}")
+    if dialog is not None and dialog not in {d.get("id") for d in spec.get("dialogs") or []}:
+        sys.exit(f"No dialog '{dialog}'")
+    text = str(text or "").strip()
+    if not text:
+        sys.exit("A comment needs some text: --text \"...\"")
+    target = screens.get(screen) or {}
+    item = {"screen": screen, "role": role or target.get("screenshot_role") or ((target.get("roles") or [None])[0]) or spec["roles"][0]["id"],
+            "element": element or (f"dialog:{next(d.get('title') for d in spec.get('dialogs') or [] if d.get('id') == dialog)}" if dialog else ""),
+            "text": text, "author": author or "", "time": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
+            "version": str(spec["project"].get("version", "draft")), "via": "command line"}
+    saved = save_comment(layout.feedback_file(project), item)
+    if is_listening(project):
+        live_alive(project)
+    refresh_comments_workbook(project)
+    print(f"{saved['id']} saved on {target.get('title') or screen}, {in_words(spec, saved.get('element'))}, v{saved['version']}.")
+    return saved
+
+
 def show_feedback(project):
     fb = layout.feedback_file(project)
     items = standing(json.loads(fb.read_text(encoding="utf-8"))) if fb.exists() else []  # taken back in the mock-up: left out
@@ -3014,7 +3219,7 @@ def show_feedback(project):
         for it in lst:
             several = it.get("elements") if isinstance(it.get("elements"), list) and len(it.get("elements")) > 1 else None
             place = f"{len(several)} things: {', '.join(several)}" if several else f"new, in {it.get('element') or 'screen'}" if it.get("box") else it.get("element") or "screen"
-            print(f"- {it.get('id', '')} [{place}] ({it.get('author') or 'anon'}, {it.get('role')}, v{it.get('version')}): {it.get('text')}"
+            print(f"- {it.get('id', '')} [{place}] ({it.get('author') or 'anon'}, {it.get('role')}, v{it.get('version') or '?'}): {it.get('text')}"
                   + (" (edited)" if it.get("edited") else "") + (f"  -> {it['status']}" if it.get("status") else "")
                   + (f"  (follows {', '.join(it['follows'])})" if it.get("follows") else ""))
 
@@ -3025,11 +3230,18 @@ def main():
     if sys.argv[1:2] == ["live"]:
         return live_main(sys.argv[2:])
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["build", "serve", "screenshots", "feedback", "look"])
+    ap.add_argument("command", choices=["build", "serve", "screenshots", "feedback", "comment", "look"])
     ap.add_argument("project", nargs="?", help="projects/<slug>; `serve` without it lists every mock-up")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--lan", action="store_true")
     ap.add_argument("--version", help="serve a saved mock-up version, e.g. 0.2")
+    ap.add_argument("--no-open", dest="open_browser", action="store_false", help="serve: do not open the default browser")
+    ap.add_argument("--screen", help="comment: the screen's id the comment is on")
+    ap.add_argument("--text", help="comment: what the comment says")
+    ap.add_argument("--element", help="comment: what on the screen it is about, as the mock-up names it (field:reason, button:Approve, column:Status)")
+    ap.add_argument("--role", help="comment: the role it was made as (default: the screen's)")
+    ap.add_argument("--author", help="comment: who said it")
+    ap.add_argument("--dialog", help="comment: the dialog it is about")
     ap.add_argument("--try", dest="tries", nargs="+", metavar="KEY=VALUE",
                     help=f"look: preview these settings ({', '.join(LOOK_KEYS)}) without changing the project")
     a = ap.parse_args()
@@ -3046,9 +3258,13 @@ def main():
         build(a.project)
         refresh_overview(a.project)
     elif a.command == "serve" and not a.project:
-        serve_home(a.port, a.lan)
+        serve_home(a.port, a.lan, a.open_browser)
     elif a.command == "serve":
-        serve(a.project, a.port, a.lan, a.version)
+        serve(a.project, a.port, a.lan, a.version, a.open_browser)
+    elif a.command == "comment":
+        if not a.screen or not a.text:
+            ap.error('comment needs --screen and --text, for example: comment projects/x --screen my-tasks --text "Show the due date"')
+        add_comment(a.project, a.screen, a.text, a.element, a.role, a.author, a.dialog)
     elif a.command == "screenshots":
         screenshots(a.project)
         refresh_overview(a.project)
