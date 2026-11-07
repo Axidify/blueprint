@@ -1337,6 +1337,41 @@ def test_a_mistake_in_the_scope_is_named(tmp_path, scope, said):
     assert said in str(stop.value)
 
 
+def test_the_scope_chapter_says_where_each_scope_of_work_item_is_specified(tmp_path):
+    """Nothing compared the requirements with the scope of work: a document that left out most of what was sold
+    went to sign-off. The scope chapter lists each item and where it is specified; the generator warns about the
+    ones with no requirement."""
+    spec = support.load_spec(support.EXAMPLE)
+    spec["sow"] = {"items": [{"ref": "1", "item": "Leave application"}, {"ref": "2", "item": "Approval"},
+                             {"ref": "3", "item": "Leave balance report"}, {"ref": "4", "item": "Mobile app", "deferred": "Phase 2"}]}
+    spec["requirements"][0]["sow"] = "1"
+    spec["requirements"][1]["items"][0] = {"text": spec["requirements"][1]["items"][0], "sow": "2"}
+    result = support.generate(support.make_project(tmp_path / "sow", spec=spec))
+    table = [[c.strip(" ") for c in r] for r in rows(support.table_starting(chapter(result.doc, TITLES["scope"]), "Ref"))]
+    assert table == [["Ref", "Scope of work item", "Specified in"], ["1", "Leave application", "FR-APP-001"],
+                     ["2", "Approval", "FR-APP-002.1"], ["3", "Leave balance report", "Not specified yet"],
+                     ["4", "Mobile app", "Not in this version: Phase 2"]]
+    assert "Scope of work items with no requirement: 3 Leave balance report" in result.log
+    warning = next(line for line in result.log.splitlines() if "Scope of work items with no requirement" in line)
+    assert "Mobile app" not in warning and "Approval" not in warning
+
+
+@pytest.mark.parametrize("change, said", [
+    (lambda s: s.update(sow=[{"ref": "1", "item": "Leave"}]), "sow: must have 'items'"),
+    (lambda s: s.update(sow={"items": [{"ref": "1", "item": "Leave", "mandays": 12}]}),
+     "sow item 1: 'mandays' is not one of ref, item, deferred, note (mandays stay in the estimate and on the timeline)"),
+    (lambda s: s.update(sow={"items": [{"ref": "1", "item": "Leave"}, {"ref": "1", "item": "Approval"}]}),
+     "sow item 1: the ref is used twice"),
+    (lambda s: (s.update(sow={"items": [{"ref": "1", "item": "Leave"}]}), s["requirements"][0].update(sow="9")),
+     "requirement FR-APP-001: sow '9' is not an item of the spec's sow"),
+    (lambda s: s["requirements"][0].update(sow="1"), "names a scope of work item (sow), but the spec has no sow items"),
+], ids=["not-items", "mandays", "twice", "unknown-ref", "no-sow"])
+def test_a_mistake_in_the_scope_of_work_items_is_named(change, said):
+    spec = support.load_spec(support.EXAMPLE)
+    change(spec)
+    assert any(said in e for e in generate_requirements.document_errors(spec)), generate_requirements.document_errors(spec)
+
+
 def test_a_company_that_lists_its_own_chapters_adds_scope_to_get_it(temp_workspace, tmp_path):
     company_format(temp_workspace, "chapters: [users_access, requirements, screens, decisions, signoff]\n")
     result = support.generate(support.make_project(tmp_path / "own-chapters"))

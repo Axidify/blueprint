@@ -298,8 +298,8 @@ python -I tools/workshop.py gaps   projects/<slug>
 python -I tools/workshop.py check  projects/<slug> ["<agenda.json>"]
 python -I tools/workshop.py render projects/<slug> ["<agenda.json>"]
 ```
-`gaps` lists what a workshop has to settle: the open client questions, what the spec does not say yet and
-the gap patterns with their evidence. `check` checks an agenda file in `_blueprint/workshops/`:
+`gaps` lists what a workshop has to settle: the open client questions, what the spec does not say yet
+(including the scope of work's items that no requirement specifies) and the gap patterns with their evidence. `check` checks an agenda file in `_blueprint/workshops/`:
 every reference is an open client question, every screen exists, the sections fit the time, no open
 high-severity question is left out without a reason, and nothing the client's agenda prints (the goal, the
 questions and options, what to bring, parked items) uses the team's words (mandays, rates, building blocks). `render` checks it and writes two Word documents into
@@ -425,10 +425,12 @@ python -I tools/project.py migrate <slug> | --all [--dry-run] [--undo]
 ```
 Project housekeeping. `ready` says whether the current version can go to the client for signature. It stops
 on a client question still marked "Blocks sign-off" (open or answered, high), on settled items with no agreed
-`decision` (the document would print the client's raw answer as what is signed), and on a document older than
-the spec or the register. It also lists what to look at: answered items still open, two questions that look
+`decision` (the document would print the client's raw answer as what is signed), on a scope of work item
+(the spec's `sow`) that no requirement specifies and nobody agreed to leave out (`deferred`), and on a document
+older than the spec or the register. It also lists what to look at: answered items still open, two questions that look
 the same, a field whose choices differ from the ones the client listed in an answer, "the agreed …" or "to be
-confirmed" in a requirement with no `tbc` item behind it, and a side with nobody to sign. `issue` runs the
+confirmed" in a requirement with no `tbc` item behind it, a requirement group that names no scope of work
+item (a possible change request), a spec with no `sow` at all, and a side with nobody to sign. `issue` runs the
 same check and issues nothing while something stops it; `--anyway "<why>"` issues it all the same and keeps
 the reason with the issue. `issue` records that the current document version went to the client and locks it (its
 files become read-only and the generator refuses to overwrite it, so the next change needs a new version).

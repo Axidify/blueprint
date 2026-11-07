@@ -100,6 +100,41 @@ FRONT = ("cover", "at_a_glance", "about", "contents")
 CHAPTERS = ("users_access", "scope", "by_role", "requirements", "screens", "nfr", "timeline", "extras", "decisions", "signoff")
 STATUS_RULES = (("edit", "May edit"), ("cancel", "May cancel"), ("delete", "May delete"))  # plus `next`
 SCOPE_PARTS = (("in_scope", "In scope"), ("out_of_scope", "Out of scope"), ("assumptions", "Assumptions"))
+
+
+# ------------------------------------------------------------------ the scope of work's items
+# The spec lists the scope of work's items (`sow: {items: [{ref, item}]}`) and each requirement group, or item,
+# names the ones it specifies (`sow: "3.1"`). An end-to-end test signed off a document that covered six of the
+# fourteen modules sold: nothing compared the two. Mandays never go here; they stay in the estimate.
+def sow_items(spec):
+    """The scope of work's items in the spec, each a dict with at least ref and item."""
+    sow = spec.get("sow")
+    items = sow.get("items") if isinstance(sow, dict) else None
+    return [x for x in items if isinstance(x, dict)] if isinstance(items, list) else []
+
+
+def sow_refs(x):
+    """The scope of work refs a requirement group or item names: `sow: "3.1"` or `sow: ["3.1", "3.2"]`."""
+    value = x.get("sow") if isinstance(x, dict) else None
+    if value is None:
+        return []
+    return [str(v).strip() for v in (value if isinstance(value, list) else [value]) if str(v).strip()]
+
+
+def sow_coverage(spec):
+    """Each scope of work item's ref -> the requirement ids that specify it (a group's id, or FR-XXX-001.3 for
+    one item), in document order."""
+    cover = {str(s.get("ref")).strip(): [] for s in sow_items(spec)}
+    for g in spec.get("requirements") or []:
+        if not isinstance(g, dict):
+            continue
+        for ref in sow_refs(g):
+            cover.setdefault(ref, []).append(str(g.get("id")))
+        for n, item in enumerate(g.get("items") or [], 1):
+            for ref in sow_refs(item):
+                if str(g.get("id")) not in cover.setdefault(ref, []):
+                    cover[ref].append(f"{g.get('id')}.{n}")
+    return cover
 INTEGRATION_DETAILS = (("trigger", "Trigger"), ("data", "Data exchanged"), ("on_failure", "If it fails"))
 SCOPE_INTRO = ("What this version of {system} covers, what it leaves out, and what has been assumed. "
                "Work outside this scope is agreed separately as a change request.")
@@ -277,6 +312,40 @@ def document_errors(spec):
             text = item.get("text") if isinstance(item, dict) else item
             if not isinstance(text, str) or not text.strip():
                 errors.append(f"{where}, item {j}: needs its text")
+    # The scope of work's items, and the requirements that name them.
+    sow = spec.get("sow")
+    if sow is not None:
+        if not isinstance(sow, dict) or not isinstance(sow.get("items"), list):
+            errors.append("sow: must have 'items', the scope of work's items as {ref, item}")
+        else:
+            for key in sow:
+                if key not in ("source", "items"):
+                    errors.append(f"sow: '{key}' is not one of source, items"
+                                  + (" (the scope of work's mandays go on the timeline's activities)" if key == "mandays" else ""))
+            refs = set()
+            for i, s in enumerate(sow["items"], 1):
+                if not need(f"sow item {i}", s, "ref", "item"):
+                    continue
+                for key in s:
+                    if key not in ("ref", "item", "deferred", "note"):
+                        errors.append(f"sow item {s['ref']}: '{key}' is not one of ref, item, deferred, note"
+                                      + (" (mandays stay in the estimate and on the timeline)" if key == "mandays" else ""))
+                if str(s["ref"]).strip() in refs:
+                    errors.append(f"sow item {s['ref']}: the ref is used twice")
+                refs.add(str(s["ref"]).strip())
+            for g in spec.get("requirements") or []:
+                if not isinstance(g, dict):
+                    continue
+                named = [(str(g.get("id")), r) for r in sow_refs(g)]
+                named += [(f"{g.get('id')}.{n}", r) for n, it in enumerate(g.get("items") or [], 1) for r in sow_refs(it)]
+                for where, r in named:
+                    if r not in refs:
+                        errors.append(f"requirement {where}: sow '{r}' is not an item of the spec's sow")
+    else:
+        for g in spec.get("requirements") or []:
+            if isinstance(g, dict) and (sow_refs(g) or any(sow_refs(it) for it in g.get("items") or [])):
+                errors.append(f"requirement group {g.get('id')}: names a scope of work item (sow), but the spec has no sow items")
+                break
     for i, n in each("notifications"):
         need(f"notification {i}", n, "event", "recipient")
     for i, x in each("nfr"):
@@ -1326,7 +1395,7 @@ def plan_sections(spec, fmt, reg_items):
             continue
         if key == "timeline" and not spec.get("timeline"):
             continue
-        if key == "scope" and not spec.get("scope"):
+        if key == "scope" and not (spec.get("scope") or sow_items(spec)):
             continue
         n += 1
         chapters.append((key, chap(n), fmt["titles"][key]))
@@ -1517,6 +1586,11 @@ def build(project):
     if raw and "decisions" in [k for k, *_ in chapters]:
         warnings.append(f"Decisions made prints the client's own answer for {', '.join(raw)}: write each one's agreed decision "
                         "in one line (register.py update ... --set decision=\"...\"), as it is what the client signs")
+    cover = sow_coverage(spec)
+    bare = [f"{x['ref']} {x['item']}" for x in sow_items(spec) if not cover.get(str(x["ref"]).strip()) and not x.get("deferred")]
+    if bare:
+        warnings.append(f"Scope of work items with no requirement: {'; '.join(bare)}. Write their requirements (sow: on the "
+                        "group), or record that they are left out of this version (deferred:) once the client agrees")
     notes = []  # worth knowing, but no reason to hold a version back
     roles = spec["roles"]
     role_ids = [r["id"] for r in roles]
@@ -2019,9 +2093,24 @@ def build(project):
             w.heading(f"{number} {title}", 1, key=chapter_key(key, title))
             w.lead(fill(bp.get("scope_intro") or SCOPE_INTRO))
             for part, label_ in SCOPE_PARTS:
-                if spec["scope"].get(part):
+                if (spec.get("scope") or {}).get(part):
                     w.para([(label_, "medium")], size=w.s["h3"], before=6, after=3, keep=True)
                     w.bullets([fill(x, f"scope, {label_.lower()}") for x in spec["scope"][part]])
+            if sow_items(spec):
+                # Where each item of the scope of work is specified, so the client can check nothing sold is missing.
+                cover = sow_coverage(spec)
+                w.para([("Scope of work items", "medium")], size=w.s["h3"], before=6, after=3, keep=True)
+                rows = []
+                for x in sow_items(spec):
+                    ids = cover.get(str(x["ref"]).strip()) or []
+                    if ids:
+                        where_ = link_list([(i, requirement_key(i)) for i in ids])
+                    elif x.get("deferred"):
+                        where_ = "Not in this version: " + fill(str(x["deferred"]), f"sow item {x['ref']}")
+                    else:
+                        where_ = [("Not specified yet", "tag")]
+                    rows.append([str(x["ref"]), fill(str(x["item"]), f"sow item {x['ref']}"), where_])
+                w.table(["Ref", "Scope of work item", "Specified in"], rows, [1.6, tw * 0.5 - 1.6, tw * 0.5])
 
         # ---------------------------------------------------------------- requirements by role
         elif key == "by_role":

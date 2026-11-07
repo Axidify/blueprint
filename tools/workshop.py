@@ -122,6 +122,14 @@ def spec_gaps(spec):
         loose_screens = [s.get("title", s.get("id")) for s in spec.get("screens") or [] if s.get("type") != "login" and s.get("id") not in linked]
         if loose_screens:
             gaps.append(("Requirements", f"no requirement refers to: {', '.join(loose_screens)}", ""))
+    if spec.get("sow"):
+        # What the scope of work sold and nothing specifies yet: the workshop asks how each one must work.
+        import generate_requirements as gen
+        cover = gen.sow_coverage(spec)
+        bare = [f"{x.get('ref')} {x.get('item')}" for x in gen.sow_items(spec)
+                if not cover.get(str(x.get("ref")).strip()) and not x.get("deferred")]
+        if bare:
+            gaps.append(("Scope of work", f"sold but not specified yet: {'; '.join(bare)}", ""))
     return gaps
 
 
