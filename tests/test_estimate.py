@@ -559,11 +559,21 @@ def test_share_of_uncalibrated_mandays_caps_the_level(kb, high_end, level):
     assert ("not rates calibrated from delivered projects" in " ".join(res["reasons"])) == (level != "high")
 
 
-@pytest.mark.parametrize("uncalibrated", [block("L02", "BB-03", count=4), block("L02", "BB-07", count=4, rate=[3, 6])])
-def test_low_confidence_and_provisional_rates_count_as_uncalibrated(kb, uncalibrated):
+@pytest.mark.parametrize("uncalibrated, source", [
+    (block("L02", "BB-03", count=4), "the knowledge base's low-confidence figures,"),
+    (block("L02", "BB-07", count=4, rate=[3, 6]), "figures the lead developer gave for this estimate,")])
+def test_low_confidence_and_provisional_rates_count_as_uncalibrated(kb, uncalibrated, source):
+    """It said "low-confidence rates or the lead developer's figures" whichever was used, so an estimate priced
+    from the knowledge base alone claimed figures the lead developer never gave."""
     res = work_out(kb, estimate_of(CALIBRATED, uncalibrated))  # 24 MD of 44 at the high end
     assert res["confidence"] == "low" and res["uncalibrated_share"] == pytest.approx(24 / 44)
-    assert res["reasons"][0].startswith("55% of the priced mandays use low-confidence rates")
+    assert res["reasons"][0] == f"55% of the priced mandays rest on {source} not rates calibrated from delivered projects."
+
+
+def test_both_sources_of_uncalibrated_figures_are_named(kb):
+    res = work_out(kb, estimate_of(CALIBRATED, block("L02", "BB-03", count=4), fixed("L03", 1, 20)))
+    assert ("rest on the knowledge base's low-confidence figures and figures the lead developer gave for this estimate"
+            in res["reasons"][0])
 
 
 def test_percent_lines_do_not_count_towards_the_share(kb):
@@ -922,6 +932,19 @@ def overview_text(wb):
     return [str(r[0]) for r in sheet_rows(wb["Overview"]) if r[0]]
 
 
+def test_next_step_relates_the_building_blocks_to_the_lines_that_need_them(tmp_path, kb, run):
+    """"13 of 13 building-block lines need a rate" above, "the Rates needed sheet (11 building blocks)" below:
+    the two counts read as a contradiction when several lines share a block."""
+    est = full_estimate()
+    est["lines"].append(block("L05", "BB-07", count=1, group="Integration"))
+    path = full_project(tmp_path / "project", est)
+    run(kb, "render", tmp_path / "project")
+    text = overview_text(load_workbook(path.with_suffix(".xlsx")))
+    assert "The build is not priced yet: 2 of 3 building-block lines need a rate, so there is no project total." in text
+    assert ("1.  Ask the lead developer for the rates of 1 building block on the Rates needed sheet "
+            "(the 2 lines without a rate use it).") in text
+
+
 def test_a_priced_build_still_gives_a_total(tmp_path, kb, run):
     """Only an unpriced building block takes the total away: an unpriced item of other work leaves it, said so."""
     est = full_estimate()
@@ -1003,12 +1026,12 @@ def test_overview_has_confidence_and_next_steps_without_lists_of_ids(rendered):
     i = text.index("Confidence: Low")
     assert text[i + 1:i + 4] == [
         "•  1 of 4 lines have no rate or share set and are not priced: the total leaves them out, so it is not the whole project.",
-        "•  23% of the priced mandays use low-confidence rates or the lead developer's figures for this estimate, not "
+        "•  23% of the priced mandays rest on figures the lead developer gave for this estimate, not "
         "rates calibrated from delivered projects.",
         "•  1 high-severity register item is still open."]
     j = text.index("What to do next")
     assert text[j + 1:j + 4] == [
-        "1.  Ask the lead developer for the rates on the Rates needed sheet (1 building block).",
+        "1.  Ask the lead developer for the rates of 1 building block on the Rates needed sheet.",
         "2.  Settle the questions that narrow the range most (Risks and questions sheet), starting with: "
         "“May two bookings overlap?” and “Which systems must it exchange data with?”",
         "3.  Compare with the scope of work on the Against SOW sheet: 2 lines differ from the estimate."]

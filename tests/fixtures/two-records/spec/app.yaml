@@ -1,0 +1,150 @@
+# Made-up spec for the tests: two kinds of record share the one list of statuses. A batch of leave applications
+# is approved on the batch's screen; each application in it then moves on its own screen. Not a client project.
+
+project:
+  name: Leave Batch System
+  client: Sample Client Sdn. Bhd.
+  version: "0.1"
+  platform: Joget DX
+
+roles:
+  - {id: officer, name: Leave Officer}
+  - {id: manager, name: HR Manager}
+  - {id: clerk, name: Payroll Clerk}
+
+statuses:
+  # the batch
+  - {id: open, name: Open, color: grey, edit: [officer], cancel: none, delete: [officer], next: [submitted]}
+  - {id: submitted, name: Submitted, color: amber, edit: none, cancel: none, delete: none, next: [approved, returned]}
+  - {id: returned, name: Returned, color: red, edit: [officer], cancel: none, delete: none, next: [submitted]}
+  - {id: approved, name: Approved, color: green, edit: none, cancel: none, delete: none, next: [closed]}
+  - {id: closed, name: Closed, color: grey, edit: none, cancel: none, delete: none, next: []}
+  # each application of a batch
+  - {id: waiting, name: Waiting, color: amber, edit: none, cancel: none, delete: none, next: [recorded]}
+  - {id: recorded, name: Recorded, color: green, edit: none, cancel: none, delete: none, next: [archived]}
+  - {id: archived, name: Archived, color: grey, edit: none, cancel: none, delete: none, next: []}
+  - {id: late, name: Late, color: amber, edit: [officer], cancel: none, delete: none, next: [waiting]}
+
+process_flow:
+  title: Monthly leave batch
+  steps:
+    - {name: Collect the month's applications, role: Leave Officer, status: Open}
+    - {name: Approve the batch, role: HR Manager, status: Approved}
+    - {name: Record each application in payroll, role: Payroll Clerk, status: Recorded}
+    - {name: Archive the application, role: Payroll Clerk, status: Archived}
+    - {name: Close the batch, role: HR Manager, status: Closed}
+
+data:
+  batches:
+    - {id: "B-2026-10", month: "October 2026", status: "Approved"}
+    - {id: "B-2026-11", month: "November 2026", status: "Submitted"}
+    - {id: "B-2026-12", month: "December 2026", status: "Open"}
+  applications:
+    - {id: "LV-101", batch: "B-2026-10", employee: "Nur Aisyah", days: 2, status: "Waiting"}
+    - {id: "LV-102", batch: "B-2026-10", employee: "Daniel Tan", days: 1, status: "Recorded"}
+    - {id: "LV-103", batch: "B-2026-10", employee: "Mei Ling", days: 3, status: "Archived"}
+    - {id: "LV-104", batch: "B-2026-12", employee: "Arun Kumar", days: 1, status: "Late"}
+
+screens:
+  - {id: login, type: login, title: Login}
+
+  - id: batches
+    type: list
+    title: Leave Batches
+    menu: Batches
+    roles: [officer, manager]
+    list:
+      data: batches
+      columns: [{field: id, label: Batch}, {field: month, label: Month}, {field: status, label: Status, chip: true}]
+      actions:
+        - {label: Open, to: batch}
+      toolbar:
+        - {label: New batch, to: new-batch, roles: [officer]}
+
+  - id: new-batch
+    type: form
+    title: New Leave Batch
+    roles: [officer]
+    data: batches
+    sections:
+      - title: Batch
+        fields:
+          - {id: month, label: Month, type: text, required: true}
+    buttons:
+      - {label: Cancel, to: batches}
+      - {label: Save batch, style: primary, set_status: open, to: batches, toast: "Batch saved"}
+
+  - id: batch
+    type: detail
+    title: Leave Batch
+    roles: [officer, manager]
+    data: batches
+    buttons:
+      - {label: Back, to: batches}
+      - {label: Submit to HR, style: primary, set_status: submitted, when: {status: [Open, Returned]}, roles: [officer]}
+      - {label: Return, dialog: return-batch, when: {status: Submitted}, roles: [manager]}
+      - {label: Approve, style: primary, dialog: approve-batch, when: {status: Submitted}, roles: [manager]}
+      - {label: Close batch, set_status: closed, when: {status: Approved}, roles: [manager]}
+      - {label: Add application, to: new-application, when: {status: Open}, roles: [officer]}
+    list:
+      data: applications
+      columns: [{field: id, label: Ref No}, {field: employee, label: Employee}, {field: status, label: Status, chip: true}]
+      actions:
+        - {label: View, to: application}
+
+  - id: new-application
+    type: form
+    title: New Application in the Batch
+    roles: [officer]
+    data: applications
+    sections:
+      - title: Application
+        fields:
+          - {id: employee, label: Employee, type: text, required: true}
+          - {id: days, label: Days, type: number, required: true}
+    buttons:
+      - {label: Cancel, to: batch}
+      # adds an application in Waiting: it must never stand in for Accept late, which moves Late to Waiting
+      - {label: Add application, style: primary, set_status: waiting, to: batch, toast: "Application added"}
+      - {label: Add late application, creates: true, set_status: late, to: batch, toast: "Late application added"}
+
+  - id: applications
+    type: list
+    title: Leave Applications
+    menu: Applications
+    roles: [clerk, manager]
+    list:
+      data: applications
+      columns: [{field: id, label: Ref No}, {field: employee, label: Employee}, {field: status, label: Status, chip: true}]
+      actions:
+        - {label: View, to: application}
+        - {label: Archive, set_status: archived, when: {status: Recorded}, roles: [clerk], toast: "Application archived"}
+
+  - id: application
+    type: detail
+    title: Leave Application
+    roles: [clerk, manager]
+    data: applications
+    buttons:
+      - {label: Back, to: applications}
+      - {label: Record in payroll, style: primary, set_status: recorded, when: {status: Waiting}, roles: [clerk]}
+      - {label: Accept late, set_status: waiting, when: {status: Late}, roles: [manager]}
+
+dialogs:
+  - id: approve-batch
+    title: Approve the batch
+    fields:
+      - {id: comment, label: Comment, type: textarea}
+    confirm: {label: Confirm approval, style: primary, set_status: approved, toast: "Batch approved"}
+  - id: return-batch
+    title: Return the batch
+    fields:
+      - {id: reason, label: Reason, type: textarea, required: true}
+    confirm: {label: Return to officer, set_status: returned, toast: "Batch returned"}
+
+requirements:
+  - id: FR-BAT-001
+    title: Leave batches
+    items:
+      - The HR Manager approves or returns a batch submitted by the Leave Officer.
+      - The Payroll Clerk records each application of an approved batch in payroll, then archives it.

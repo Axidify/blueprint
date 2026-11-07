@@ -217,7 +217,7 @@ follow" until then).
 
 **Ask:** "prepare the UAT scripts", "write the test scenarios", "test cases for UAT", "get ready for UAT"
 Writes the user acceptance test scripts from what the client signed (the version issued last, or the
-current spec when nothing is issued yet, and it says which): the main process signed in as each role in
+current spec when nothing is issued yet, and it says which): the main process (one per kind of record) signed in as each role in
 turn, every other status move such as reject and cancel, what each role may not do in each status, the
 field checks of every form and dialog, the screens each role may not open, the dashboard figures, and the
 notifications and integrations. It then adds the edge cases from the gap patterns that apply, merges and

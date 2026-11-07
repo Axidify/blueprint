@@ -123,7 +123,7 @@ def readable_place(part):
     p = re.sub(r"\bsection\b", "Section", p)
     p = re.sub(r"\s*/\s*(?=Section )", ", ", p)
     p = re.sub(r"^(\d+(?:\.\d+)+[a-z]?)\b", r"Section \1", p)
-    p = re.sub(r"(?<!comment )\b(FB-\d+)\b", r"comment \1", p)
+    p = re.sub(r"(?<!comment )(?<!comments )(?<!, )(?<!and )\b(FB-\d+)\b", r"comment \1", p)
     p = re.sub(r"'([^']{30})[^']{8,}'", r"'\1…'", p)
     return re.sub(r"\s{2,}", " ", p).strip()
 
@@ -135,6 +135,79 @@ def readable_reference(source):
     doc, rest = (m.group(1).strip(), src[m.end():]) if m else ("", src)
     places = [readable_place(x) for x in re.split(r"\s*;\s*", rest) if x.strip(" ,")]
     return doc, "\n".join(places)
+
+
+# What the client reads in the Where column: the places as above, without the team's own references. A mock-up
+# comment's id (FB-009) means nothing to the client, and a spec id ("dialog pickup-dialog") names a part of the
+# spec they never see: it becomes the title the mock-up shows ("Pick up dialog").
+COMMENT_IDS = re.compile(r"\b(?:mock-up\s+)?(comments?)\s+FB-\d+(?:(?:\s*,\s*|\s+and\s+)(?:comment\s+)?FB-\d+)*", re.I)
+SPEC_ID = r"[a-z][a-z0-9]*(?:-[a-z0-9]+)+"  # how spec ids are written: lower-case words joined by hyphens
+# References of the team's own that should never reach the client (render warns about a client item whose Where
+# still has one): mock-up comments, building blocks, gap patterns, other work and estimate lines; and the ids
+# of the spec (spec_ids), which these cannot tell from words like "e-mail".
+INTERNAL_REFS = re.compile(r"\b(?:FB|BB|GP|OW)-\d+\b|\bL\d{2,}\b")
+
+
+def load_spec(project):
+    try:
+        import yaml
+
+        spec = yaml.safe_load(layout.spec_file(project).read_text(encoding="utf-8")) or {}
+    except Exception:  # no spec yet, or one that cannot be read: the ids are shown as written
+        return {}
+    return spec if isinstance(spec, dict) else {}
+
+
+def spec_titles(spec):
+    """{spec id: (kind, title)} for a spec's screens and dialogs."""
+    out = {}
+    for kind, key in (("screen", "screens"), ("dialog", "dialogs")):
+        for part in spec.get(key) or []:
+            if isinstance(part, dict) and part.get("id") and part.get("title"):
+                out[str(part["id"])] = (kind, str(part["title"]).strip())
+    return out
+
+
+def spec_ids(node, out=None):
+    """Every id in a spec written the way spec ids are (screens, dialogs, roles, statuses, fields ...)."""
+    out = set() if out is None else out
+    if isinstance(node, dict):
+        if isinstance(node.get("id"), str) and re.fullmatch(SPEC_ID, node["id"]):
+            out.add(node["id"])
+        for value in node.values():
+            spec_ids(value, out)
+    elif isinstance(node, list):
+        for value in node:
+            spec_ids(value, out)
+    return out
+
+
+def internal_ref(where, ids):
+    """The first reference of the team's own left in a client item's Where, or None."""
+    m = INTERNAL_REFS.search(where)
+    if m:
+        return m.group(0)
+    return next((x for x in re.findall(rf"(?<![\w-]){SPEC_ID}(?![\w-])", where) if x in ids), None)
+
+
+def client_place(place, titles):
+    """One place of an item's Where as the client reads it (see COMMENT_IDS)."""
+    p = COMMENT_IDS.sub(lambda m: "mock-up " + m.group(1).lower(), place)
+    p = re.sub(r"\bFB-\d+\b", "mock-up comment", p)
+    p = re.sub(r"\b(?:mock-up\s+)+mock-up\b", "mock-up", p, flags=re.I)
+
+    def title(sid):
+        kind, name = titles[sid]
+        return name if name.lower().endswith(kind) else f"{name} {kind}"
+    p = re.sub(r"\b(?:screen|dialog)\s+([a-z0-9]+(?:-[a-z0-9]+)*)(?![\w-])",
+               lambda m: title(m.group(1)) if m.group(1) in titles else m.group(0), p)
+    p = re.sub(rf"(?<![\w-])({SPEC_ID})(?![\w-])", lambda m: title(m.group(1)) if m.group(1) in titles else m.group(0), p)
+    return re.sub(r"\s{2,}", " ", p).strip()
+
+
+def client_where(source, titles):
+    """The Where column of the client's sheets, from an item's `source` note."""
+    return "\n".join(client_place(x, titles) for x in readable_reference(source)[1].split("\n"))
 
 
 def excel_edits(project, reg, path=None):
@@ -544,8 +617,11 @@ def render(project, reg, overwrite=False, returned=None):
     cap = lambda k: (lambda it: (it.get(k) or "").capitalize())
     doc_of = lambda it: readable_reference(it.get("source"))[0]
     where_of = lambda it: readable_reference(it.get("source"))[1]
+    spec = load_spec(project)
+    titles, ids = spec_titles(spec), spec_ids(spec)
+    client_where_of = lambda it: client_where(it.get("source"), titles)
     client_cols = [
-        ("ID", 8, "id"), ("Severity", 10, cap("severity")), ("Document", 12, doc_of), ("Where", 34, where_of),
+        ("ID", 8, "id"), ("Severity", 10, cap("severity")), ("Document", 12, doc_of), ("Where", 34, client_where_of),
         ("Observation", 55, "finding"), ("Question for client", 55, "question"),
         ("Our recommendation", 40, "recommendation"), ("Client response", 45, "answer"),
         ("Status", 12, "status"), ("Raised", 12, "raised"),
@@ -607,6 +683,11 @@ def render(project, reg, overwrite=False, returned=None):
                 print(f"  Check {it['id']} before sending: its {key} says '{m.group(0)}', and it goes to the client. "
                       f"Reword it with register.py update {it['id']} --set {key}=\"...\" and render again.")
                 break
+        ref = internal_ref(client_where_of(it), ids)
+        if ref:
+            print(f"  Check {it['id']} before sending: its Where says '{ref}', a reference of the team's that the "
+                  f"client will not know. Say it in the client's words (a screen's title, a section of the document) "
+                  f"with register.py update {it['id']} --set source=\"...\" and render again.")
 
     # The file to send: the client's items and nothing else, in no sheet, hidden or not. Its hidden note holds
     # only those items, so a copy the client sends back is taken in with --from like the BA's file.

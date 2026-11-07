@@ -232,3 +232,33 @@ def test_no_active_project_means_unknown(temp_workspace):
     f = drop(temp_workspace / "inbox", "brief.txt", "A new system for a new client")
     m = project_tool.match_file(f)
     assert (m["verdict"], m["best"], m["projects"]) == ("unknown", None, [])
+
+
+def test_words_on_every_mockup_never_make_a_guess(two):
+    """Notes with "User", "Location", "Summary" and "Details" in them made an unrelated project the best guess:
+    single words that common say nothing about which project a file is for."""
+    spec = support.load_spec(support.EXAMPLE)
+    spec["project"].update(name="Fleet Inspection System", short_name="FIS", client="Another Client Bhd.")
+    spec["screens"][0]["title"] = "User"
+    spec["screens"][1]["title"] = "Summary"
+    spec["screens"][0].setdefault("fields", []).extend([{"id": "loc", "label": "Location"}, {"id": "det", "label": "Details"}])
+    make(two.parent / "projects", "fleet-inspection", spec, {"project": "Fleet Inspection System", "items": []}, None)
+    f = drop(two, "minutes.txt", "The user opens the Location screen and sees the Summary and the Details.")
+    m = project_tool.match_file(f)
+    assert m["verdict"] == "unknown" and m["best"] is None
+    assert "fleet-inspection" not in scores(m)
+
+
+def test_a_distinctive_word_of_an_archived_name_is_found_through_hyphens(two, temp_workspace):
+    """An inbox file "Zeta EPASS" did not find the archived "Acme E-PASS System": the file name had to hold every
+    word of the name, and the hyphen split "E-PASS" in two."""
+    spec = support.load_spec(support.EXAMPLE)
+    spec["project"].update(name="Acme E-PASS System", short_name="", client="Made-up Motors Sdn. Bhd.")
+    make(None, "e-pass", spec, {"project": "Acme E-PASS System", "items": []}, None, temp_workspace / "projects" / "_archive")
+    f = drop(two, "Zeta EPASS.txt", "Minutes of the kick-off meeting.")
+    m = project_tool.match_file(f)
+    assert [r["slug"] for r in m["archived"]] == ["e-pass"]
+    assert "the file name has a word of its system name: epass" in m["archived"][0]["evidence"][0]["what"]
+    assert m["verdict"] == "unknown"
+    m = project_tool.match_file(drop(two, "notes.txt", "Notes on the leave rollout: who signs off."))
+    assert "a word of its system name: leave" in " ".join(e["what"] for e in m["projects"][0]["evidence"])

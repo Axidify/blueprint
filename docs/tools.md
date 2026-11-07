@@ -108,6 +108,10 @@ written stops it, with both values. The `client-answers` skill uses it.
 Beside it, `render` writes `Questions for the client.xlsx`: the client's items alone, in no sheet, hidden or
 not, the only register file to send (the register's own file holds the internal fixes and a hidden record of
 every item). A copy of it that comes back filled in is taken in with `--from` like the register itself.
+Its Where column, like the register's For client sheet, says places in the client's words: a mock-up
+comment's id becomes "mock-up comment", and a spec id of a screen or dialog becomes its title. `render`
+warns about any client item whose Where still holds a reference of the team's (a mock-up comment, building
+block, gap pattern or spec id). The internal sheets keep the references as written.
 See [The register](register.md).
 
 ### mockup.py
@@ -195,7 +199,9 @@ the spec sets no theme, so it keeps joget` when the spec has none). It says
 which forms add a record when submitted (and to which list, in which status), and which main buttons only
 show their message, and how many parts of the mock-up carry a "Custom development" tag (from the spec's
 `platform_fit` and the project's own code). It also lists, as warnings, settings the mock-up ignores (a
-misspelling, a stray key from a comma in unquoted text).
+misspelling, a stray key from a comma in unquoted text, a `style`, `creates` or `example` on a row
+action), and text the client would read in the mock-up that names a register item (`R-…`) or a mock-up comment
+(`FB-…`), with where it is: say in words what is agreed, or move the note to a key that starts with `_`.
 
 Every build keeps a copy of the mock-up in `_blueprint/mockup/versions/v<version>/`. The copy of a version that
 was issued to the client is never replaced: bump `project.version` to keep a new one.
@@ -310,7 +316,9 @@ python -I tools/uat.py render  projects/<slug> ["<scripts.json>"] [--force]
 python -I tools/uat.py results projects/<slug> ["<filled-in workbook.xlsx>"]
 ```
 `draft` writes `_blueprint/uat/<date> uat scripts v<version>.json` from the spec, the same way every
-time: the main process as each role in turn, the other status moves, what each role may not do in each
+time: the main process as each role in turn (every status change made with the button that makes it, on the
+screen where it is, signed in as the role allowed to press it; when the statuses belong to more than one kind
+of record, told apart by the screens' `data`, each kind has a main process of its own), the other status moves, what each role may not do in each
 status, field checks, access, dashboard figures, notifications, integrations, and a case for every
 requirement no scenario covers yet. It uses the version issued last (`_blueprint/output/spec-v<version>.yaml`), or the
 current spec when nothing is issued or with `--current`, and refuses to replace a draft of the same name
@@ -408,7 +416,7 @@ python -I tools/project.py issued  <slug>
 python -I tools/project.py file    <slug> "<file>" --kind "client comments" [--responds-to 1.3] [--date 2026-11-12] [--copy]
 python -I tools/project.py archive <slug>
 python -I tools/project.py restore <slug>
-python -I tools/project.py find    "<system name>"
+python -I tools/project.py find    "<system name>" [--client "<client>"]
 python -I tools/project.py match   "<file>" [--text <extracted text.md>] [--json]
 python -I tools/project.py hold    "<file>" --reason "not sure which project"
 python -I tools/project.py check   [<slug>] [--fix]
@@ -426,7 +434,9 @@ both places), and `--date` must be a date. `archive` moves a delivered project t
 out of the status list; `restore` brings it back. `archive` refuses when an archived project already has
 that name, and moves nothing. Both move the folder in one step or not at all: when a file in it is open
 (in Excel or Word, or OneDrive is syncing) they stop, move nothing and say to close it. `find` lists earlier work on the same or a similar system name (words like
-"system" and "phase 2" are ignored): active and archived projects, and systems delivered before, from
+"system" and "phase 2" are ignored; hyphens and dots inside a name do not count, so "E-PASS" is "EPASS"; one
+distinctive word in common is enough, though not words many systems share such as "request"; `--client` puts
+that client's own earlier projects first and marks them "same client"): active and archived projects, and systems delivered before, from
 `knowledge/actuals/` and the projects log; `new-project` and `process-inbox` run it so a new document for a
 system you already built is not treated as brand new. `check` reports projects missing parts of the
 standard layout, and `--fix` creates them; it also names the projects still in the old folder layout, with
@@ -455,10 +465,11 @@ first:
 | An id of the project (R-, FB-, UAT-, CR- or a requirement id) with the words around it matching that item | 25, or 20 when another project has the same id; at most 75 |
 | An id only that project has, the words around it not matching | 5, at most 15 |
 | Its system name / short name, when no other project has it | 30 / 15 |
-| Role names, screen titles, status names, field labels only that project has | 8 / 6 / 4 / 2 each (half for one word), at most 40 |
+| A distinctive word of its system name, not the whole name | 10 |
+| Role names, screen titles, status names, field labels only that project has | 8 / 6 / 4 / 2 each (half for one word; a word as common as "User" or "Details" counts nothing), at most 40 |
 | The client's name | 12 when only one active project is for that client, otherwise 5 |
 | Names of its people (sample users, signatories, workshop attendees) / e-mail domains only it has | 4 / 12 each, at most 12 / 24 |
-| The file name holding its system name, short name or folder name | 20 |
+| The file name holding its system name, short name or folder name / only a distinctive word of them | 20 / 15 |
 
 The verdict is **clear** when the best project has at least 40 points, at least 25 more than the next and at
 least twice its score, and no archived project comes within 25 points of it; **likely** when it has at

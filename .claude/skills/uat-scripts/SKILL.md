@@ -25,6 +25,10 @@ It produces, in the project's `6 UAT` folder (the JSON in `_blueprint/uat/`):
    every other status move (reject, cancel, resubmit ...), what each role may not do in each status, the
    field checks of every form and dialog, what each role may not open, the dashboard figures, the
    notifications and integrations, and one case for each requirement no scenario covers yet.
+   A project whose statuses belong to two kinds of record (a plan approved on its screen and its tasks on
+   theirs) has a main process for each: "Main process: the plan, …", "Main process: the task, …". For the
+   second, write in its preconditions what the first record must be in (its `todo` asks for it), and keep
+   each process to its own screens.
    `todo` says what a case still needs; `related` names the scenarios that probably test that
    requirement already.
 

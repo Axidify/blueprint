@@ -18,13 +18,13 @@ It is `_blueprint/spec/app.yaml` in the project folder (`spec/app.yaml` in a pro
 | `screens` | The screens (below) |
 | `dialogs` | Pop-ups opened by buttons (below) |
 | `screenshots` | Extra screenshots beyond one per screen: `{screen, role, record, page, dialog, name, caption}`. Without its own `caption` the requirements document captions it "…, as seen by <role>" or "…, showing record <id>", and warns when two figures share a caption |
-| `requirements` | Functional requirement groups: `{id: FR-XXX-001, title, screens, priority, items: [...]}`. `screens` lists the screen ids the group applies to, so requirements and screens link to each other. `priority` (Must, Should, Could) is the group default; set it only when the client has agreed it. Items are numbered `.1`, `.2` … in the requirements document. An item is text, or `{text, priority, screens, tbc: R-019, note}`: `tbc` links an open register item (shown as "Decision needed R-019"), `note` is internal and not printed |
+| `requirements` | Functional requirement groups: `{id: FR-XXX-001, title, screens, priority, items: [...]}`. `screens` lists the screen ids the group applies to, so requirements and screens link to each other. `priority` (Must, Should, Could) is the group default; set it only when the client has agreed it. Items are numbered `.1`, `.2` … in the requirements document. An item is text, or `{text, priority, screens, tbc: R-019, note}`: `tbc` links an open register item (shown as "Decision needed R-019"), `note` is internal and not printed. The document's Screen column lists an item's own `screens`, or else its group's, each once and in document order; give an item its own `screens` when its group lists several |
 | `signoff` | Everyone who signs: `{name, designation, department, organisation, signing_for, status}`. Client signatories are listed first; `status` is `Pending` (default) or `Signed`. Without it the requirements document has one client and one supplier block to fill in |
 | `notifications` | `{event, recipient, template}`. document section 1.6 |
 | `integrations` | `{system, purpose, direction, notes}`, and how it works: `trigger` (what starts the exchange), `data` (what goes across) and `on_failure` (what happens when it fails). With these the document adds a table "How each exchange works"; one left out shows "To be confirmed" and is warned about |
 | `nfr` | `{area, requirement}` |
 | `glossary` | `{term, meaning}`. document section 1.5 |
-| `process_flow` | `{title, steps: [{name, role, optional, status}], reject, notes: [...]}` (`notes` is a list, even of one note). Drawn as a diagram (mock-up URL `#/__flow`), screenshotted and placed in document section 1.3, so it always matches the statuses |
+| `process_flow` | `{title, steps: [{name, role, optional, status}], reject, notes: [...]}` (`notes` is a list, even of one note). Drawn as a diagram (mock-up URL `#/__flow`), screenshotted and placed in document section 1.3, so it always matches the statuses. A step's `role` and `status` may be the name or the id; the diagram shows names, and the generator warns about one that is neither |
 | `timeline` | The project timeline chapter (below) |
 | `extra_sections` | Free-form document sections after the NFRs: `{title, appendix, content: [{heading} \| {text} \| {bullets} \| {table: {header, rows}} \| {image, caption}]}`. `appendix: true` puts it after sign-off as Appendix A, B… Text may use `{client}` and `{system}`. In a table, an unquoted `No` or `Yes` is printed as that word (a first column headed `No` is the narrow numbering column); quote `"On"`, `"Off"`, `"True"` and `"False"` to keep those exact words |
 
@@ -181,8 +181,12 @@ waiting for it; a role it does not name gets `where`, and the screenshot shows t
 Where records carry their own `timeline`, `waiting_for_me: true` in a `where` or `when` keeps the records
 whose waiting step is handled by whoever is signed in (see [Status moves](#status-moves)),
 `columns: [{field, label, chip}]` (`chip: true` shows
-the value as a coloured status), `filters: [field, ...]`,
-`actions: [{label, to | toast, when, roles, set_status}]` (per row; `to` opens a screen with that row's record; `when:
+the value as a coloured status), `filters: [field, ...]` (the first choice, All, is no filter; when a value is the word All it reads Any, and
+All is a choice of its own; a filter or search box is labelled by its column, else by the field's label on a
+screen, else by the field's name in words),
+`actions: [{label, to | toast | dialog, when, roles, set_status, also_move}]` (per row; `to` opens a screen with that row's record;
+`dialog` opens that dialog on the row's record, and its confirm button's `set_status` moves that row and its `to`
+goes on with the row's record; `when:
 {status: Draft}` shows the action only on matching rows; `roles` shows it only to those roles, in the
 mock-up and in the document's access matrix; `set_status` moves that row's record, see
 [Status moves](#status-moves)),
@@ -227,7 +231,8 @@ primary`) and by a dialog's confirm button: the first press marks the required f
 whichever step of the form they are (on a form in steps the button stays on the last step and names
 the step that holds them, marked with a dot), and the second press goes on without them, saying on screen
 that only the mock-up does: the real system would not send the form. A read-only field is never
-asked for. A `file` field takes a sample file when clicked and a `signature` field signs as the signed-in
+asked for. A `file` field takes a sample file when clicked (on a phone, or in a page as narrow as one, it reads "Take a
+photo or choose a file") and a `signature` field signs as the signed-in
 role's `user`. None of this is in a screenshot.
 
 **Buttons:** `{label, style (primary | danger), to, toast, dialog, roles, when, example, set_status, also_move, creates}`. With a

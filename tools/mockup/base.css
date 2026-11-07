@@ -25,7 +25,9 @@ body.no-menu .sidebar { display: none; }  /* the requirements document's picture
 .menu-item:hover { background: var(--sidebar-hover); }
 .menu-item.active { background: var(--sidebar-active); color: var(--sidebar-active-text); border-left-color: var(--primary); font-weight: 600; }
 .content { flex: 1; padding: 22px 28px 40px; min-width: 0; }
-body:not(.clean) .content { padding-bottom: 88px; }  /* room to scroll the last buttons clear of the presenter's tools */
+/* Room to scroll the last buttons and rows clear of the presenter's tools: as tall as the tools are from the bottom
+   of the window (set by app.js as they change: the bar, and the open Feedback panel), and a little more. */
+body:not(.clean) .content { padding-bottom: calc(var(--fb-room, 76px) + 16px); }
 
 .page-head { margin-bottom: 18px; }
 .page-head p { margin: 4px 0 0; color: var(--muted); }
@@ -111,6 +113,8 @@ table.datalist { width: 100%; border-collapse: collapse; font-size: calc(13px * 
 .denied { padding: 40px; text-align: center; color: var(--muted); }
 
 .modal-back { position: fixed; inset: 0; background: rgba(15, 23, 42, .45); display: flex; align-items: center; justify-content: center; z-index: 50; }
+/* A dialog sits above the presenter's bar, so its buttons at the bottom right are never under it (on a phone it can reach that far). */
+body:not(.clean) .modal-back { padding-bottom: var(--fb-bar-room, 0px); }
 .modal { width: 520px; max-width: 94vw; background: var(--card); border-radius: calc(var(--radius) * var(--rs)); box-shadow: 0 12px 40px rgba(0,0,0,.25); }
 .modal-head { padding: 14px 18px; font-weight: 600; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; }
 .modal-x { color: var(--muted); font-size: calc(20px * var(--ts)); line-height: 1; }
@@ -174,8 +178,8 @@ body.fb-active #fb-toggle { background: var(--fb-ink); color: #1d1d1f; }
 /* The Feedback panel: a dark card above the bar. */
 #fb-panel { width: 340px; max-width: calc(100vw - 32px); max-height: min(60vh, 520px); overflow: auto; background: var(--fb-card); color: var(--fb-ink); border-radius: 16px; padding: 16px 16px 14px;
   box-shadow: var(--fb-ring), 0 10px 30px rgba(0, 0, 0, .5); font-size: 13px; line-height: 1.45; animation: fb-rise .2s var(--ease); color-scheme: dark; }
-/* While it is open on a wide screen the page makes room for it, so it never covers the last columns or buttons. */
-/* An open panel lies over the page and never moves it: what is drawn on the page (pins, boxes) stays where it was put. */
+/* An open panel lies over the page and never moves it: what is drawn on the page (pins, boxes) stays where it was put.
+   The page only grows at its bottom (--fb-room), so what the panel lies over can be scrolled clear of it. */
 .fb-panel-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 15px; font-weight: 600; letter-spacing: -.01em; margin-bottom: 6px; }
 .fb-count { color: var(--fb-sub); font-size: 13px; font-weight: 400; }
 .fb-item { display: flex; gap: 10px; padding: 10px 0; border-top: 1px solid var(--fb-hair); border-radius: 9px; }

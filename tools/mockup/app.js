@@ -253,6 +253,11 @@
       const key = Object.keys(data[0] || {})[0];
       return { name: el.dataset.list, rec: data.find((x) => String(x[key]) === el.dataset.record) };
     }
+    if (el.closest(".modal") && r.q.row != null && r.q.list) {  // in a dialog a row action opened: that row's record
+      const data = (S.data || {})[r.q.list] || [];
+      const key = Object.keys(data[0] || {})[0];
+      return { name: r.q.list, rec: data.find((x) => String(x[key]) === r.q.row) || null };
+    }
     const screen = byId(S.screens, r.screen);
     if (!screen || !screen.data || !(screen.type === "detail" || (screen.type === "form" && formOnRecord(screen, r.q)))) return {};
     const rec = record(screen, r.q);
@@ -316,7 +321,8 @@
       const role = byId(S.roles, r.role) || {};
       const modal = el.closest(".modal");
       const typedIn = modal ? [...modal.querySelectorAll(".modal-body textarea, .modal-body input.f-input")].map((c) => c.value.trim()).find(Boolean) : "";
-      const opener = modal && ((byId(S.screens, r.screen) || {}).buttons || []).find((b) => b.dialog === r.q.dialog);
+      const at = byId(S.screens, r.screen) || {};
+      const opener = modal && [...(at.buttons || []), ...((at.list || {}).actions || [])].find((b) => b.dialog === r.q.dialog);
       const lines = shown.map((s) => ({ ...s }));
       const waiting = lines.findIndex((s) => !s.at && !SKIPPED.test(String(s.status || "")));
       const entry = { by: role.user || role.name || "", at: now(), status: to.name, ...(typedIn ? { comment: typedIn } : {}) };
@@ -363,7 +369,7 @@
       if (wrap.scrollWidth > wrap.clientWidth + 1) cells.forEach((td) => td.classList.replace("nb2", "nb2-off"));
     });
   }
-  window.addEventListener("resize", () => fitLists());
+  window.addEventListener("resize", () => { fitLists(); syncFakes(); });
   const WHO = /^(submitted_by|created_by|requested_by|raised_by|applied_by|prepared_by|reported_by|requester|requestor|applicant|employee|staff|initiator|submitter|owner)$/i;
   const WHEN = /^(submitted|created|requested|raised|applied|applied_on|date_submitted|date_created|date_requested|submission_date|request_date|application_date|(submitted|created|requested|raised)_(at|on|date|time))$/i;
   function creatingEntry(r, label, dialog) {
@@ -597,19 +603,45 @@
     return `<div class="stats" data-el="region:summary figures">${stats.map((s) => `<div class="stat" data-el="stat:${esc(s.label)}"><div class="stat-value">${esc(value(s))}</div><div class="stat-label">${esc(s.label)}</div></div>`).join("")}</div>`;
   }
 
+  // What a filter or search box is called on the screen (and in a comment on it): the label of the list's column
+  // for that field, else the label of a field with that id on a screen or in a dialog, else the id in words
+  // ("unit_ref" reads "Unit Ref"). Never the bare id: the client read "the unit_ref search box".
+  const words = (id) => String(id).replace(/[_\s]+/g, " ").trim().replace(/\b\w/g, (ch) => ch.toUpperCase());
+  function boxLabel(list, f) {
+    const col = (list.columns || []).find((c) => c.field === f && c.label);
+    if (col) return col.label;
+    const fields = [...S.screens.flatMap((s) => (s.sections || []).flatMap((x) => x.fields || [])), ...(S.dialogs || []).flatMap((d) => d.fields || [])];
+    const named = fields.find((x) => x.id === f && x.label);
+    return named ? named.label : words(f);
+  }
+  // A row action works on its own row: `to` opens a screen with that row's record, `set_status` moves it,
+  // `dialog` opens a dialog on it (its confirm button then moves that row, and goes on with its record), and
+  // `toast` says something. Without one of them it is a link that does nothing.
+  function rowAction(a, row, key, list) {
+    const id = esc(row[key]);
+    const onRow = a.to || a.dialog || a.set_status != null;
+    return `<a href="#" class="link" data-el="action:${esc(a.label)}" ${a.dialog ? `data-dialog="${esc(a.dialog)}"` : a.to ? `data-go="${a.to}"` : ""}`
+      + ` ${onRow ? `data-record="${id}" data-list="${esc(list.data)}"` : ""} ${a.set_status != null && !a.dialog ? moveAttr(a) : ""}`
+      + ` ${a.toast ? `data-toast="${esc(a.toast)}"` : ""}>${esc(a.label)}</a>`;
+  }
+
   // `shown`: the record of the detail screen a related list is drawn on (see `where_record` in rows()).
   function renderList(list, r, shown) {
     if (!list) return "";
     const data = rows(list, shown);
     const cols = list.columns || [];
+    // A filter's first choice, "All", is no filter: its value is empty, so a record whose value is the word
+    // "All" (a user of all sites) cannot be taken for it. That choice is then "Any", so the list never offers
+    // "All" twice, and the real value stays a choice of its own. A blank value is no choice.
     const filters = (list.filters || []).map((f) => {
-      const col = cols.find((c) => c.field === f) || { label: String(f).replace(/_/g, " ").replace(/\b\w/g, (ch) => ch.toUpperCase()) };
-      const vals = [...new Set(((S.data || {})[list.data] || []).map((x) => x[f]))];
-      return `<div class="filter" data-el="filter:${esc(col.label)}"><label>${esc(col.label)}</label><select class="f-input" data-filter="${esc(f)}"><option value="All">All</option>${vals.map((v) => `<option>${esc(v)}</option>`).join("")}</select></div>`;
+      const label = boxLabel(list, f);
+      const vals = [...new Set(((S.data || {})[list.data] || []).map((x) => x[f]).filter((v) => v != null && v !== "").map(String))];
+      const none = vals.some((v) => v.trim().toLowerCase() === "all") ? "Any" : "All";
+      return `<div class="filter" data-el="filter:${esc(label)}"><label>${esc(label)}</label><select class="f-input" data-filter="${esc(f)}"><option value="">${none}</option>${vals.map((v) => `<option value="${esc(v)}">${esc(v)}</option>`).join("")}</select></div>`;
     }).join("");
     const search = (list.search || []).map((f) => {
-      const col = cols.find((c) => c.field === f) || { label: f };
-      return `<div class="filter" data-el="search:${esc(col.label)}"><label>${esc(col.label)}</label><input class="f-input" placeholder="Search" data-search="${esc(f)}"></div>`;
+      const label = boxLabel(list, f);
+      return `<div class="filter" data-el="search:${esc(label)}"><label>${esc(label)}</label><input class="f-input" placeholder="Search" data-search="${esc(f)}"></div>`;
     }).join("");
     const toolbar = (list.toolbar || []).map((b) => button(b, r)).join("");
     const key = Object.keys(data[0] || {})[0];
@@ -618,13 +650,13 @@
     const watchedValues = (row) => esc(JSON.stringify(Object.fromEntries(watched.map((f) => [f, row[f] == null ? "" : String(row[f])]))));
     // A column holds people when any of its values is a person: then every name in it gets its initials.
     const peopleCols = new Set(cols.filter((c) => !c.chip && data.some((row) => PEOPLE.has(String(row[c.field] == null ? "" : row[c.field]).trim().toLowerCase()))).map((c) => c.field));
-    const body = data.length ? data.map((row) => `<tr data-row="${watchedValues(row)}" data-el="row:${esc(row[key])}">${cols.map((c) => `<td ${shortClass(String(row[c.field] == null ? "" : row[c.field]))}data-el="cell:${esc(c.label)}|${esc(row[key])}">${c.chip ? `<span class="chip ${statusClass(row[c.field])}">${esc(row[c.field])}</span>` : person(row[c.field], peopleCols.has(c.field))}</td>`).join("")}${(list.actions || []).length ? `<td class="actions" data-el="cell:Action|${esc(row[key])}">${list.actions.filter((a) => matches(a.when, row) && (!a.roles || a.roles.includes(r.role))).map((a) => `<a href="#" class="link" data-el="action:${esc(a.label)}" ${a.to ? `data-go="${a.to}"` : ""} ${a.to || a.set_status != null ? `data-record="${esc(row[key])}"` : ""} ${a.set_status != null ? `${moveAttr(a)} data-list="${esc(list.data)}"` : ""} ${a.toast ? `data-toast="${esc(a.toast)}"` : ""}>${esc(a.label)}</a>`).join(" ")}</td>` : ""}</tr>`).join("")
+    const body = data.length ? data.map((row) => `<tr data-row="${watchedValues(row)}" data-el="row:${esc(row[key])}">${cols.map((c) => `<td ${shortClass(String(row[c.field] == null ? "" : row[c.field]))}data-el="cell:${esc(c.label)}|${esc(row[key])}">${c.chip ? `<span class="chip ${statusClass(row[c.field])}">${esc(row[c.field])}</span>` : person(row[c.field], peopleCols.has(c.field))}</td>`).join("")}${(list.actions || []).length ? `<td class="actions" data-el="cell:Action|${esc(row[key])}">${list.actions.filter((a) => matches(a.when, row) && (!a.roles || a.roles.includes(r.role))).map((a) => rowAction(a, row, key, list)).join(" ")}</td>` : ""}</tr>`).join("")
       : `<tr><td colspan="${cols.length + 1}" class="empty">${esc(list.empty || "No records found")}</td></tr>`;
     // One block for the list: its toolbar row, the table and the count (the desk theme draws it as one card).
     return `<div class="list-block">
       ${search || filters || toolbar ? `<div class="list-tools" data-el="region:area above the list">${search || filters ? `<div class="filters" data-el="region:filters">${search}${filters}<button class="btn small" data-el="button:Search" data-apply-filters>Search</button><button class="btn small" data-el="button:Clear Filters" data-clear-filters>${W.clear}</button></div>` : "<div></div>"}<div class="toolbar" data-el="region:list buttons">${toolbar}</div></div>` : ""}
       <div class="table-wrap" data-el="region:list"><table class="datalist ${cols.length > 9 ? "dense" : ""}">
-        <thead><tr>${cols.map((c) => `<th data-el="column:${esc(c.label)}">${esc(c.label)}</th>`).join("")}${(list.actions || []).length ? `<th>${W.action}</th>` : ""}</tr></thead>
+        <thead><tr>${cols.map((c) => `<th data-el="column:${esc(c.label)}">${esc(c.label)}</th>`).join("")}${(list.actions || []).length ? `<th data-el="column:${W.action}">${W.action}</th>` : ""}</tr></thead>
         <tbody>${body}${data.length ? `<tr class="none-match" hidden><td colspan="${cols.length + 1}" class="empty">${esc(list.empty || "No records found")}</td></tr>` : ""}</tbody>
       </table></div>
       <div class="pager" data-el="region:record count" data-total="${data.length}">${W.showing(data.length, data.length)}</div></div>`;
@@ -655,7 +687,7 @@
       case "datetime": input = `<input class="f-input" type="datetime-local" value="${esc(v)}">`; break;
       case "number": input = `<input class="f-input" type="number" value="${esc(v)}">`; break;
       // A file field and a signature field answer a click: a sample file is attached, the signed-in person signs.
-      case "file": input = ro ? `<div class="f-value">${esc(v) || "-"}</div>` : `<div class="file-drop" data-fake="file"><input type="hidden"><span class="fake-view">Drop file here or <span class="link">browse</span></span></div>`; break;
+      case "file": input = ro ? `<div class="f-value">${esc(v) || "-"}</div>` : `<div class="file-drop" data-fake="file"><input type="hidden"><span class="fake-view">${fileHint()}</span></div>`; break;
       case "signature": input = ro ? `<div class="signature">${v ? `<span class="sig-ink">${esc(v)}</span>` : "Sign here"}</div>` : `<div class="signature" data-fake="signature"><input type="hidden"><span class="fake-view">Sign here</span></div>`; break;
       // A user field offers people: those of its `roles` (each role's `user`), or, without roles, everyone the
       // spec names (the roles' users and a `users` list in the data); `options` or `options_from` win.
@@ -743,16 +775,20 @@
   }
 
   // Process flow diagram, generated from spec.process_flow so it always matches the statuses.
+  // A step may name its role and status by id (`role: security`, `status: in-progress`): the picture, which goes
+  // into the requirements document, shows their names, as the role and status tables beside it do.
   function renderFlow() {
     const f = S.process_flow;
     if (!f) return "<p>No process_flow in the spec.</p>";
+    const roleName = (v) => (byId(S.roles, v) || (S.roles || []).find((x) => same(x.name, v)) || {}).name || v;
+    const statusName = (v) => (findStatus(v) || {}).name || v;
     const steps = f.steps.map((s, i) => `
       ${i ? '<div class="flow-arrow">&#10140;</div>' : ""}
       <div class="flow-step ${s.optional ? "optional" : ""}">
         <div class="flow-num">${i + 1}</div>
         <div class="flow-name">${esc(s.name)}</div>
-        <div class="flow-role">${esc(s.role || "")}${s.optional ? " · optional" : ""}</div>
-        ${s.status ? `<div class="flow-status"><span class="chip ${statusClass(s.status)}">${esc(s.status)}</span></div>` : ""}
+        <div class="flow-role">${esc(s.role ? roleName(s.role) : "")}${s.optional ? " · optional" : ""}</div>
+        ${s.status ? `<div class="flow-status"><span class="chip ${statusClass(statusName(s.status))}">${esc(statusName(s.status))}</span></div>` : ""}
       </div>`).join("");
     return `<div class="flow">
       <h2>${esc(f.title || P.name + " process flow")}</h2>
@@ -803,7 +839,7 @@
   // resets them. A filter picks one value; a search box matches part of the text, in any letter case.
   function applyFilters(scope) {
     if (!scope) return;
-    const picks = [...scope.querySelectorAll("[data-filter]")].filter((s) => s.value !== "All").map((s) => [s.dataset.filter, s.value]);
+    const picks = [...scope.querySelectorAll("[data-filter]")].filter((s) => s.value !== "").map((s) => [s.dataset.filter, s.value]);
     const words = [...scope.querySelectorAll("[data-search]")].filter((i) => i.value.trim()).map((i) => [i.dataset.search, i.value.trim().toLowerCase()]);
     const rowsOnPage = scope.querySelectorAll("tbody tr[data-row]");
     let shown = 0;
@@ -856,11 +892,20 @@
 
   // ------------------------------------------------------------------ file and signature fields
   // Each keeps what it holds in a hidden input, so it survives a redraw like anything typed.
+  // An empty file field says what a person does there: on a computer drop a file or browse for one, on a phone
+  // take a photo or choose a file (a phone has no files to drop). The mock-up is on a phone when the window is
+  // as narrow as one, or when the page is: a project's own code may draw a phone screen inside a phone frame.
+  const PHONE_WIDTH = 480, PHONE_PAGE = 440;
+  function onPhone() {
+    const content = document.getElementById("content");
+    return window.innerWidth <= PHONE_WIDTH || (!!content && content.clientWidth > 0 && content.clientWidth <= PHONE_PAGE);
+  }
+  const fileHint = () => (onPhone() ? 'Take a photo or <span class="link">choose a file</span>' : 'Drop file here or <span class="link">browse</span>');
   function syncFakes() {
     app.querySelectorAll("[data-fake]").forEach((box) => {
       const value = box.querySelector("input[type=hidden]").value;
       box.querySelector(".fake-view").innerHTML = box.dataset.fake === "file"
-        ? (value ? `<span class="file-name">${esc(value)}</span> <a href="#" class="link" data-fake-clear>Remove</a>` : 'Drop file here or <span class="link">browse</span>')
+        ? (value ? `<span class="file-name">${esc(value)}</span> <a href="#" class="link" data-fake-clear>Remove</a>` : fileHint())
         : (value ? `<span class="sig-ink">${esc(value)}</span>` : "Sign here");
     });
   }
@@ -976,6 +1021,7 @@
     const first = modal && (modal.querySelector(".modal-body input:not([type=hidden]), .modal-body textarea, .modal-body select") || modal.querySelector(".modal-foot .btn:last-child"));
     if (first) first.focus();
     runHooks({ screen: app.dataset.screen, role: r.role, q: r.q, root: app });
+    syncFakes();  // again: the project's code may have drawn the screen as a phone
     feedback.renderPins();
     custom.draw();
   }
@@ -1019,7 +1065,7 @@
     if (el.dataset.applyFilters !== undefined || el.dataset.clearFilters !== undefined) {
       const scope = listScope(el);
       if (el.dataset.clearFilters !== undefined) {
-        scope.querySelectorAll("[data-filter]").forEach((s) => { s.value = "All"; });
+        scope.querySelectorAll("[data-filter]").forEach((s) => { s.value = ""; });
         scope.querySelectorAll("[data-search]").forEach((i) => { i.value = ""; });
       }
       return applyFilters(scope);
@@ -1041,9 +1087,14 @@
     if (made) typed.key = null;  // what was typed went into the record: drawn again, the form starts empty
     const before = location.hash;
     if (el.dataset.page) go(r.screen, { ...stay(r.q), page: el.dataset.page });
-    else if (el.dataset.dialog) go(r.screen, { ...stay(r.q), dialog: el.dataset.dialog }, true);
-    // A dialog's confirm button has both: it goes where it says, and only closes when it goes nowhere.
-    else if (el.dataset.go) go(el.dataset.go, el.dataset.record ? { record: el.dataset.record } : {}, !!r.q.dialog);
+    // A row action's dialog opens on that row (row and list in the address), so its confirm button moves that row.
+    else if (el.dataset.dialog) go(r.screen, { ...stay(r.q), dialog: el.dataset.dialog, ...(el.dataset.list && el.dataset.record != null ? { row: el.dataset.record, list: el.dataset.list } : {}) }, true);
+    // A dialog's confirm button has both: it goes where it says, and only closes when it goes nowhere. Opened on
+    // a row, it goes on with that row's record.
+    else if (el.dataset.go) {
+      const onRow = !el.dataset.record && r.q.row != null && el.closest(".modal") ? { record: r.q.row } : {};
+      go(el.dataset.go, el.dataset.record ? { record: el.dataset.record } : onRow, !!r.q.dialog);
+    }
     else if (el.dataset.close !== undefined) closeDialog();
     if (acted && location.hash === before) render();  // it stayed on the page: show the record as it is now
   });
@@ -1073,7 +1124,15 @@
       return `the ${(fields.find((f) => f.id === name) || {}).label || name} field`;
     }
     if (kind === "title") return "the page title";
-    if (kind === "header") return name === "user" ? "the signed-in user" : "the Logout link";
+    // The engine's own two parts of the top bar; any other (added by the project's own code, `header:connection`)
+    // goes by its own name. All others used to be called the Logout link.
+    if (kind === "header") return name === "user" ? "the signed-in user" : name === "logout" ? "the Logout link" : name ? `the ${name}` : "the header";
+    // A filter or search box goes by its field's label; one saved under its field's id reads in words.
+    if ((kind === "filter" || kind === "search") && /^[a-z0-9_]+$/.test(name) && name.includes("_")) {
+      const fields = [...S.screens.flatMap((s) => (s.sections || []).flatMap((x) => x.fields || [])), ...(S.dialogs || []).flatMap((d) => d.fields || [])];
+      const col = S.screens.flatMap((s) => ((s.list || {}).columns || [])).find((c) => c.field === name && c.label);
+      return `the ${col ? col.label : (fields.find((f) => f.id === name && f.label) || {}).label || words(name)} ${kind === "search" ? "search box" : "filter"}`;
+    }
     if (kind === "region") return `the ${name}`;
     if (kind === "row") return `the row ${name}`;
     if (kind === "cell") {
@@ -1780,6 +1839,20 @@
     + `<button id="fb-list" type="button" hidden title="Show the comments on this screen">Comments</button>`
     + `<button id="fb-toggle">Feedback</button></div><div id="fb-panel" hidden></div><div id="fb-changes" hidden></div>`;
   document.body.appendChild(tools);
+  // The page keeps room at its bottom for the presenter's tools, so whatever they lie over can be scrolled clear
+  // of them: the last buttons of a page (at the bottom right in most themes), the last row of a list and its
+  // actions. The room is as tall as the tools are from the bottom of the window, the bar and, in feedback mode,
+  // the panel above it however long its list has grown; it follows them as they change (CSS: --fb-room, and
+  // --fb-bar-room for a dialog, which only the bar can cover). A fixed room used to leave the open panel lying
+  // over the last buttons, which then could neither be clicked nor commented on.
+  function makeRoom() {
+    const from = (el) => (el && el.getClientRects().length ? Math.max(0, Math.ceil(window.innerHeight - el.getBoundingClientRect().top)) : 0);
+    document.documentElement.style.setProperty("--fb-room", `${from(tools)}px`);
+    document.documentElement.style.setProperty("--fb-bar-room", `${from(tools.querySelector(".fb-bar"))}px`);
+  }
+  makeRoom();
+  window.addEventListener("resize", makeRoom);
+  if (window.ResizeObserver) new ResizeObserver(makeRoom).observe(tools);
   function syncTools(r, screen) {
     tools.querySelector(".fb-viewas").hidden = !r.role || screen.type === "login";
     tools.querySelector(".role-switch").value = r.role || "";

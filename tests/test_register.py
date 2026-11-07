@@ -660,3 +660,47 @@ def test_render_warns_when_a_client_item_speaks_of_effort(tmp_path, monkeypatch,
     project = write_register(tmp_path / "words", reg)
     run(monkeypatch, "render", project)
     assert f"Check {item['id']} before sending: its recommendation says 'mandays'" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------- the client's Where
+@pytest.mark.parametrize("source, where", [
+    ("Mock-up v0.4 live session, Sign in: password (comment FB-009)", "live session, Sign in: password (mock-up comment)"),
+    ("Mock-up v0.6, Users (comments FB-024, FB-028)", "Users (mock-up comments)"),
+    ("Mock-up v0.1 FB-001, New Loan Request", "mock-up comment, New Loan Request"),
+    ("Spec v0.4 dialog reject-dialog: \"Reason\"", "Reject Application dialog: \"Reason\""),
+    ("Spec v0.4 screen review-application; FR-APP-002.2", "Review Leave Application screen\nFR-APP-002.2"),
+    ("Spec v0.4 approve-dialog, e-mail and sign-off", "Approve Application dialog, e-mail and sign-off"),
+    ("SRS v1.0 §2.1 Loan Request Form", "Section 2.1 Loan Request Form"),
+])
+def test_the_clients_where_has_no_comment_ids_or_spec_ids(source, where):
+    """The client's file showed "FB-009" (a mock-up comment's id) and "dialog pickup-dialog" (a spec id): references
+    the client never sees anywhere else. Requirement ids stay: the client reads them in the requirements document."""
+    titles = register.spec_titles(support.load_spec(support.EXAMPLE))
+    assert register.client_where(source, titles) == where
+
+
+def test_the_internal_sheets_keep_the_references_and_render_warns_about_what_is_left(tmp_path, monkeypatch, capsys):
+    reg = copy.deepcopy(GOOD)
+    client = [it for it in reg["items"] if it["audience"] == "client"]
+    client[0]["source"] = "Mock-up v0.2, Pending Approvals (comments FB-003 and FB-004); dialog approve-dialog"
+    client[1]["source"] = "Spec v0.2, field leave-balance"
+    client[2]["source"] = "Estimate v0.2, GP-02"
+    project = write_register(tmp_path / "where", reg)
+    spec = support.load_spec(support.EXAMPLE)
+    spec["screens"][1].setdefault("fields", []).append({"id": "leave-balance", "label": "Leave balance"})
+    support.write_spec(project, spec)
+    run(monkeypatch, "render", project)
+    out = capsys.readouterr().out
+    assert f"Check {client[0]['id']} before sending" not in out
+    assert f"Check {client[1]['id']} before sending: its Where says 'leave-balance'" in out
+    assert f"Check {client[2]['id']} before sending: its Where says 'GP-02'" in out
+    for path, sheet in ((project / "register.xlsx", "For client"), (project / "Questions for the client.xlsx", "For client")):
+        assert cell_in(path, sheet, client[0]["id"], "Where") == "Pending Approvals (mock-up comments)\nApprove Application dialog"
+    assert cell_in(project / "register.xlsx", "All items", client[0]["id"], "Where") == \
+        "Pending Approvals (comments FB-003 and FB-004)\ndialog approve-dialog", "the team's own sheets keep the ids"
+
+
+def cell_in(path, sheet, item_id, column):
+    ws = load_workbook(path)[sheet]
+    head = [c.value for c in ws[1]]
+    return next(r for r in ws.iter_rows(min_row=2, values_only=True) if r[head.index("ID")] == item_id)[head.index(column)]

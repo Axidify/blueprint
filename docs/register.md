@@ -29,7 +29,8 @@ Internal fixes never appear on the client sheet.
 
 `Questions for the client.xlsx` is written with the register each time. It holds the **For client** sheet
 alone: no internal fixes, no All items or Summary, and its hidden note of what it held lists the client's
-items only. Send this file, never the register: deleting the internal sheets from the register by hand
+items only, and its Where column names places in the client's words ("mock-up comment", a screen's title)
+instead of the team's ids. Send this file, never the register: deleting the internal sheets from the register by hand
 still leaves a hidden record of every item's status and answer in it. When the client sends it back with
 their answers, take them in with `register.py render projects/<slug> --from "<returned file>"` (the
 `client-answers` skill does). Do not type into it yourself: type into the register, and render again. Before writing it, `render` warns
