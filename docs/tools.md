@@ -314,23 +314,38 @@ python -I tools/uat.py draft   projects/<slug> [--current] [--date YYYY-MM-DD] [
 python -I tools/uat.py check   projects/<slug> ["<scripts.json>"]
 python -I tools/uat.py render  projects/<slug> ["<scripts.json>"] [--force]
 python -I tools/uat.py results projects/<slug> ["<filled-in workbook.xlsx>"]
+python -I tools/uat.py defects projects/<slug>
+python -I tools/uat.py defect  projects/<slug> D-001 [D-002 ...] <status> [--note "..."] [--cr CR-004]
 ```
 `draft` writes `_blueprint/uat/<date> uat scripts v<version>.json` from the spec, the same way every
 time: the main process as each role in turn (every status change made with the button that makes it, on the
 screen where it is, signed in as the role allowed to press it; when the statuses belong to more than one kind
 of record, told apart by the screens' `data`, each kind has a main process of its own), the other status moves, what each role may not do in each
-status, field checks, access, dashboard figures, notifications, integrations, and a case for every
-requirement no scenario covers yet. It uses the version issued last (`_blueprint/output/spec-v<version>.yaml`), or the
+status, field checks, access, dashboard figures, notifications and integrations. Each requirement that
+plainly names a field, a dialog, a draft, a role it is sent to, a button, an e-mail on a status, a screen or
+a list's add and edit goes into the scenario that tests it, or gets one written for it; the rest (and any
+waiting for an open decision) get a case of their own to refine. A process step without a status rule is
+made with the button named after it, and a draft or rejected record goes on with its form's own button.
+Every case lists its `test_data` (test accounts, records in their status and how to get one, files,
+mailboxes and connections). It uses the version issued last (`_blueprint/output/spec-v<version>.yaml`), or the
 current spec when nothing is issued or with `--current`, and refuses to replace a draft of the same name
 without `--force`. `check` checks that every requirement is covered or excluded with a reason, case ids are
 unique, every step has an expected result, roles and screens exist and nothing internal is in it (mandays,
-rates, internal register items, platform findings), and lists the draft's `todo`s still open. `render`
+rates, internal register items, platform findings), and lists the draft's `todo`s still open and any case
+without test data. `render`
 checks and writes, into `6 UAT/`, the workbook for the testers (one row per step, Pass/Fail chosen from a
-list, a summary of coverage and results) and the test scripts as a Word document in the company's format.
+list, a summary of coverage and results, and the Test data sheet the client prepares before UAT) and the
+test scripts as a Word document in the company's format, with the same test data list.
 When the testers have already typed results into that workbook (a Pass/Fail, an actual result, a tester, a
 date or a defect), `render` stops rather than write over them; `--force` writes it anyway and first keeps
 their workbook beside it as `<name> - results kept <date> <time>.xlsx`.
-`results` reads a filled-in workbook and lists the failed and blocked steps. The file format is at the top
+`results` reads a filled-in workbook, lists the failed and blocked steps and brings the project's defect log
+(`_blueprint/uat/defects/defects.json`) up to date: each failed step not yet logged becomes a defect
+(`D-001` …, open) linked to its scenario, step and requirements; one marked fixed or retest that fails again
+is open again, one whose step now passes is closed; a workbook read before changes nothing. It writes
+`6 UAT/Defect log.xlsx`. `defects` lists the log and writes the Excel file again. `defect` sets the status of
+one or more defects (open, fixed, retest, closed, "not a defect" with a `--note` saying why, or "change
+request", with `--cr` for its CR id), keeping each change in the defect's history. The file format is at the top
 of the script. Used by the `uat-scripts` skill. See [UAT scripts](uat.md).
 
 ### platform_fit.py

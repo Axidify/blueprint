@@ -5,6 +5,8 @@ Usage:
     python -I tools/uat.py check   projects/<slug> ["<scripts.json>"]
     python -I tools/uat.py render  projects/<slug> ["<scripts.json>"] [--force]
     python -I tools/uat.py results projects/<slug> ["<filled-in workbook.xlsx>"]
+    python -I tools/uat.py defects projects/<slug>
+    python -I tools/uat.py defect  projects/<slug> D-001 [D-002 ...] <status> [--note "..."] [--cr CR-004]
 
 draft    writes <date> uat scripts v<version>.json into the project's _blueprint/uat/ (uat/ in a project not yet
          moved to the new folder layout) from the spec, the same way every time:
@@ -12,21 +14,37 @@ draft    writes <date> uat scripts v<version>.json into the project's _blueprint
          on its screen, by the role allowed to press it; one main process for each kind of record the statuses
          belong to, such as a plan approved on its screen and its tasks on theirs), every other status move, what each role
          may NOT do in each status, the field checks of every form and dialog, what each role may not open,
-         the dashboard figures, the notifications and integrations, and one case for every requirement no
-         scenario covers yet. It works from the version issued to the client last (output/spec-v<version>.yaml),
+         the dashboard figures, the notifications and integrations. Each requirement goes into the scenario that
+         tests it when it plainly says what it is about (a field of a form or dialog, saving a draft, sending a
+         record on to a role, a button that moves a record, an e-mail when a record reaches a status, what a screen
+         shows, adding or changing a list's entries), or gets a scenario written for it; one it cannot tie for
+         certain gets a case of its own to refine. A process step no status rule ties to a button is made with
+         the button named after it, and a record sent back to its form (a draft, a rejected application the
+         status rules let its owner change) goes on with the form's own button. Every case lists its test data:
+         the test accounts that sign in, the records its preconditions ask for and how to get one, the files to
+         upload, and mailboxes and connections. It works from the version issued to the client last (output/spec-v<version>.yaml),
          because UAT tests what was signed; with nothing issued, or with --current, from spec/app.yaml.
          It refuses to replace a draft of the same name (refined by hand, perhaps) unless --force.
 check    every requirement covered by a case or excluded with a reason, case ids unique, every case with
          steps and an expected result for each, roles and screens that exist, nothing internal
 render   checks the scripts, then writes into the project's "6 UAT" folder (next to them in the old layout):
            "<name>.xlsx"  the workbook for the testers: one row per step, with Actual result, Pass/Fail,
-                          Tester, Date and Defect ref to fill in, and a summary of coverage and results
-           "<name>.docx"  the test scripts for the client, in the company's document format
+                          Tester, Date and Defect ref to fill in, a summary of coverage and results, and the
+                          Test data sheet: everything the client prepares before UAT (TD-01 ...), with Ready to mark
+           "<name>.docx"  the test scripts for the client, in the company's document format, with the test data
+                          list and, in each scenario, the test data it uses
          Without a file name it takes the newest scripts in the project's UAT folder.
          When the testers have already filled in steps of that workbook (a result, an actual result, a tester,
          a date or a defect), it stops, because writing it again would lose them; --force writes it anyway and
          first keeps the filled-in workbook as "<name> - results kept <date> <time>.xlsx" beside it
-results  reads a workbook the testers filled in and lists the failed and blocked steps
+results  reads a workbook the testers filled in, lists the failed and blocked steps, and brings the project's
+         defect log up to date: each failed step not logged yet becomes a defect (open), linked to its case,
+         step and requirements; a defect fixed or sent for retest that fails again is open again, and one whose
+         step now passes is closed. A workbook read before changes nothing. Writes "Defect log.xlsx" into 6 UAT.
+defects  lists the defect log and writes "Defect log.xlsx" again
+defect   sets the status of defects: open, fixed, retest, closed, "not a defect" (with --note saying why) or
+         "change request" (a failure that is really a new wish: take it to the change-request skill, then record
+         its CR with --cr). Each change is kept in the defect's history with the date and the note.
 
 uat/<date> uat scripts v<version>.json:
 {
@@ -40,11 +58,21 @@ uat/<date> uat scripts v<version>.json:
      "preconditions": ["..."],
      "steps": [{"action": "Sign in as Employee", "expected": "...", "role": "employee", "screen": "login"}],
      "requirements": ["FR-APP-001.1"],
+     "test_data": [{"kind": "record", "need": "A record in Draft", "how": "Fill in New Leave Application and press Save as Draft"}],
+                                                           kind: account, record, file or other; how is optional
      "source": "status rules: Draft > Pending Approval > Approved",     what in the spec produced it
      "todo": "...", "related": ["UAT-004"]}                             draft only: for Claude, never printed
   ],
   "excluded": [{"requirement": "FR-APP-003.2", "reason": "..."}]       client-facing reason
 }
+
+_blueprint/uat/defects/defects.json (uat/defects/ in the old layout), the defect log:
+{"project": "leave-request", "defects": [
+  {"id": "D-001", "status": "open", "case": "UAT-004", "scenario": "...", "step": 6, "action": "...", "expected": "...",
+   "actual": "...", "requirements": ["FR-APP-003.1"], "priority": "High", "tester": "...", "date": "2026-12-10",
+   "client_ref": "the testers' Defect ref", "found_in": "<workbook>", "seen_in": ["<workbook>", ...],
+   "cr": "CR-004 (when it became a change request)",
+   "history": [{"date": "2026-12-10", "status": "open", "note": "Failed in <workbook>"}]}]}
 
 Case types: main process, status change, not allowed, field checks, access, figures, notification,
 integration, requirement, edge case. "source", "todo" and "related" are Blueprint's own: they never reach
@@ -71,13 +99,21 @@ TYPES = OrderedDict([
 PRIORITIES = ("High", "Medium", "Low")
 RESULTS = ("Pass", "Fail", "Blocked", "Not run")
 DRAFT_ONLY = ("source", "todo", "related")
+# What a scenario needs before it starts ("test_data"), by kind, in the order the test data list shows them.
+DATA_KINDS = OrderedDict([("account", "Test account"), ("record", "Record"), ("file", "File"), ("other", "Other")])
+DATA_SHEET = "Test data"
+# A defect's status in the project's defect log, in the order a defect goes through them.
+DEFECT_STATUSES = OrderedDict([
+    ("open", "red"), ("fixed", "accent"), ("retest", "orange"), ("closed", "green"), ("not a defect", "grey"),
+    ("change request", "grey"),
+])
 NEGATIVE = re.compile(r"reject|cancel|return|withdr|declin|void|fail|delet|revok|terminat|suspend|abandon|expire|lost", re.I)
 INTERNAL_WORDS = re.compile(r"\bman-?days?\b|\bday rates?\b|\brate card\b|\bplatform[_ ]fit\b|\bbuilding blocks?\b|\beffort impact\b", re.I)
 REF = re.compile(r"\{ref:([a-z]+):([^}]+)\}")
 STEPS_SHEET = "Test steps"
 STEP_COLUMNS = [  # (header, width, filled in by the testers)
     ("Case", 10, False), ("Scenario", 34, False), ("Priority", 9, False), ("Role", 16, False), ("Preconditions", 34, False),
-    ("Step", 6, False), ("Screen", 20, False), ("Action", 46, False), ("Expected result", 46, False),
+    ("Test data", 14, False), ("Step", 6, False), ("Screen", 20, False), ("Action", 46, False), ("Expected result", 46, False),
     ("Requirements", 16, False), ("Actual result", 34, True), ("Pass/Fail", 10, True), ("Tester", 16, True),
     ("Date", 12, True), ("Defect ref", 12, True),
 ]
@@ -488,23 +524,93 @@ class Model:
     def form_fields(self, scr):
         return [f for sec in scr.get("sections") or [] if isinstance(sec, dict) for f in sec.get("fields") or [] if isinstance(f, dict)]
 
+    def shown_fields(self, scr):
+        """The fields a screen shows: its own sections, or those of the form it takes them from (fields_from)."""
+        own = self.form_fields(scr)
+        if own or not scr.get("fields_from"):
+            return own
+        return self.form_fields(self.screen.get(scr["fields_from"]) or {})
+
+    def named_button(self, name, kind=None, rid=None):
+        """The button that does a process step no status rule ties to a button: one whose label is the step's name,
+        or starts it ("Approve" for "Approve and release"), on a screen of that kind of record, that the role may
+        press. As a mover {screen, label, dialog, roles, toast, data, row, creates}, or None. A button that only
+        goes to another screen never counts."""
+        want = re.sub(r"\s+", " ", str(name or "").strip().lower())
+        if not want:
+            return None
+        for scr in self.screens:
+            if self.creates_on(scr["id"]) or (kind and scr.get("data") not in (kind, None)
+                                              and (scr.get("list") or {}).get("data") not in (kind, None)):
+                continue
+            lst = scr.get("list") or {}
+            for b, row in [(b, False) for b in scr.get("buttons") or []] + [(a, True) for a in lst.get("actions") or []]:
+                if not isinstance(b, dict) or not (b.get("dialog") or b.get("toast") or b.get("set_status")):
+                    continue
+                label = re.sub(r"\s+", " ", str(b.get("label") or "").strip().lower())
+                if not label or not (label == want or want.startswith(label + " ") or label.startswith(want + " ")):
+                    continue
+                roles = [r for r in as_list(b.get("roles")) or self.openers(scr["id"]) if self.can_open(r, scr["id"])]
+                if rid and roles and rid not in roles:
+                    continue
+                dlg = self.dialog.get(b.get("dialog")) if b.get("dialog") else None
+                return {"from": None, "to": None, "screen": scr["id"], "label": str(b.get("label")), "dialog": dlg, "roles": roles,
+                        "toast": ((dlg or {}).get("confirm") or {}).get("toast") if dlg else b.get("toast"),
+                        "data": lst.get("data") if row else scr.get("data"), "creates": False, "row": row}
+        return None
+
+    def roles_in(self, low):
+        """The role ids a (lower-case) text names, in the order it names them."""
+        found = []
+        for r in self.roles:
+            for word in (str(r.get("name") or ""), str(r["id"])):
+                hit = re.search(rf"\b{re.escape(word.lower())}s?\b", low) if len(word) >= 3 else None
+                if hit:
+                    found.append((hit.start(), r["id"]))
+                    break
+        return [rid for _, rid in sorted(found)]
+
+    def statuses_in(self, low):
+        """The status ids a (lower-case) text names: by name, or by the first word of a longer name ("pending")."""
+        out = []
+        for s in self.statuses:
+            name = str(s.get("name") or s["id"]).lower()
+            words = [name] + ([name.split()[0]] if " " in name and len(name.split()[0]) >= 4 else [])
+            if any(re.search(rf"\b{re.escape(w)}\b", low) for w in words):
+                out.append(s["id"])
+        return out
+
 
 # ---------------------------------------------------------------- the draft
 class Draft:
     def __init__(self, spec):
         self.m = Model(spec)
         self.cases = []
+        self.records = {}  # precondition text -> (status id, record kind): the records the test data list asks for
 
-    def add(self, title, kind, roles, steps, source, priority="Medium", preconditions=(), requirements=(), todo=None, keys=()):
+    def add(self, title, kind, roles, steps, source, priority="Medium", preconditions=(), requirements=(), todo=None, keys=(),
+            moves=(), needs=()):
+        """A case. `moves` are the (from, to, button label) it makes, so a requirement about that move can be linked
+        to it; `needs` is test data the steps do not show (a mailbox, a connection, a record about to fall due)."""
         if any(c["title"].lower() == title.lower() for c in self.cases) or not steps:
             return None
         case = {"id": "", "title": title, "type": kind, "priority": priority, "roles": [r for r in dict.fromkeys(roles) if r],
-                "preconditions": list(preconditions), "steps": steps, "requirements": list(requirements), "source": source}
+                "preconditions": list(dict.fromkeys(preconditions)), "steps": steps, "requirements": list(requirements), "source": source}
         if todo:
             case["todo"] = todo
         case["_keys"] = {str(k).lower() for k in keys if k and len(str(k)) >= 4}
+        case["_moves"] = list(moves)
+        case["_needs"] = list(needs)
         self.cases.append(case)
         return case
+
+    def titled(self, title):
+        return next((c for c in self.cases if c["title"].lower() == title.lower()), None)
+
+    @staticmethod
+    def link(case, rid):
+        if rid not in case["requirements"]:
+            case["requirements"].append(rid)
 
     @staticmethod
     def step(action, expected, screen=None, role=None):
@@ -539,11 +645,13 @@ class Draft:
         m = self.m
         kind = kind or m.kind_of(status_id)
         rec = m.record(status_id, kind)
-        noun = m.noun(kind)
         if rec:
-            return f"{m.a(kind).capitalize()} in {m.sname(status_id)}, for example {rec}"
-        made = self.creation_note(status_id, kind)
-        return f"{m.a(kind).capitalize()} in {m.sname(status_id)}" + (f" ({made})" if made else "")
+            text = f"{m.a(kind).capitalize()} in {m.sname(status_id)}, for example {rec}"
+        else:
+            made = self.creation_note(status_id, kind)
+            text = f"{m.a(kind).capitalize()} in {m.sname(status_id)}" + (f" ({made})" if made else "")
+        self.records[text] = (status_id, kind)
+        return text
 
     def creation_note(self, status_id, kind=None):
         m = self.m
@@ -611,7 +719,7 @@ class Draft:
         that makes it, on its own screen, by the role allowed to press it."""
         m = self.m
         noun = m.noun(kind)
-        steps, roles, keys, todo, moves, pre = [], [], [], [], set(), []
+        steps, roles, keys, todo, moves, pre, made_moves = [], [], [], [], set(), [], []
         start, start_role, _ = chain[0]
         made = m.creation(kind, start)
         begin = made["status"] if made and made["status"] else m.origin(kind)
@@ -664,9 +772,24 @@ class Draft:
                     keys.append(mv["label"])
                     roles.append(rid)
                     moves.add((a, b))
+                    made_moves.append((a, b, mv["label"]))
                     visited.append(b)
                 continue
             rid = hint or self.rule_role(frm, to)
+            named = m.named_button(name, kind, rid) if name and to else None
+            if named:  # a button named after the step does it, though no status rule ties it to the move
+                rid = rid or (named["roles"][0] if named["roles"] else None)
+                roles.append(rid)
+                if rid != actor or not rid:
+                    steps.append(self.step(**m.sign_in(rid)) if rid else self.step("Sign in as the person who does the next step", "Signed in"))
+                    actor = rid
+                steps += self.open(named["screen"], rid, rec) + self.press(named, to, rec)
+                keys.append(named["label"])
+                if frm:
+                    moves.add((frm, to))
+                    made_moves.append((frm, to, named["label"]))
+                visited.append(to)
+                continue
             roles.append(rid)
             if rid != actor or not rid:
                 steps.append(self.step(**m.sign_in(rid)) if rid else self.step("Sign in as the person who does the next step", "Signed in"))
@@ -703,7 +826,7 @@ class Draft:
         span = f"from {m.sname(chain[0][0]) if chain[0][0] else 'start'} to {m.sname(last) if last else 'end'}"
         self.add(f"Main process: the {noun}, {span}" if m.several and kind else f"Main process: {span}",
                  "main process", roles, steps, "status rules: " + " > ".join(path) if path else "process flow", "High", pre,
-                 todo="; ".join(todo) or None, keys=keys + path)
+                 todo="; ".join(todo) or None, keys=keys + path, moves=made_moves)
         return moves
 
     def rule_role(self, frm, to):
@@ -732,16 +855,31 @@ class Draft:
                     self.add(f"Automatic: from {m.sname(frm)} to {m.sname(to)}", "status change", [], steps,
                              f"status rules: {m.sname(frm)} moves to {m.sname(to)} automatically", "High", [self.precondition(frm, kind)],
                              todo=f"write the condition from the requirements (a date or event), and how the tester brings it about",
-                             keys=[m.sname(frm), m.sname(to), "automatic"])
+                             keys=[m.sname(frm), m.sname(to), "automatic"], moves=[(frm, to, None)],
+                             needs=[{"kind": "record", "need": f"{m.a(kind).capitalize()} in {m.sname(frm)} that will meet the condition "
+                                     f"for {m.sname(to)} during UAT",
+                                     "how": "prepare it before UAT so the condition falls on a test day (a date due then, or the event "
+                                            "staged), or agree with the team how the testers bring the condition about"}])
                     continue
                 mover = m.mover(frm, to, kind)
                 rid = (mover["roles"][0] if mover and mover["roles"] else None) or self.rule_role(frm, to)
                 rec = m.record(frm, kind)
                 steps = [self.step(**m.sign_in(rid))] if rid else []
                 todo = None
+                again = None if mover else self.resubmit(frm, to, kind)
                 if mover:
                     steps += self.open(mover["screen"], rid, rec) + self.press(mover, to, rec)
                     title = f"{mover['label']}: from {m.sname(frm)} to {m.sname(to)}"
+                elif again:
+                    rid, form, button = again
+                    steps = [self.step(**m.sign_in(rid))]
+                    where = m.detail_for(rid, kind)
+                    if where:
+                        steps += self.open(where, rid, rec)
+                    steps.append(self.step(f"Open {rec or 'the ' + noun} to change it", f"{m.title(form)} opens with its details filled in", form))
+                    steps.append(self.step(f"Press {button}", f"The status is now {m.sname(to)}", form))
+                    title = f"{button}: from {m.sname(frm)} to {m.sname(to)}"
+                    mover = {"label": button}
                 else:
                     where = m.detail_for(rid, kind) if rid else None
                     if where:
@@ -752,7 +890,20 @@ class Draft:
                     if not rid:
                         todo += ", and who does it"
                 self.add(title, "status change", [rid], steps, f"status rules: {m.sname(frm)} next {m.sname(to)}", "High",
-                         [self.precondition(frm, kind)], todo=todo, keys=[m.sname(frm), m.sname(to), (mover or {}).get("label")])
+                         [self.precondition(frm, kind)], todo=todo, keys=[m.sname(frm), m.sname(to), (mover or {}).get("label")],
+                         moves=[(frm, to, (mover or {}).get("label"))])
+
+    def resubmit(self, frm, to, kind):
+        """(role, form, button) when a record in `frm` goes on to `to` by being changed on the form that adds it and
+        sent with that form's button: the form's records start in `to`, and the status rules let the role change
+        the record in `frm` (a draft sent on, a rejected application corrected and sent again). Else None."""
+        m = self.m
+        made = m.creation(kind, to)
+        if not made or made["status"] != to:
+            return None
+        allowed = m.allowed(frm, "edit") or set()
+        rid = next((r for r in m.openers(made["screen"]) if r in allowed), None)
+        return (rid, made["screen"], str(made["button"].get("label") or "Submit")) if rid else None
 
     def allowed_actions(self):
         """A case for each status where a role may change or delete a record without moving it."""
@@ -961,7 +1112,8 @@ class Draft:
                                 f"{m.text(n.get('recipient') or 'The recipient')} receives the notification as specified"
                                 + (f" ({template})" if template else ""))],
                      f"notifications: {n['event']}", requirements=[r for r in reqs if r in requirement_ids(m.spec)],
-                     todo=None if template else "the wording of this notification is not in the spec", keys=[n["event"], "e-mail"])
+                     todo=None if template else "the wording of this notification is not in the spec", keys=[n["event"], "e-mail"],
+                     needs=[{"kind": "other", "need": f"A mailbox the testers can read for {m.text(n.get('recipient') or 'the recipient')}"}])
 
     def integrations(self):
         m = self.m
@@ -977,9 +1129,262 @@ class Draft:
             missing = [k for k in ("trigger", "on_failure") if not x.get(k)]
             self.add(f"Integration: {system}" + (f" ({m.text(x['purpose'])})" if x.get("purpose") else ""), "integration", [], steps,
                      f"integrations: {x['system']}", todo=f"not in the spec for this exchange: {', '.join(missing)}" if missing else None,
-                     keys=[system])
+                     keys=[system], needs=[{"kind": "other", "need": f"{system} connected to the test system, with test data for the exchange"
+                                            + (f" ({m.text(x['data'])})" if x.get("data") else "")}]
+                     + ([{"kind": "other", "need": f"A way to make {system} unavailable during the test, agreed with its owner"}] if x.get("on_failure") else []))
 
-    # ---- (e) every requirement covered
+    # ---- (e) requirements tied to the scenario that tests them
+    def link_requirements(self):
+        """Put each requirement into the scenario that tests it, or write the scenario that does, when the
+        requirement says plainly what it is about: a field of a form (filled in, its choices, required, required
+        for one choice), a field of a dialog that must be filled in, saving a draft, sending a record on to a role,
+        a button that moves a record, an e-mail when a record reaches a status, what a screen shows, adding or
+        changing a list's entries. What it cannot tie for certain is left to requirements(), as a case to refine.
+        A requirement waiting for an open decision (tbc) is never tied."""
+        covered = {r for c in self.cases for r in c["requirements"]}
+        rules = (self.by_notification, self.by_dialog_field, self.by_field, self.by_draft, self.by_route, self.by_move,
+                 self.by_screen, self.by_maintain)
+        for rid, (group, text, priority, tbc) in requirement_ids(self.m.spec).items():
+            if rid in covered or tbc:
+                continue
+            plain = self.m.text(text)
+            item = next((it for it in group.get("items") or [] if isinstance(it, dict) and self.m.text(it.get("text")) == plain), None)
+            screens = [s for s in as_list((item or {}).get("screens")) or as_list(group.get("screens")) if s in self.m.screen]
+            screens += [k for kind, k in REF.findall(str(text)) if kind == "screen" and k in self.m.screen and k not in screens]
+            prio = {"must": "High", "should": "Medium", "could": "Low"}.get(str(priority or "").lower(), "Medium")
+            for rule in rules:
+                if rule(rid, plain, plain.lower(), prio, screens):
+                    break
+
+    def by_notification(self, rid, plain, low, prio, screens):
+        """"e-mail the employee when the application is approved or rejected": for each status, a case that moves a
+        record there and checks the recipient's e-mail."""
+        m = self.m
+        if not re.search(r"e-?mail|notif|\binform|\balert|\bsms\b", low):
+            return False
+        who = m.roles_in(low)
+        targets = [s for s in m.statuses_in(low) if any(x["to"] == s and not x["creates"] for x in m.movers())]
+        if not who or not targets:
+            return False
+        name = m.role_name(who[0])
+        for to in targets:
+            mv = next(x for x in m.movers() if x["to"] == to and not x["creates"])
+            frm = mv["from"] or next((s["id"] for s in m.statuses if to in m.nexts(s["id"])), None)
+            kind = mv["data"] or m.kind_of(to)
+            actor = (mv["roles"] or [None])[0]
+            if not frm or not actor:
+                return False
+            rec = m.record(frm, kind)
+            steps = [self.step(**m.sign_in(actor))] + self.open(mv["screen"], actor, rec) + self.press(mv, to, rec)
+            steps.append(self.step(f"Open the mailbox of the {name} test account",
+                                   f"An e-mail has come telling them that {rec or 'the ' + m.noun(kind)} is now {m.sname(to)}"))
+            case = self.add(f"E-mail to the {name}: {m.sname(to)}", "notification", [actor, who[0]], steps, f"requirement {rid}", prio,
+                            [self.precondition(frm, kind)], [rid], moves=[(frm, to, mv["label"])],
+                            needs=[{"kind": "other", "need": f"A mailbox the testers can read for the {name} test account"}])
+            if case is None:
+                self.link(self.titled(f"E-mail to the {name}: {m.sname(to)}"), rid)
+        return True
+
+    def form_screens(self):
+        return [s for s in self.m.screens if s.get("type") == "form" and s.get("sections")]
+
+    def by_field(self, rid, plain, low, prio, screens):
+        """A field of a form named in the requirement: filled in by the system, its choices, required, or required
+        only for one choice of another field (that case gets the step that proves it)."""
+        m = self.m
+        for scr in self.form_screens():
+            fields = m.form_fields(scr)
+            named = [f for f in fields if f.get("label") and re.search(rf"\b{re.escape(m.text(f['label']).lower())}", low)]
+            rules = self.titled(f"{m.title(scr['id'])}: field rules")
+            required = self.titled(f"{m.title(scr['id'])}: required fields")
+            for f in named:
+                label = m.text(f["label"])
+                if f.get("readonly") and (f.get("source") or f.get("default")) and rules \
+                        and re.search(r"pre-?fill|read-?only|calculat|filled in|automatic", low):
+                    self.link(rules, rid)
+                    return True
+                if (f.get("options") or f.get("options_from")) and rules and re.search(r"\boffer|\bchoos|\bchoice|\bselect|\bpick|\blist", low):
+                    self.link(rules, rid)
+                    return True
+            if not re.search(r"\brequire|\bmandatory|\bmust be (filled|given|attached)", low):
+                continue
+            button = next((b.get("label") for b in scr.get("buttons") or [] if isinstance(b, dict) and b.get("style") == "primary"), "Submit")
+            for f in named:
+                label = m.text(f["label"])
+                if f.get("required") and required and not f.get("readonly"):
+                    self.link(required, rid)
+                    return True
+                for other in fields:  # "required for Medical Leave": a value of another field's choices
+                    if other is f:
+                        continue
+                    for value in self.choices(other):
+                        if value and re.search(rf"\b{re.escape(value.lower())}\b", low):
+                            case = required or rules
+                            step = self.step(f"Choose {value} in {m.text(other.get('label'))}, leave {label} empty and press {button}",
+                                             f"The form is not sent: {label} is pointed out as required for {value}", scr["id"])
+                            if case is None:
+                                return False
+                            case["steps"].append(step)
+                            self.link(case, rid)
+                            return True
+        return False
+
+    def choices(self, f):
+        """The values a choice field offers, from its options or the list they come from."""
+        m = self.m
+        values = list(f.get("options") or [])
+        src = f.get("options_from")
+        if isinstance(src, dict):
+            values = [r.get(src.get("field")) for r in m.data.get(src.get("list")) or [] if isinstance(r, dict)]
+        elif src and "." in str(src):
+            lst, col = str(src).split(".", 1)
+            values = [r.get(col) for r in m.data.get(lst) or [] if isinstance(r, dict)]
+        return [str(v.get("label") or v.get("value")) if isinstance(v, dict) else str(v) for v in values if v]
+
+    def by_dialog_field(self, rid, plain, low, prio, screens):
+        """"require a reason when rejecting": a required field of the dialog that the named button opens."""
+        m = self.m
+        if not re.search(r"\brequire|\bmandatory", low):
+            return False
+        for did, dlg in m.dialog.items():
+            case = self.titled(f"{m.text(dlg.get('title') or did)}: required fields")
+            if not case:
+                continue
+            openers = [str(b.get("label") or "") for s in m.screens for b in s.get("buttons") or [] if isinstance(b, dict) and b.get("dialog") == did]
+            stems = [w.lower().rstrip("e") for w in (o.split()[0] for o in openers if o.split()) if len(w) >= 4]
+            words = {w for f in dlg.get("fields") or [] if isinstance(f, dict) and f.get("required")
+                     for w in re.findall(r"[a-z]{4,}", m.text(f.get("label") or f.get("id")).lower())}
+            if any(re.search(rf"\b{re.escape(st)}", low) for st in stems) and any(re.search(rf"\b{w}\b", low) for w in words):
+                self.link(case, rid)
+                return True
+        return False
+
+    def by_draft(self, rid, plain, low, prio, screens):
+        """"save a draft without validation": a case that saves one with the form's draft button."""
+        m = self.m
+        if "draft" not in low:
+            return False
+        status = next((s["id"] for s in m.statuses if "draft" in f"{s['id']} {s.get('name', '')}".lower()), None)
+        for scr in self.form_screens():
+            button = next((b for b in scr.get("buttons") or [] if isinstance(b, dict) and "draft" in str(b.get("label", "")).lower()), None)
+            who = [r for r in m.openers(scr["id"]) if r in m.roles_in(low)] or m.openers(scr["id"])
+            if not button or not who or not m.creates_on(scr["id"]):
+                continue
+            kind = scr.get("data") or m.main
+            loose = re.search(r"without (validation|checks|all)|incomplete|partial|unfinished|not complete", low)
+            saved = (f'A message like "{m.text(button["toast"])}" appears. ' if button.get("toast") else "") + \
+                    (f"The {m.noun(kind)} is saved with status {m.sname(status)}" if status else f"The {m.noun(kind)} is saved")
+            steps = [self.step(**m.sign_in(who[0]))] + self.open(scr["id"], who[0])
+            if loose:
+                steps.append(self.step(f"Fill in one field only, leave the required fields empty and press {button['label']}", saved, scr["id"]))
+            else:
+                steps.append(self.step(f"Fill in some of the fields and press {button['label']}", saved, scr["id"]))
+            self.add(f"{button['label']}: an unfinished {m.noun(kind)}", "status change", [who[0]], steps, f"requirement {rid}", prio,
+                     requirements=[rid], moves=[(None, status, button["label"])])
+            return True
+        return False
+
+    def by_route(self, rid, plain, low, prio, screens):
+        """"route a submitted application to the employee's line manager": the main process, where that role finds it."""
+        m = self.m
+        if not re.search(r"\brout|\bsent to|\bsend\b.*\bto\b|\bassign|\bforward", low) or " to " not in low:
+            return False
+        who = m.roles_in(low.split(" to ", 1)[1])
+        if not who:
+            return False
+        target = who[-1]
+        for case in (c for c in self.cases if c["type"] == "main process"):
+            at = next((n for n, s in enumerate(case["steps"]) if s.get("role") == target and s["action"].startswith("Sign in")), None)
+            if at is None:
+                continue
+            after = case["steps"][at + 1:]
+            look = next((s for s in after if s["action"].startswith("Find")), None) or next((s for s in after if s["action"].startswith("Open")), None)
+            if look is not None and "sent to them as the" not in look["expected"]:
+                look["expected"] += f". The {m.noun()} is there, sent to them as the {m.role_name(target)}"
+            self.link(case, rid)
+            return True
+        return False
+
+    def by_move(self, rid, plain, low, prio, screens):
+        """A requirement about a button that moves a record ("cancel a Pending or Approved application"): the cases
+        that press it, those from the statuses it names when it names any, by the roles it names."""
+        m = self.m
+        if re.search(r"e-?mail|notif|\binform\b", low):
+            return False
+        found = []
+        status_words = {str(s.get("name") or s["id"]).lower() for s in m.statuses}
+        for x in m.movers():
+            word = (x["label"].split() or [""])[0].lower()
+            stem = word.rstrip("e") if len(word) > 4 else word
+            # "an approved batch" names a status, not the button: only other words from the stem count
+            if len(stem) >= 4 and any(w not in status_words for w in re.findall(rf"\b{re.escape(stem)}[a-z]*", low)):
+                found.append(x)
+        who = m.roles_in(low)
+        found = [x for x in found if not who or not x["roles"] or set(who) & set(x["roles"])]
+        if not found:
+            return False
+        named = m.statuses_in(low)
+        found = [x for x in found if x["from"] in named or x["to"] in named] or found
+        cases = [c for c in self.cases for x in found if any(mv[2] == x["label"] and (x["from"] in (None, mv[0])) and mv[1] == x["to"]
+                                                          for mv in c["_moves"])]
+        for case in dict.fromkeys(map(id, cases)):
+            self.link(next(c for c in cases if id(c) == case), rid)
+        return bool(cases)
+
+    def by_screen(self, rid, plain, low, prio, screens):
+        """"show the booking as specified in Booking Details": a case that opens the screen and checks its fields."""
+        m = self.m
+        if not re.search(r"\bshow|\bdisplay|\bview|\bsee\b", low):
+            return False
+        for sid in screens:
+            scr = m.screen[sid]
+            labels = [m.text(f.get("label")) for f in m.shown_fields(scr) if f.get("label")]
+            labels = labels or [m.text(c.get("label")) for c in (scr.get("list") or {}).get("columns") or [] if isinstance(c, dict) and c.get("label")]
+            who = [r for r in m.roles_in(low) if m.can_open(r, sid)] or m.openers(sid)
+            if not labels or not who:
+                continue
+            kind = scr.get("data") or (scr.get("list") or {}).get("data")
+            rec = m.text(scr.get("record")) if scr.get("record") else None
+            steps = [self.step(**m.sign_in(who[0]))] + self.open(sid, who[0], rec)
+            steps.append(self.step("Look at what the screen shows", f"It shows {join_words(labels)}, each with the {m.noun(kind)}'s own value", sid))
+            self.add(f"{m.title(sid)}: what it shows", "requirement", [who[0]], steps, f"requirement {rid}", prio,
+                     [self.precondition(m.sid((next((r for r in m.data.get(kind) or [] if isinstance(r, dict)), {})).get("status")), kind)]
+                     if kind and m.statuses and any(isinstance(r, dict) and m.sid(r.get("status")) for r in m.data.get(kind) or []) else [],
+                     [rid])
+            return True
+        return False
+
+    def by_maintain(self, rid, plain, low, prio, screens):
+        """"allow the Administrator to add and edit equipment": the list's add and edit buttons, each tried."""
+        m = self.m
+        verbs = [v for v in ("add", "edit", "delete") if re.search(rf"\b{v}", low)]
+        if not verbs:
+            return False
+        for sid in screens or [s["id"] for s in m.screens]:
+            scr = m.screen[sid]
+            lst = scr.get("list") or {}
+            if scr.get("type") != "list" or not (screens or (lst.get("data") and re.search(rf"\b{re.escape(str(lst['data']).rstrip('s').replace('_', ' '))}", low))):
+                continue
+            buttons = [(b, "toolbar") for b in lst.get("toolbar") or [] if isinstance(b, dict)] + \
+                      [(b, "action") for b in lst.get("actions") or [] if isinstance(b, dict)]
+            pick = {v: next(((b, how) for b, how in buttons if re.search(rf"\b{v}", str(b.get("label", "")).lower())), None) for v in verbs}
+            who = [r for r in m.roles_in(low) if m.can_open(r, sid)] or m.openers(sid)
+            if not all(pick.values()) or not who:
+                continue
+            thing = m.noun(lst.get("data")) if m.several else str(lst.get("data") or "entry").replace("_", " ").rstrip("s")
+            steps = [self.step(**m.sign_in(who[0]))] + self.open(sid, who[0])
+            for v in verbs:
+                b, how = pick[v]
+                action = f"Press {b['label']}" if how == "toolbar" else f"Find {('an' if thing[:1] in 'aeiou' else 'a')} {thing} and press {b['label']}"
+                expected = {"add": f"A new {thing} can be filled in and saved; it is then listed",
+                            "edit": f"Its details can be changed and saved; the list shows the change",
+                            "delete": f"After confirming, the {thing} is no longer listed"}[v]
+                steps.append(self.step(action, expected, sid))
+            self.add(f"{m.title(sid)}: {join_words(verbs)}", "requirement", [who[0]], steps, f"requirement {rid}", prio, requirements=[rid])
+            return True
+        return False
+
+    # ---- (f) every requirement covered
     def requirements(self):
         m = self.m
         covered = {r for c in self.cases for r in c["requirements"]}
@@ -1010,6 +1415,51 @@ class Draft:
             if case is not None and related:
                 case["_related"] = related
 
+    # ---- what each case needs before it starts
+    def test_data(self, case):
+        """[{kind, need, how?}]: the test accounts that sign in, the records the preconditions ask for (and how to
+        get one), the files the steps upload, and what the case asked for itself (a mailbox, a connection)."""
+        m = self.m
+        out = []
+        signed = [s.get("role") for s in case["steps"] if s.get("role")] + [r for r in case["roles"] if r]
+        for rid in dict.fromkeys(signed):
+            if rid not in m.role:
+                continue
+            scope = m.text(m.role[rid].get("scope") or "")
+            out.append({"kind": "account", "need": f"A test account for {m.role_name(rid)}"
+                        + (f" (what it sees: {scope[:1].lower()}{scope[1:]}; set it up so the test records are among them)" if scope else "")})
+        for pre in case["preconditions"]:
+            if pre not in self.records:
+                continue
+            status, kind = self.records[pre]
+            need = {"kind": "record", "need": f"{m.a(kind).capitalize()} in {m.sname(status)}"}
+            made = m.creation(kind, status)
+            start = (made or {}).get("status") or m.origin(kind)
+            how = self.creation_note(status, kind)
+            route = m.path(start, status, kind) if start and start != status else None
+            first = f"fill in {m.title(made['screen'])} and press {made['button'].get('label')}" if made and made.get("status") == start else ""
+            if not how and route:
+                presses = [f"{mv['label']} (as {m.role_name(mv['roles'][0])})" if mv["roles"] else mv["label"] for _, _, mv in route]
+                how = (f"{first}, then " if first else f"from {m.sname(start)}, press ") + ", then ".join(presses)
+            elif not how and start == status and first:
+                how = first
+            if how:
+                need["how"] = how[:1].upper() + how[1:]
+            out.append(need)
+        for step in case["steps"]:
+            scr = m.screen.get(step.get("screen")) or {}
+            for f in m.form_fields(scr) if scr.get("type") == "form" else []:
+                label = m.text(f.get("label") or f.get("id"))
+                if f.get("type") != "file" or "empty" in step["action"] or not (
+                        label.lower() in step["action"].lower() or (f.get("required") and step["action"].startswith("Fill in every required"))):
+                    continue
+                need = f"A file to upload as {label}" + (f" ({m.text(f['help'])})" if f.get("help") else "")
+                if "breaks its rule" in step["action"] and f.get("validation"):
+                    need = f"A file for {label} that breaks its rule: {m.text(f['validation'])}"
+                out.append({"kind": "file", "need": need})
+        out += case.get("_needs") or []
+        return list({d["need"]: d for d in out}.values())
+
     def build(self):
         done = self.main_process()
         self.status_moves(done)
@@ -1020,6 +1470,7 @@ class Draft:
         self.figures()
         self.notifications()
         self.integrations()
+        self.link_requirements()
         self.requirements()
         for n, c in enumerate(self.cases, 1):
             c["id"] = f"UAT-{n:03d}"
@@ -1027,7 +1478,9 @@ class Draft:
             related = c.pop("_related", [])
             if related:
                 c["related"] = [r["id"] for r in related]
-            c.pop("_keys", None)
+            c["test_data"] = self.test_data(c)
+            for key in ("_keys", "_moves", "_needs"):
+                c.pop(key, None)
         return self.cases
 
 
@@ -1056,6 +1509,10 @@ def scripts_file(project, name=None):
 def texts(case):
     yield case.get("title")
     yield from case.get("preconditions") or []
+    for d in case.get("test_data") or []:
+        if isinstance(d, dict):
+            yield d.get("need")
+            yield d.get("how")
     for s in case.get("steps") or []:
         if isinstance(s, dict):
             yield s.get("action")
@@ -1136,6 +1593,13 @@ def check(scripts, project):
             for rid in re.findall(r"\bR-\d+\b", t):
                 if rid in internal_ids:
                     errors.append(f"{cid}: {rid} is an internal register item")
+        data = c.get("test_data")
+        if data is None:
+            warnings.append(f"{cid}: no test data listed: say what it needs before it starts (test accounts, records in "
+                            "their status, files to upload), or write \"test_data\": [] when it needs nothing")
+        elif not isinstance(data, list) or not all(isinstance(d, dict) and d.get("kind") in DATA_KINDS and str(d.get("need") or "").strip()
+                                                    for d in data):
+            errors.append(f"{cid}: each test_data entry needs a kind ({', '.join(DATA_KINDS)}) and what is needed (need)")
         if c.get("todo"):
             warnings.append(f"{cid}: still to do: {c['todo']}")
     _, by, excluded = coverage(scripts, spec)
@@ -1180,7 +1644,36 @@ def summary(scripts, spec):
     return {"cases": len(cases), "steps": sum(len(c["steps"]) for c in cases), "requirements": len(reqs), "covered": covered,
             "excluded": len([r for r in reqs if r in excluded and not by[r]]),
             "by_type": Counter(c.get("type") if c.get("type") in TYPES else "requirement" for c in cases),
-            "by_priority": Counter(c["priority"] for c in cases)}
+            "by_priority": Counter(c["priority"] for c in cases), "test_data": len(test_data_list(scripts))}
+
+
+def test_data_list(scripts):
+    """Every distinct thing the scenarios need before UAT starts, numbered TD-01 ...: [{ref, kind, need, how, cases}],
+    test accounts first, then records, files and the rest, each in the order the scenarios first ask for it."""
+    found = OrderedDict()
+    for c in scripts.get("cases") or []:
+        for d in c.get("test_data") or [] if isinstance(c, dict) else []:
+            if not isinstance(d, dict) or not str(d.get("need") or "").strip():
+                continue
+            kind = d.get("kind") if d.get("kind") in DATA_KINDS else "other"
+            item = found.setdefault((kind, str(d["need"]).strip()), {"kind": kind, "need": str(d["need"]).strip(), "how": "", "cases": []})
+            item["how"] = item["how"] or str(d.get("how") or "").strip()
+            if c.get("id") not in item["cases"]:
+                item["cases"].append(c.get("id"))
+    order = list(DATA_KINDS)
+    items = sorted(found.values(), key=lambda d: order.index(d["kind"]))
+    for n, d in enumerate(items, 1):
+        d["ref"] = f"TD-{n:02d}"
+    return items
+
+
+def data_refs(scripts):
+    """{case id: [TD refs]}."""
+    out = {}
+    for d in test_data_list(scripts):
+        for cid in d["cases"]:
+            out.setdefault(cid, []).append(d["ref"])
+    return out
 
 
 # ---------------------------------------------------------------- render
@@ -1221,15 +1714,18 @@ def render_xlsx(scripts, spec, out):
     tester_cols = [c for c, (_, _, by_tester) in enumerate(STEP_COLUMNS, 1) if by_tester]
     for c, (name, width, _) in enumerate(STEP_COLUMNS, 1):
         ws.cell(row=1, column=c, value=name)
+    refs = data_refs(scripts)
+    date_col = [name for name, _, _ in STEP_COLUMNS].index("Date") + 1
     r = 1
     for case, k, step, role in step_rows(scripts, m):
         r += 1
         values = [case["id"], case["title"], case["priority"], role, "\n".join(case.get("preconditions") or []) if k == 1 else "",
+                  ", ".join(refs.get(case["id"], [])) if k == 1 else "",
                   k, m.title(step["screen"]) if step.get("screen") else "", step["action"], step["expected"],
                   ", ".join(case.get("requirements") or []), "", "", "", None, ""]
         for c, value in enumerate(values, 1):
             ws.cell(row=r, column=c, value=value)
-        ws.cell(row=r, column=14).number_format = "d mmm yyyy"
+        ws.cell(row=r, column=date_col).number_format = "d mmm yyyy"
     sheets.header(ws, 1, len(STEP_COLUMNS), fill_in=tester_cols)
     sheets.rows(ws, 2, r, len(STEP_COLUMNS), fill_in=tester_cols)
     col = {name: get_column_letter(i) for i, (name, _, _) in enumerate(STEP_COLUMNS, 1)}
@@ -1250,7 +1746,7 @@ def render_xlsx(scripts, spec, out):
     sheets.setup(s, [22, 44, 13, 13, 13, 13, 40], titles=None)
     sheets.title(s, "A1", f"{scripts['project']}: user acceptance test",
                  f"Written from {scripts.get('based_on') or 'v' + scripts['spec_version']} · {readable(scripts['date'])}")
-    rows = [("Scenarios", sm["cases"]), ("Steps", sm["steps"]),
+    rows = [("Scenarios", sm["cases"]), ("Steps", sm["steps"]), ("Test data to prepare", f"{sm['test_data']} items, see {DATA_SHEET}"),
             ("Requirements covered", f"{sm['covered']} of {sm['requirements']}" + (f" ({sm['excluded']} not tested, see below)" if sm["excluded"] else ""))]
     rng = f"'{STEPS_SHEET}'!{col['Pass/Fail']}2:{col['Pass/Fail']}{max(r, 2)}"
     rows += [("Steps passed", f'=COUNTIF({rng},"Pass")'), ("Steps failed", f'=COUNTIF({rng},"Fail")'),
@@ -1280,6 +1776,21 @@ def render_xlsx(scripts, spec, out):
             line += 1
             sheets.label(s.cell(row=line, column=1, value=label))
             sheets.value(s.cell(row=line, column=3, value=sm["by_type"][kind]))
+    data = test_data_list(scripts)
+    t = sheets.setup(wb.create_sheet(DATA_SHEET, 1), [9, 14, 54, 44, 22, 18, 9, 30], freeze="C2")
+    data_cols = ("Ref", "Kind", "What is needed", "How to get it", "Scenarios", "Prepared by", "Ready", "Notes")
+    for c, name in enumerate(data_cols, 1):
+        t.cell(row=1, column=c, value=name)
+    for n, d in enumerate(data, 2):
+        for c, value in enumerate((d["ref"], DATA_KINDS[d["kind"]], d["need"], d["how"], ", ".join(d["cases"]), "", "", ""), 1):
+            t.cell(row=n, column=c, value=value)
+    sheets.header(t, 1, len(data_cols), fill_in=(6, 7, 8))
+    sheets.rows(t, 2, max(len(data) + 1, 2), len(data_cols), fill_in=(6, 7, 8))
+    if data:
+        ready = DataValidation(type="list", formula1='"Yes,No"', allow_blank=True)
+        t.add_data_validation(ready)
+        ready.add(f"G2:G{len(data) + 1}")
+        sheets.status(t, f"G2:G{len(data) + 1}", {"Yes": "green", "No": "red"})
     reqs, by, excluded = coverage(scripts, spec)
     left_out = [(rid, reqs[rid][1], excluded[rid]) for rid in reqs if not by[rid] and rid in excluded]
     if left_out:
@@ -1291,7 +1802,7 @@ def render_xlsx(scripts, spec, out):
                 x.cell(row=n, column=c, value=value)
         sheets.header(x, 1, 3)
         sheets.rows(x, 2, len(left_out) + 1, 3)
-    wb.active = 1
+    wb.active = wb.sheetnames.index(STEPS_SHEET)
     try:
         wb.save(str(out))
     except PermissionError:
@@ -1338,6 +1849,17 @@ def render_docx(scripts, spec, out):
         "Pass and note the wish under Actual result: it is a change request, handled apart from defects.",
         "Use test accounts and test data, never live personal data.",
     ])
+    data = test_data_list(scripts)
+    refs = {d["ref"]: d for d in data}
+    by_case = data_refs(scripts)
+    if data:
+        w.heading("Test data to prepare before UAT", 2)
+        w.para(f"{client} prepares these before the testers start, so no scenario is held up for want of an account, a record "
+               "in the right status or a file. Each scenario lists the items it uses. The workbook's Test data sheet has a "
+               "column to mark each one ready.", after=4)
+        w.table(["Ref", "What is needed", "How to get it", "Scenarios"],
+                [[[(d["ref"], "mono")], d["need"], d["how"] or "–", ", ".join(d["cases"])] for d in data],
+                [1.6, (tw - 4.6) * 0.45, (tw - 4.6) * 0.35, 3.0 + (tw - 4.6) * 0.2])
     groups = group_rows(scripts, spec)
     if groups:
         w.heading("What the scenarios cover", 2)
@@ -1362,6 +1884,9 @@ def render_docx(scripts, spec, out):
             if c.get("preconditions"):
                 w.para([("Before you start", "medium")], after=2, keep=True)
                 w.bullets([str(p) for p in c["preconditions"]])
+            if by_case.get(c["id"]):
+                w.para([("Test data: ", "medium"), ("  ".join(f"{ref} {refs[ref]['need']}." for ref in by_case[c["id"]]), "")],
+                       after=4, keep=True)
             w.table(["No", "Step", "Expected result", "Result"],
                     [[[(str(k), "mono")], s["action"], s["expected"], ""] for k, s in enumerate(c["steps"], 1)],
                     [1.0, (tw - 3.2) * 0.5, (tw - 3.2) * 0.5, 2.2])
@@ -1453,7 +1978,7 @@ def cmd_results(project, name):
     if name:
         path = Path(name) if Path(name).exists() else folder / name
     else:
-        found = sorted(folder.glob("*.xlsx")) if folder.exists() else []
+        found = sorted(f for f in folder.glob("*.xlsx") if f.name != layout.DEFECT_LOG) if folder.exists() else []
         path = found[-1] if found else None
     if not path or not path.exists():
         sys.exit("No filled-in UAT workbook found: name the file.")
@@ -1475,6 +2000,235 @@ def cmd_results(project, name):
                   + (f" defect {r['defect']}" if r.get("defect") else ""))
             print(f"    expected: {r.get('expected')}")
             print(f"    actual:   {r.get('actual') or '(not written)'}" + (f"  ({r.get('tester') or ''} {when})".rstrip(" ()") + ")" if r.get("tester") or when else ""))
+    if counts.get("Blocked"):
+        print("\n  A blocked step usually lacks test data or access: check the scripts' Test data list with the client.")
+    log, changed = record_defects(project, rows, path.name, scripts_for(project, path))
+    if any(changed.values()):
+        save_defects(project, log)
+    print(f"\nDefect log ({layout.shown(project, layout.defect_log(project))}): "
+          + "; ".join(f"{len(ids)} {what}: {', '.join(ids)}" for what, ids in changed.items() if ids) if any(changed.values())
+          else "\nDefect log: nothing new from this workbook.")
+    print_defects(log, only_active=True)
+    write_defects_xlsx(project, log)
+
+
+# ---------------------------------------------------------------- the defect log
+def scripts_for(project, workbook):
+    """The UAT scripts a workbook was written from: the one of the same name, else the newest; {} when none."""
+    import layout
+
+    folder = layout.uat_source(project)
+    same = folder / Path(workbook).with_suffix(".json").name
+    found = [same] if same.exists() else sorted(folder.glob("* uat scripts *.json")) if folder.exists() else []
+    try:
+        return json.loads(found[-1].read_text(encoding="utf-8")) if found else {}
+    except ValueError:
+        return {}
+
+
+def load_defects(project):
+    import layout
+
+    path = layout.defect_log(project)
+    if not path.exists():
+        return {"project": Path(project).name, "defects": []}
+    try:
+        log = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError as e:
+        sys.exit(f"{layout.shown(project, path)} is not valid JSON: {e}")
+    log.setdefault("defects", [])
+    return log
+
+
+def defect_errors(log):
+    errors, seen = [], set()
+    for n, d in enumerate(log.get("defects") or [], 1):
+        if not isinstance(d, dict):
+            errors.append(f"defect {n}: not a defect")
+            continue
+        did = str(d.get("id") or f"defect {n}")
+        if not re.fullmatch(r"D-\d{3,}", str(d.get("id") or "")):
+            errors.append(f"{did}: the id must be D- and a number, for example D-001")
+        if did in seen:
+            errors.append(f"{did} is used twice")
+        seen.add(did)
+        if d.get("status") not in DEFECT_STATUSES:
+            errors.append(f"{did}: status must be one of {', '.join(DEFECT_STATUSES)}")
+        if not d.get("case"):
+            errors.append(f"{did}: needs the UAT case it was found in")
+    return errors
+
+
+def save_defects(project, log):
+    import layout
+
+    errors = defect_errors(log)
+    if errors:
+        sys.exit("The defect log has mistakes; nothing was written:\n  " + "\n  ".join(errors))
+    path = layout.defect_log(project)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(log, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return path
+
+
+def as_date(value):
+    if hasattr(value, "date"):
+        return value.date().isoformat()
+    return str(value or "")[:10]
+
+
+def record_defects(project, rows, source, scripts, today=None):
+    """Bring the defect log up to date with a filled-in workbook (`source`, its file name): a failed step not in the
+    log yet becomes a defect (open), one fixed or sent for retest that fails again is open again, and one fixed or
+    sent for retest whose step now passes is closed. A workbook read before changes nothing.
+    Returns (log, {"new": [ids], "open again": [ids], "closed": [ids]})."""
+    today = today or dt.date.today().isoformat()
+    log = load_defects(project)
+    cases = {str(c.get("id")): c for c in scripts.get("cases") or [] if isinstance(c, dict)}
+    by_step = {(str(d.get("case")), str(d.get("step"))): d for d in log["defects"]}
+    changed = OrderedDict([("new", []), ("open again", []), ("closed", [])])
+    numbers = [int(d["id"][2:]) for d in log["defects"] if re.fullmatch(r"D-\d+", str(d.get("id") or ""))]
+    for r in rows:
+        if r["result"] not in ("Fail", "Pass") or not r.get("case"):
+            continue
+        key = (str(r["case"]), str(r.get("step")))
+        d = by_step.get(key)
+        if d is not None and source in d.get("seen_in", []):
+            continue
+        if r["result"] == "Pass":
+            if d is not None and d["status"] in ("fixed", "retest"):
+                d["status"] = "closed"
+                d["history"].append({"date": today, "status": "closed", "note": f"Passed in {source}"})
+                d.setdefault("seen_in", []).append(source)
+                changed["closed"].append(d["id"])
+            continue
+        case = cases.get(str(r["case"])) or {}
+        reqs = [x.strip() for x in str(r.get("requirements") or "").split(",") if x.strip()] or list(case.get("requirements") or [])
+        found = {"actual": str(r.get("actual") or ""), "tester": str(r.get("tester") or ""), "date": as_date(r.get("date")),
+                 "client_ref": str(r.get("defect") or "")}
+        if d is None:
+            numbers.append(max(numbers, default=0) + 1)
+            d = {"id": f"D-{numbers[-1]:03d}", **found, "case": str(r["case"]), "scenario": str(r.get("scenario") or case.get("title") or ""),
+                 "step": r.get("step"), "action": str(r.get("action") or ""), "expected": str(r.get("expected") or ""),
+                 "requirements": reqs, "priority": case.get("priority") or "", "found_in": source, "seen_in": [source],
+                 "status": "open", "history": [{"date": today, "status": "open", "note": f"Failed in {source}"}]}
+            log["defects"].append(d)
+            by_step[key] = d
+            changed["new"].append(d["id"])
+            continue
+        d.setdefault("seen_in", []).append(source)
+        if d["status"] in ("fixed", "retest", "closed"):
+            d.update({k: v for k, v in found.items() if v})
+            d["status"] = "open"
+            d["history"].append({"date": today, "status": "open", "note": f"Failed again in {source}"})
+            changed["open again"].append(d["id"])
+    return log, changed
+
+
+def set_defects(project, ids, status, note="", cr="", today=None):
+    """Change the status of defects in the log, with a note in each one's history. Returns the log."""
+    if status not in DEFECT_STATUSES:
+        sys.exit(f"'{status}' is not a defect status: use one of {', '.join(DEFECT_STATUSES)}")
+    if status == "not a defect" and not note:
+        sys.exit('Say why it is not a defect: --note "<why>" (the system does what was signed, for example).')
+    log = load_defects(project)
+    by_id = {d.get("id"): d for d in log["defects"]}
+    missing = [i for i in ids if i not in by_id]
+    if missing:
+        sys.exit(f"Not in the defect log: {', '.join(missing)}. Nothing was changed.")
+    for i in ids:
+        d = by_id[i]
+        d["status"] = status
+        if cr:
+            d["cr"] = cr
+        d.setdefault("history", []).append({"date": today or dt.date.today().isoformat(), "status": status, "note": note})
+    save_defects(project, log)
+    return log
+
+
+def print_defects(log, only_active=False):
+    defects = log.get("defects") or []
+    counts = Counter(d.get("status") for d in defects)
+    if not defects:
+        return
+    print(f"  {len(defects)} defect{'s' if len(defects) != 1 else ''}: " + ", ".join(f"{counts[s]} {s}" for s in DEFECT_STATUSES if counts.get(s)))
+    for d in defects:
+        if only_active and d.get("status") in ("closed", "not a defect", "change request"):
+            continue
+        reqs = ", ".join(d.get("requirements") or [])
+        print(f"  {d['id']} [{d.get('status')}] {d.get('case')} step {d.get('step')}: {d.get('scenario')}"
+              + (f" ({reqs})" if reqs else "") + (f" client ref {d['client_ref']}" if d.get("client_ref") else "")
+              + (f" -> {d['cr']}" if d.get("cr") else ""))
+
+
+def write_defects_xlsx(project, log):
+    """"Defect log.xlsx" in the project's 6 UAT folder: one row per defect, for the team and the client's UAT lead."""
+    from openpyxl import Workbook
+    from openpyxl.utils import get_column_letter
+
+    import layout
+    import sheets
+
+    defects = log.get("defects") or []
+    if not defects:
+        return None
+    out = layout.defect_log_xlsx(project)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    columns = [("Defect", 9), ("Status", 14), ("Priority", 9), ("Case", 10), ("Scenario", 34), ("Step", 6), ("Requirements", 18),
+               ("Expected result", 44), ("Actual result", 44), ("Tester", 16), ("Found on", 12), ("Client ref", 10),
+               ("Change request", 12), ("Last change", 40)]
+    wb = Workbook()
+    ws = sheets.setup(wb.active, [w for _, w in columns], freeze="C2")
+    ws.title = "Defects"
+    for c, (name, _) in enumerate(columns, 1):
+        ws.cell(row=1, column=c, value=name)
+    for r, d in enumerate(defects, 2):
+        last = (d.get("history") or [{}])[-1]
+        when = readable(last.get("date", "")) if last.get("date") else ""
+        values = [d.get("id"), d.get("status"), d.get("priority"), d.get("case"), d.get("scenario"), d.get("step"),
+                  ", ".join(d.get("requirements") or []), d.get("expected"), d.get("actual"), d.get("tester"),
+                  readable(d["date"]) if d.get("date") else "", d.get("client_ref"), d.get("cr", ""),
+                  f"{when}: {last.get('status', '')}" + (f", {last['note']}" if last.get("note") else "")]
+        for c, value in enumerate(values, 1):
+            ws.cell(row=r, column=c, value=value)
+    last_row = len(defects) + 1
+    sheets.header(ws, 1, len(columns))
+    sheets.rows(ws, 2, last_row, len(columns))
+    sheets.status(ws, f"B2:B{last_row}", dict(DEFECT_STATUSES))
+    ws.auto_filter.ref = f"A1:{get_column_letter(len(columns))}{last_row}"
+    try:
+        wb.save(str(out))
+    except PermissionError:
+        print(f"  Cannot write {out.name}: close it in Excel and run uat.py defects again. The log itself is saved.")
+        return None
+    print(f"  {layout.shown(project, out)}")
+    return out
+
+
+def cmd_defects(project):
+    import layout
+
+    log = load_defects(project)
+    errors = defect_errors(log)
+    if errors:
+        sys.exit("The defect log has mistakes:\n  " + "\n  ".join(errors))
+    if not log["defects"]:
+        print("No defects logged yet: they come from the testers' workbook (uat.py results).")
+        return
+    print(f"Defect log ({layout.shown(project, layout.defect_log(project))}):")
+    print_defects(log)
+    write_defects_xlsx(project, log)
+
+
+def cmd_defect(project, ids, status, note, cr):
+    log = set_defects(project, ids, status, note, cr)
+    print(f"{', '.join(ids)}: {status}" + (f" ({note})" if note else ""))
+    if status == "change request" and not cr:
+        d = next(x for x in log["defects"] if x["id"] == ids[0])
+        print("  Take it to the change-request skill, which checks it against the signed version, for example:\n"
+              f'    python -I tools/change_request.py scope {Path(project).as_posix()} "{d.get("actual") or d.get("scenario")}"\n'
+              f"  Then record the CR on the defect: uat.py defect {Path(project).as_posix()} {ids[0]} \"change request\" --cr CR-00x")
+    write_defects_xlsx(project, log)
 
 
 # ---------------------------------------------------------------- commands
@@ -1482,21 +2236,34 @@ def main():
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     args = sys.argv[1:]
-    flags = {a for a in args if a.startswith("--") and a != "--date"}
-    date = None
-    if "--date" in args:
-        i = args.index("--date")
-        if i + 1 >= len(args):
-            sys.exit("--date needs a date, for example --date 2026-11-12")
-        date = args[i + 1]
-        del args[i:i + 2]
+    values = {}
+    for key in ("--date", "--note", "--cr"):
+        if key in args:
+            i = args.index(key)
+            if i + 1 >= len(args):
+                sys.exit(f"{key} needs a value, for example " + {"--date": "--date 2026-11-12", "--note": '--note "fixed in build 14"',
+                                                                 "--cr": "--cr CR-004"}[key])
+            values[key] = args[i + 1]
+            del args[i:i + 2]
+    date = values.get("--date")
+    flags = {a for a in args if a.startswith("--")}
     args = [a for a in args if a not in flags]
-    if len(args) not in (2, 3) or args[0] not in ("draft", "check", "render", "results") or (args[0] == "draft" and len(args) != 2) \
-            or flags - {"--current", "--force"} or (args[0] not in ("draft", "render") and flags)             or (args[0] == "render" and flags - {"--force"}):
+    if args[:1] == ["defect"]:
+        if len(args) < 4 or flags or "--date" in values:
+            sys.exit(__doc__)
+        if not Path(args[1]).is_dir():
+            sys.exit(f"No project folder {args[1]}")
+        return cmd_defect(args[1], args[2:-1], args[-1], values.get("--note", ""), values.get("--cr", ""))
+    if len(args) not in (2, 3) or args[0] not in ("draft", "check", "render", "results", "defects") \
+            or (args[0] in ("draft", "defects") and len(args) != 2) or set(values) - {"--date"} \
+            or flags - {"--current", "--force"} or (args[0] not in ("draft", "render") and flags) \
+            or (args[0] == "render" and flags - {"--force"}):
         sys.exit(__doc__)
     command, project = args[0], args[1]
     if not Path(project).is_dir():
         sys.exit(f"No project folder {project}")
+    if command == "defects":
+        return cmd_defects(project)
     if command == "draft":
         try:
             date = dt.date.fromisoformat(date).isoformat() if date else dt.date.today().isoformat()

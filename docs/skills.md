@@ -50,6 +50,8 @@ feedback, the client's answers, workshop notes, brief, project actuals), shows y
 right next step. A document for a system that was archived or delivered before is matched to that work
 rather than treated as new. It never files on a guess: a file it isn't sure of is asked about, with its best
 guesses and why, or left in the inbox with a note, and the start-up summary says it is waiting.
+A filled-in UAT workbook puts each failed step into the project's defect log, and it goes through them with
+you: a real defect for the developers, a new wish for `change-request`, or not a defect.
 
 ### review-requirements
 
@@ -223,13 +225,17 @@ Writes the user acceptance test scripts from what the client signed (the version
 current spec when nothing is issued yet, and it says which): the main process (one per kind of record) signed in as each role in
 turn, every other status move such as reject and cancel, what each role may not do in each status, the
 field checks of every form and dialog, the screens each role may not open, the dashboard figures, and the
-notifications and integrations. It then adds the edge cases from the gap patterns that apply, merges and
+notifications and integrations, each with the test data it needs before it starts (test accounts, records
+in the right status and how to get them, files, mailboxes). Most requirements are already in the scenario
+that tests them. It then adds the edge cases from the gap patterns that apply, merges and
 removes what overlaps, and checks that every requirement is covered or excluded with a reason. See
 [UAT scripts](uat.md).
 **Output:** in the project's `6 UAT`: a workbook for the client's testers (one row per step, with Actual
-result, Pass/Fail, Tester, Date and Defect ref) and the test scripts as a Word document in your company's
-format, both for the client; and the `.json` they are made from. After UAT, drop the filled-in workbook into
-the inbox: failed steps are listed, and those that are really new wishes go to `change-request`.
+result, Pass/Fail, Tester, Date and Defect ref, and a Test data sheet to prepare before UAT) and the test
+scripts as a Word document in your company's format, both for the client; and the `.json` they are made
+from. After UAT, drop the filled-in workbook into the inbox: failed steps go into the project's defect log
+(`6 UAT/Defect log.xlsx`), linked to their scenario and requirements and followed from open to closed, and
+those that are really new wishes go to `change-request`.
 
 ### release
 
