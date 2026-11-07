@@ -12,6 +12,10 @@ See [docs/maintaining.md](docs/maintaining.md).
 ## [Unreleased]
 
 ### Fixed
+- **Edit and Delete in the Feedback panel always act on the comment they sit on.** A card, its buttons and its
+  pin now name their comment instead of counting its place in the list, so a comment saved or taken back in
+  another browser at the same moment can never shift them onto a neighbour. (The mock-up's comment code was
+  also tidied: the page-position logic has a part of its own, and the comment states are worded in one place.)
 - **Saving an edit in the mock-up changes the record.** Save on a form opened on a record (Edit User, Edit
   Part …) used to show its message and leave the list as it was. It now keeps what was typed in that record,
   so the list and every screen that shows it follow, for the rest of the walk-through.

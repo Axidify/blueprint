@@ -2897,6 +2897,8 @@ def test_a_box_for_something_new_keeps_its_place_when_the_layout_changes(tmp_pat
     notes = dict(seen["away"]["notes"])
     assert notes["role only"].startswith("Made while viewing as Line Manager"), notes
     assert "built since" in seen["away"]["done"] and seen["away"]["doneHead"] and not seen["away"]["oldBox"], "done: in the Done part, no mark"
+    keys = seen["away"]["keys"]
+    assert len(keys) == len(set(keys)) and not any(k.isdigit() for k in keys), "a card names its comment, never its place in a list"
     assert seen["shownDone"], "Show on the screen brings a done comment's mark back, faded"
     assert seen["clickThrough"] not in ("box", ""), "a box never takes a click: the thing inside it does"
     assert any("these two together" in x for x in seen["earlier"]), "the comment box shows the earlier comment on the same thing"

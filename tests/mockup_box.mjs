@@ -164,6 +164,7 @@ out.away = await page.evaluate(() => ({
   notes: [...document.querySelectorAll("#fb-panel .fb-pick")].map((c) => [c.querySelector(".fb-text").textContent, (c.querySelector(".fb-away") || {}).textContent || ""]),
   done: [...document.querySelectorAll("#fb-panel .fb-pick.fb-done .fb-text")].map((t) => t.textContent),
   doneHead: !!document.querySelector("#fb-panel .fb-done-head"),
+  keys: [...document.querySelectorAll("#fb-panel .fb-pick")].map((c) => c.dataset.fb),
   oldBox: [...document.querySelectorAll(".fb-box")].some((b) => { const r = b.getBoundingClientRect(); return Math.round(r.width) === 51 && Math.round(r.height) === 31; }),
 }));
 // Done comments come back, faded, when asked; a box never takes a click (what is inside it can be commented on);

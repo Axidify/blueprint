@@ -1100,13 +1100,81 @@
   // What became of a comment, in the words the room reads (the server's ROOM_WORDS in tools/mockup.py says
   // the same: change both together).
   const STATE_WORDS = { received: "Received", working: "Working on it", applied: "Applied", noted: "Noted for follow-up" };
-  // Why a comment has no mark on the page (see feedback.placeOf), said on its card in the panel.
+  // Why a comment has no mark on the page (see place.of), said on its card in the panel.
   const AWAY = { hidden: "In a part of the screen that is folded away or hidden: open it to see the mark.",
     gone: "Not on this screen now (changed or removed since), so it has no mark.",
     role: "Made while viewing as {role}: what it is about may be on this screen for that role only. View as {role} to see it." };
   // A comment worked through (applied, or noted for follow-up) is history: it steps back from the page, to a Done
   // part of the panel, so the marks on the page are only those still open. Show on the screen brings its marks back, faded.
   const isDone = (c) => c.state === "applied" || c.state === "noted";
+  // Where a comment is on the page now: whether what it is about is on show, hidden or gone, why it has no mark,
+  // and where its box goes. Reads the page only; the comments themselves are feedback's.
+  const place = {
+    // Whether what a comment is about can be marked on the page: "shown", "hidden" (there, but in a part folded
+    // away or a closed tab) or "gone" (not on this screen now: removed by a change, or not drawn for this role).
+    // A comment that is hidden or gone has no pin or box: one at its old place would point at something else.
+    // Its card in the panel says so instead. A box for something new marks empty space, so it stays.
+    of(c) {
+      const forNew = c.box && !(Array.isArray(c.elements) && c.elements.length);
+      const names = Array.isArray(c.elements) && c.elements.length ? c.elements : forNew ? [] : [c.element].filter(Boolean);
+      if (!names.length || names.every((e) => e === "region:page background")) return "shown";
+      const found = names.map((e) => document.querySelector(`#app [data-el="${CSS.escape(e)}"]`)).filter(Boolean);
+      if (!found.length) {
+        const now = route().role;  // made as another role: it may simply not be drawn for this one
+        return c.role && now && c.role !== now ? "role" : "gone";
+      }
+      return found.some((el) => place.shown(el)) ? "shown" : "hidden";
+    },
+    away(c) {
+      if (isDone(c)) return null;  // history: the Done part of the panel says what became of it
+      const text = AWAY[place.of(c)];
+      return text ? text.replaceAll("{role}", (byId(S.roles, c.role) || {}).name || c.role) : null;
+    },
+    // A thing on show, or null. A hidden one (in a section folded away, a closed tab) says it is at the top-left
+    // corner of the page: a pin or box placed by it landed there, or stretched from there across the screen.
+    shown(el) {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return r.width || r.height ? el : null;
+    },
+    // Where a drawn box is now: at its things, or where it was drawn when they are no longer on the screen.
+    // null while what it is about is there but hidden: it is not drawn then (its comment stays in the panel).
+    box(c) {
+      const b = c.box || {};
+      // A box drawn around several things follows them: around where they are now, whatever the window's width.
+      const found = (Array.isArray(c.elements) ? c.elements : []).map((e) => document.querySelector(`#app [data-el="${CSS.escape(e)}"]`)).filter(Boolean);
+      const parts = found.filter((el) => place.shown(el));
+      if (Array.isArray(c.elements) && c.elements.length && !parts.length) return null;
+      if (parts.length) {
+        const rects = parts.map((el) => el.getBoundingClientRect());
+        const left = Math.min(...rects.map((r) => r.left)), top = Math.min(...rects.map((r) => r.top));
+        const right = Math.max(...rects.map((r) => r.right)), bottom = Math.max(...rects.map((r) => r.bottom));
+        return { x: left + window.scrollX - 6, y: top + window.scrollY - 6, w: right - left + 12, h: bottom - top + 12 };
+      }
+      // A box for something new stays beside the thing it was drawn next to, at the same distance.
+      const near = b.near ? [...document.querySelectorAll(`#app [data-el="${CSS.escape(b.near)}"]`)][b.nearAt || 0] : null;
+      if (near && !place.shown(near)) return null;
+      if (near && Array.isArray(b.sx) && Array.isArray(b.sy)) {
+        const a = near.getBoundingClientRect();
+        const along = ([how, off], a0, alen, len) => how === "after" ? a0 + alen + off : how === "before" ? a0 - off - len : a0 + off;
+        return { x: along(b.sx, a.left + window.scrollX, a.width, b.w), y: along(b.sy, a.top + window.scrollY, a.height, b.h), w: b.w, h: b.h };
+      }
+      const target = c.element && (b.fx != null || b.dx != null) ? document.querySelector(`#app [data-el="${CSS.escape(c.element)}"]`) : null;
+      if (target && !place.shown(target)) return null;
+      if (target && b.fx != null) {  // drawn in 1.3.1: sideways in proportion to its area; up and down at its distance from the nearest thing
+        const at = target.getBoundingClientRect();
+        const ref = b.ref ? document.querySelector(`#app [data-el="${CSS.escape(b.ref)}"]`) : null;
+        const top = ref ? ref.getBoundingClientRect().top + window.scrollY + b.ry : at.top + window.scrollY + b.fy * at.height;
+        return { x: at.left + window.scrollX + b.fx * at.width, y: top, w: b.fw * at.width, h: b.h };
+      }
+      if (target) {  // drawn before boxes kept their proportion: a fixed distance from its element
+        const at = target.getBoundingClientRect();
+        return { x: at.left + window.scrollX + b.dx, y: at.top + window.scrollY + b.dy, w: b.w, h: b.h };
+      }
+      return { x: b.x, y: b.y, w: b.w, h: b.h };
+    },
+  };
+
   const feedback = {
     active: false,
     items: [],
@@ -1121,6 +1189,16 @@
     mineKey: `mock-feedback-mine:${P.name}`,
     presenter: false,
     mini: remembered("mock-feedback-mini") === "1",  // the list put away while Feedback stays on
+    // Which comment a card or pin stands for: its number (FB-007), or for one not yet saved a key of its own that
+    // lives as long as the page. Never its place in a list, which another browser's comment can shift.
+    localKeys: new WeakMap(),
+    nextKey: 0,
+    keyOf(c) {
+      if (c.id) return String(c.id);
+      if (!this.localKeys.has(c)) this.localKeys.set(c, `new-${++this.nextKey}`);
+      return this.localKeys.get(c);
+    },
+    byKey(key) { return this.forScreen().find((c) => this.keyOf(c) === key) || null; },
     showDone: remembered("mock-feedback-done") === "1",  // the marks of done comments shown, faded
     owner() {
       let id = "";
@@ -1279,10 +1357,9 @@
     },
     // The cards' notes follow the page too: a section folded or unfolded marks a comment away or back.
     markAway() {
-      const list = this.forScreen();
       document.querySelectorAll("#fb-panel .fb-pick").forEach((card) => {
-        const c = list[Number(card.dataset.fb)];
-        const text = c ? this.awayText(c) : null;
+        const c = this.byKey(card.dataset.fb);
+        const text = c ? place.away(c) : null;
         let line = card.querySelector(".fb-away");
         if (!text) { if (line) line.remove(); return; }
         if (!line) {
@@ -1299,11 +1376,11 @@
       document.querySelectorAll(".fb-pin, .fb-box:not(.drawing)").forEach((p) => p.remove());
       if (document.body.classList.contains("clean")) return;
       const onSame = {};  // several comments on one thing: their pins sit side by side, not on top of each other
-      this.forScreen().forEach((c, i) => {
-        if (this.placeOf(c) !== "shown") return;  // its card in the panel says why there is no pin
+      this.forScreen().forEach((c) => {
+        if (place.of(c) !== "shown") return;  // its card in the panel says why there is no pin
         if (isDone(c) && !this.showDone) return;
-        const target = c.element ? this.shown(document.querySelector(`[data-el="${CSS.escape(c.element)}"]`)) : null;
-        const rect_ = c.box ? this.boxRect(c) : null;
+        const target = c.element ? place.shown(document.querySelector(`[data-el="${CSS.escape(c.element)}"]`)) : null;
+        const rect_ = c.box ? place.box(c) : null;
         if (c.box && !rect_) return;
         const pin = document.createElement("div");
         pin.onclick = () => {  // show the comment this pin stands for
@@ -1311,14 +1388,14 @@
           if (this.mini) { this.mini = false; this.renderPanel(); }
           this.picked = c;
           this.markPicked();
-          const row = document.querySelector(`#fb-panel [data-fb="${i}"]`);
+          const row = document.querySelector(`#fb-panel [data-fb="${CSS.escape(this.keyOf(c))}"]`);
           if (!row) return;
           row.scrollIntoView({ block: "nearest" });
           row.classList.remove("flash");
           void row.offsetWidth;  // lets the highlight play again on a second click
           row.classList.add("flash");
         };
-        pin.dataset.fbPin = i;
+        pin.dataset.fbPin = this.keyOf(c);
         const unsent = this.unsent.includes(c);
         pin.className = (unsent ? "fb-pin unsent" : "fb-pin") + (isDone(c) ? " done" : "");
         pin.textContent = this.number(c);
@@ -1337,9 +1414,9 @@
           return;
         }
         const rect = target ? target.getBoundingClientRect() : { right: c.x - window.scrollX, top: c.y - window.scrollY };
-        const place = target ? c.element : `${c.x},${c.y}`;
-        onSame[place] = (onSame[place] || 0) + 1;
-        pin.style.left = `${rect.right + window.scrollX - 12 - (onSame[place] - 1) * 18}px`;
+        const spot = target ? c.element : `${c.x},${c.y}`;
+        onSame[spot] = (onSame[spot] || 0) + 1;
+        pin.style.left = `${rect.right + window.scrollX - 12 - (onSame[spot] - 1) * 18}px`;
         pin.style.top = `${rect.top + window.scrollY - 8}px`;
         document.body.appendChild(pin);
       });
@@ -1360,12 +1437,13 @@
       const state = (c) => (STATE_WORDS[c.state] && (c.state !== "received" || live.listening) ? `<div class="fb-st ${c.state}">${STATE_WORDS[c.state]}</div>` : "");
       // Edit and Delete for a comment this browser may change while it waits; once it is taken, why not.
       const LOCK = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
-      const actions = (c, i) => {
+      const actions = (c) => {
         const can = this.changeable(c);
-        if (can.may) return `<div class="fb-acts"><button class="fb-act" data-fb-edit="${i}">Edit</button><button class="fb-act destroy" data-fb-remove="${i}">Delete</button></div>`;
+        const key = esc(this.keyOf(c));
+        if (can.may) return `<div class="fb-acts"><button class="fb-act" data-fb-edit="${key}">Edit</button><button class="fb-act destroy" data-fb-remove="${key}">Delete</button></div>`;
         return can.why ? `<div class="fb-locked" title="${esc(can.why)}">${LOCK}<span>${esc(can.why)}</span></div>` : "";
       };
-      const note = (c) => { const text = this.awayText(c); return text ? `<div class="fb-away">${esc(text)}</div>` : ""; };
+      const note = (c) => { const text = place.away(c); return text ? `<div class="fb-away">${esc(text)}</div>` : ""; };
       // Minimised, the list goes and a Comments button on the bar brings it back: Feedback stays on and nothing
       // covers the page.
       const back = document.getElementById("fb-list");
@@ -1373,13 +1451,14 @@
       back.textContent = `Comments \u00B7 ${list.length}`;
       if (this.mini) { panel.hidden = true; return; }
       const follows = (c) => (Array.isArray(c.follows) && c.follows.length ? ` · follows ${c.follows.map(esc).join(", ")}` : "");
-      const card = (c, i) => `<div class="fb-item fb-pick${c === this.picked ? " on" : ""}${isDone(c) ? " fb-done" : ""}" data-fb="${i}" role="button" tabindex="0" title="Show it on the screen"><span class="fb-num${this.unsent.includes(c) ? " unsent" : ""}">${esc(this.number(c))}</span><div class="fb-body"><div class="fb-el">${esc(where(c))}</div><div class="fb-text">${esc(c.text)}</div><div class="fb-meta">${esc(about(c))}${c.edited ? " · edited" : ""}${follows(c)}</div>${state(c)}${note(c)}${actions(c, i)}</div></div>`;
-      const open = list.map((c, i) => [c, i]).filter(([c]) => !isDone(c));
-      const done = list.map((c, i) => [c, i]).filter(([c]) => isDone(c));
+      const picked = this.picked ? this.keyOf(this.picked) : null;  // by key: a sync brings fresh copies of the comments
+      const card = (c) => `<div class="fb-item fb-pick${this.keyOf(c) === picked ? " on" : ""}${isDone(c) ? " fb-done" : ""}" data-fb="${esc(this.keyOf(c))}" role="button" tabindex="0" title="Show it on the screen"><span class="fb-num${this.unsent.includes(c) ? " unsent" : ""}">${esc(this.number(c))}</span><div class="fb-body"><div class="fb-el">${esc(where(c))}</div><div class="fb-text">${esc(c.text)}</div><div class="fb-meta">${esc(about(c))}${c.edited ? " · edited" : ""}${follows(c)}</div>${state(c)}${note(c)}${actions(c)}</div></div>`;
+      const open = list.filter((c) => !isDone(c));
+      const done = list.filter(isDone);
       panel.innerHTML = `<div class="fb-panel-head"><span>Feedback on this screen <span class="fb-count">${list.length}</span></span>`
         + `<button class="fb-wc-x" id="fb-mini" type="button" title="Minimise: keep commenting with the list out of the way (Comments on the bar brings it back)" aria-label="Minimise the comments">\u2013</button></div>
-        ${open.map(([c, i]) => card(c, i)).join("") || (done.length ? '<p class="fb-empty">Nothing open on this screen. Click anything to comment on it.</p>' : '<p class="fb-empty">No feedback yet. Click anything on the screen to comment on it.</p>')}
-        ${done.length ? `<div class="fb-done-head"><span>Done <span class="fb-count">${done.length}</span></span><button type="button" class="fb-act" id="fb-show-done" aria-pressed="${!!this.showDone}">${this.showDone ? "Hide from the screen" : "Show on the screen"}</button></div>${done.map(([c, i]) => card(c, i)).join("")}` : ""}
+        ${open.map(card).join("") || (done.length ? '<p class="fb-empty">Nothing open on this screen. Click anything to comment on it.</p>' : '<p class="fb-empty">No feedback yet. Click anything on the screen to comment on it.</p>')}
+        ${done.length ? `<div class="fb-done-head"><span>Done <span class="fb-count">${done.length}</span></span><button type="button" class="fb-act" id="fb-show-done" aria-pressed="${!!this.showDone}">${this.showDone ? "Hide from the screen" : "Show on the screen"}</button></div>${done.map(card).join("")}` : ""}
         ${!this.remote ? `<button class="fb-btn quiet" id="fb-export">Export feedback (${this.items.filter((c) => !c.withdrawn).length})</button>`
           : !this.unsent.length ? `<p class="fb-state ok">Saved to the project folder.</p>`
           : `<div class="fb-warn"><b>${this.unsent.length} comment${this.unsent.length > 1 ? "s" : ""} not saved to the project yet.</b> The mock-up server is not answering. Check that the window that started the mock-up is still open, then try again. The comments are kept in this browser until then.</div>
@@ -1397,14 +1476,15 @@
           return this.renderPanel();
         }
         const ed = e.target.closest("[data-fb-edit]"), rm = e.target.closest("[data-fb-remove]");
-        if (ed) return this.edit(list[Number(ed.dataset.fbEdit)]);
-        if (rm) return this.remove(list[Number(rm.dataset.fbRemove)]);
-        const card = e.target.closest(".fb-pick");
-        if (card) this.show(Number(card.dataset.fb));
+        const c = ed ? this.byKey(ed.dataset.fbEdit) : rm ? this.byKey(rm.dataset.fbRemove) : null;
+        if (ed) return c && this.edit(c);
+        if (rm) return c && this.remove(c);
+        const picked = e.target.closest(".fb-pick");
+        if (picked) this.show(picked.dataset.fb);
       };
       panel.onkeydown = (e) => {
         const card = e.target.closest && e.target.closest(".fb-pick");
-        if (card && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); this.show(Number(card.dataset.fb)); }
+        if (card && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); this.show(card.dataset.fb); }
       };
       const exp = document.getElementById("fb-export");
       if (exp) exp.onclick = () => {
@@ -1423,15 +1503,15 @@
     },
     // A comment picked in the panel: its card stays marked, as in What changed, and the thing it is about is
     // brought into view and outlined for a moment: its box, the element, or its pin when it is on neither.
-    show(i) {
-      const c = this.forScreen()[i];
+    show(key) {
+      const c = this.byKey(key);
       if (!c) return;
       this.picked = c;
       this.markPicked();
       const box = c.id ? document.querySelector(`.fb-box[data-fb-id="${CSS.escape(c.id)}"]`) : null;
       const el = !box && c.element && c.element !== "region:page background" ? document.querySelector(`#app [data-el="${CSS.escape(c.element)}"]`) : null;
-      const shown = box || this.shown(el) || document.querySelector(`.fb-pin[data-fb-pin="${i}"]`);
-      if (!shown) return toast(this.awayText(c) || "What this comment is about is not on this screen now.");
+      const shown = box || place.shown(el) || document.querySelector(`.fb-pin[data-fb-pin="${CSS.escape(key)}"]`);
+      if (!shown) return toast(place.away(c) || "What this comment is about is not on this screen now.");
       shown.scrollIntoView({ block: "center", behavior: "smooth" });
       shown.classList.remove("fb-wc-flash");
       void shown.offsetWidth;  // start the outline again when the same comment is picked twice
@@ -1439,8 +1519,8 @@
       setTimeout(() => shown.classList.remove("fb-wc-flash"), 2600);
     },
     markPicked() {
-      const list = this.forScreen();
-      document.querySelectorAll("#fb-panel .fb-pick").forEach((card) => card.classList.toggle("on", list[Number(card.dataset.fb)] === this.picked));
+      const picked = this.picked ? this.keyOf(this.picked) : null;
+      document.querySelectorAll("#fb-panel .fb-pick").forEach((card) => card.classList.toggle("on", card.dataset.fb === picked));
     },
     capture(e) {
       if (this.drew) { this.drew = false; e.preventDefault(); e.stopPropagation(); return; }  // the click that ends a drawn box
@@ -1544,69 +1624,6 @@
           text, author: localStorage.getItem("mock-author") || "", x: box.x + box.w, y: box.y,
           time: new Date().toISOString(), version: P.version, ...(live.stamp ? { build: live.stamp } : {}) });
       });
-    },
-    // Whether what a comment is about can be marked on the page: "shown", "hidden" (there, but in a part folded
-    // away or a closed tab) or "gone" (not on this screen now: removed by a change, or not drawn for this role).
-    // A comment that is hidden or gone has no pin or box: one at its old place would point at something else.
-    // Its card in the panel says so instead. A box for something new marks empty space, so it stays.
-    placeOf(c) {
-      const forNew = c.box && !(Array.isArray(c.elements) && c.elements.length);
-      const names = Array.isArray(c.elements) && c.elements.length ? c.elements : forNew ? [] : [c.element].filter(Boolean);
-      if (!names.length || names.every((e) => e === "region:page background")) return "shown";
-      const found = names.map((e) => document.querySelector(`#app [data-el="${CSS.escape(e)}"]`)).filter(Boolean);
-      if (!found.length) {
-        const now = route().role;  // made as another role: it may simply not be drawn for this one
-        return c.role && now && c.role !== now ? "role" : "gone";
-      }
-      return found.some((el) => this.shown(el)) ? "shown" : "hidden";
-    },
-    awayText(c) {
-      if (isDone(c)) return null;  // history: the Done part of the panel says what became of it
-      const text = AWAY[this.placeOf(c)];
-      return text ? text.replaceAll("{role}", (byId(S.roles, c.role) || {}).name || c.role) : null;
-    },
-    // A thing on show, or null. A hidden one (in a section folded away, a closed tab) says it is at the top-left
-    // corner of the page: a pin or box placed by it landed there, or stretched from there across the screen.
-    shown(el) {
-      if (!el) return null;
-      const r = el.getBoundingClientRect();
-      return r.width || r.height ? el : null;
-    },
-    // Where a drawn box is now: at its things, or where it was drawn when they are no longer on the screen.
-    // null while what it is about is there but hidden: it is not drawn then (its comment stays in the panel).
-    boxRect(c) {
-      const b = c.box || {};
-      // A box drawn around several things follows them: around where they are now, whatever the window's width.
-      const found = (Array.isArray(c.elements) ? c.elements : []).map((e) => document.querySelector(`#app [data-el="${CSS.escape(e)}"]`)).filter(Boolean);
-      const parts = found.filter((el) => this.shown(el));
-      if (Array.isArray(c.elements) && c.elements.length && !parts.length) return null;
-      if (parts.length) {
-        const rects = parts.map((el) => el.getBoundingClientRect());
-        const left = Math.min(...rects.map((r) => r.left)), top = Math.min(...rects.map((r) => r.top));
-        const right = Math.max(...rects.map((r) => r.right)), bottom = Math.max(...rects.map((r) => r.bottom));
-        return { x: left + window.scrollX - 6, y: top + window.scrollY - 6, w: right - left + 12, h: bottom - top + 12 };
-      }
-      // A box for something new stays beside the thing it was drawn next to, at the same distance.
-      const near = b.near ? [...document.querySelectorAll(`#app [data-el="${CSS.escape(b.near)}"]`)][b.nearAt || 0] : null;
-      if (near && !this.shown(near)) return null;
-      if (near && Array.isArray(b.sx) && Array.isArray(b.sy)) {
-        const a = near.getBoundingClientRect();
-        const place = ([how, off], a0, alen, len) => how === "after" ? a0 + alen + off : how === "before" ? a0 - off - len : a0 + off;
-        return { x: place(b.sx, a.left + window.scrollX, a.width, b.w), y: place(b.sy, a.top + window.scrollY, a.height, b.h), w: b.w, h: b.h };
-      }
-      const target = c.element && (b.fx != null || b.dx != null) ? document.querySelector(`#app [data-el="${CSS.escape(c.element)}"]`) : null;
-      if (target && !this.shown(target)) return null;
-      if (target && b.fx != null) {  // drawn in 1.3.1: sideways in proportion to its area; up and down at its distance from the nearest thing
-        const at = target.getBoundingClientRect();
-        const ref = b.ref ? document.querySelector(`#app [data-el="${CSS.escape(b.ref)}"]`) : null;
-        const top = ref ? ref.getBoundingClientRect().top + window.scrollY + b.ry : at.top + window.scrollY + b.fy * at.height;
-        return { x: at.left + window.scrollX + b.fx * at.width, y: top, w: b.fw * at.width, h: b.h };
-      }
-      if (target) {  // drawn before boxes kept their proportion: a fixed distance from its element
-        const at = target.getBoundingClientRect();
-        return { x: at.left + window.scrollX + b.dx, y: at.top + window.scrollY + b.dy, w: b.w, h: b.h };
-      }
-      return { x: b.x, y: b.y, w: b.w, h: b.h };
     },
     // The comments already made on any of these things on this screen, oldest first: a new one is a layer on top.
     earlierOn(elements) {
