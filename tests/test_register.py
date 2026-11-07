@@ -154,7 +154,7 @@ def test_internal_items_never_reach_the_client_sheet(workbook):
 def test_client_sheet_is_what_the_ba_sends(workbook):
     client = sheet_rows(workbook["For client"])
     assert client[0] == ["ID", "Severity", "Document", "Where", "Observation", "Question for client",
-                         "Our recommendation", "Client response", "Status", "Raised"]
+                         "Our recommendation", "Client response", "Agreed decision", "Status", "Raised"]
     first = dict(zip(client[0], client[1]))
     assert first["Severity"] == "High"
     assert first["Question for client"] == "May two people book the same equipment for overlapping dates?"

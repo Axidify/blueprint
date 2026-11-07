@@ -407,6 +407,92 @@ def test_archive_moves_the_whole_folder_or_nothing(projects, run, monkeypatch):
     assert (projects / "_archive" / "leave-request").exists() and not p.exists()
 
 
+# ====================================================================== ready for sign-off
+ITEM = {"type": "question", "audience": "client", "severity": "medium", "category": "GP-01", "stage": "workshop-1",
+        "source": "Minutes", "finding": "Not said.", "raised": "2026-11-01"}
+
+
+def with_items(p, items, spec_change=None):
+    """The register (and the spec) as given, with the generated document made after them, as after generating."""
+    spec = support.load_spec(p)
+    if spec_change:
+        spec_change(spec)
+        support.write_spec(p, spec)
+    (p / "register.json").write_text(json.dumps({"project": "Leave Request System", "items": [{**ITEM, **it} for it in items]}),
+                                     encoding="utf-8")
+    later = (p / "register.json").stat().st_mtime + 60
+    for f in (p / "output").iterdir():
+        os.utime(f, (later, later))
+
+
+def test_a_version_with_a_question_blocking_sign_off_is_not_issued_without_a_reason(projects, run):
+    """A version went out for signature with a question still marked "Blocks sign-off" in it."""
+    p = new_project(projects)
+    with_items(p, [{"id": "R-001", "severity": "high", "status": "answered", "question": "Which export do you use?",
+                    "answer": "The daily one."}])
+    with pytest.raises(SystemExit, match="Nothing was issued"):
+        run("issue", "leave-request")
+    assert not project_tool.load_issues(p)
+    out = run("issue", "leave-request", "--anyway", "client signs with R-001 open")
+    assert "R-001 still blocks sign-off: Which export do you use? It has an answer" in out
+    assert project_tool.load_issues(p)[0]["note"] == "Issued with 1 point(s) open: client signs with R-001 open"
+
+
+def test_ready_asks_for_the_agreed_decision_and_passes_once_it_is_written(projects, run, capsys):
+    """The client's raw answers were printed as the decisions they sign."""
+    p = new_project(projects)
+    settled = {"id": "R-002", "status": "resolved", "question": "Keep closed requests how long?", "answer": "TEST ANSWER: 7y, IT says 10"}
+    with_items(p, [settled])
+    with pytest.raises(SystemExit):
+        run("ready", "leave-request")
+    assert "R-002 is settled with no agreed decision, so the document prints the client's own answer as what is signed." \
+        in capsys.readouterr().out
+    with_items(p, [{**settled, "decision": "Closed requests are kept for ten years."}])
+    out = run("ready", "leave-request")
+    assert "Not ready" not in out and "agreed decision" not in out
+
+
+def test_ready_stops_when_the_document_is_older_than_the_register(projects, run):
+    p = new_project(projects)
+    with_items(p, [])
+    later = (p / "output" / f"{DOC}.docx").stat().st_mtime + 60
+    os.utime(p / "register.json", (later, later))
+    with pytest.raises(SystemExit):
+        run("ready", "leave-request")
+
+
+def test_ready_points_at_what_to_check_before_it_goes_out(projects, run, capsys):
+    """Answered questions still open, the same question twice, choices that differ from the client's list,
+    "the agreed time" with no time agreed, nobody to sign."""
+    p = new_project(projects)
+
+    def change(spec):
+        spec["dialogs"] = [{"id": "cancel-dialog", "title": "Cancel request", "fields": [
+            {"id": "reason", "label": "Reason", "type": "select", "options": ["Plans changed", "Illness", "Work", "Other"]}]}]
+        spec["requirements"][0]["items"].append("System shall remind the approver after the agreed time.")
+        spec["requirements"][0]["items"].append({"text": "System shall keep files for the agreed period.", "tbc": "R-004"})
+    with_items(p, [
+        {"id": "R-003", "status": "answered", "question": "Which reasons may an employee give when cancelling a request?",
+         "answer": "Plans changed, Illness, Family or travel, Other (with remarks)"},
+        {"id": "R-004", "status": "open", "question": "Which reasons may an employee give when cancelling a leave request?"},
+    ], change)
+    out = run("ready", "leave-request")
+    assert "R-003 has an answer but is still open" in out
+    assert "R-003 and R-004 look like the same question" in out
+    assert ("dialog 'Cancel request', field 'Reason': its choices differ from R-003's answer "
+            "(it leaves out family or travel and adds Work)") in out
+    assert 'FR-APP-001.6 says "the agreed time" with nothing tracking it' in out
+    assert "FR-APP-001.7" not in out, "a placeholder linked to its register item is tracked"
+    assert "The spec names nobody to sign" in out
+    assert "Not ready" not in out, "none of these stops the issue"
+
+
+def test_a_list_of_choices_keeps_an_or_inside_it():
+    assert project_tool.answer_list("TEST ANSWER: Vehicle problem, Road or weather, Other (with remarks).") == \
+        {"vehicle problem", "road or weather", "other"}
+    assert project_tool.answer_list("Email, SMS or push") == {"email", "sms", "push"}
+
+
 # ====================================================================== QC pass 1: medium findings
 def test_issue_takes_this_version_only_and_needs_its_pdf(projects, run):
     """`* v1.*` also matched v1.0 and v1.1, Word's ~$ lock file and leftovers of the PDF step, and a version with

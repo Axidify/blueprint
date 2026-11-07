@@ -77,9 +77,15 @@ again. Something the generator does not produce (a process-flow diagram) goes in
 
 ## 4. Issue it
 
+Before a version goes for signature, run `python -I tools/project.py ready <slug>` and work through what it
+says: a question still blocking sign-off, a settled item with no agreed decision, a document older than the
+spec, then the points to look at (answered items still open, duplicate questions, choices that differ from the
+client's answer, "the agreed …" with nothing tracking it, a missing signatory). Fix them in the spec and the
+register, generate again, and run it again until nothing stops it.
+
 When the user says the document has gone (or is going) to the client:
-`python -I tools/project.py issue <slug> --to "<recipient>"`. The version is locked; later changes need a
-new version.
+`python -I tools/project.py issue <slug> --to "<recipient>"`. It runs the same check and issues nothing while something stops it; if the client really signs it as it is,
+`--anyway "<why>"` issues it and keeps the reason. The version is locked; later changes need a new version.
 
 ## Hand over
 

@@ -129,7 +129,7 @@ def old_project(projects, slug="leave-request"):
 
 
 def issue(p, run):
-    run(project_tool, "issue", p.name, "--date", "2026-11-10", "--without-pdf")  # the PDF needs Word, not here
+    run(project_tool, "issue", p.name, "--date", "2026-11-10", "--without-pdf", "--anyway", "test fixture")  # the PDF needs Word, not here
 
 
 def tree(folder):

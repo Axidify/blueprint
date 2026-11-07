@@ -411,7 +411,8 @@ figure. The file format is at the top of the script. Used by the `change-request
 ### project.py
 
 ```bash
-python -I tools/project.py issue   <slug> [--to "the client"] [--date 2026-11-12] [--note "..."] [--without-pdf]
+python -I tools/project.py ready   <slug>
+python -I tools/project.py issue   <slug> [--to "the client"] [--date 2026-11-12] [--note "..."] [--without-pdf] [--anyway "<why>"]
 python -I tools/project.py issued  <slug>
 python -I tools/project.py file    <slug> "<file>" --kind "client comments" [--responds-to 1.3] [--date 2026-11-12] [--copy]
 python -I tools/project.py archive <slug>
@@ -422,7 +423,14 @@ python -I tools/project.py hold    "<file>" --reason "not sure which project"
 python -I tools/project.py check   [<slug>] [--fix]
 python -I tools/project.py migrate <slug> | --all [--dry-run] [--undo]
 ```
-Project housekeeping. `issue` records that the current document version went to the client and locks it (its
+Project housekeeping. `ready` says whether the current version can go to the client for signature. It stops
+on a client question still marked "Blocks sign-off" (open or answered, high), on settled items with no agreed
+`decision` (the document would print the client's raw answer as what is signed), and on a document older than
+the spec or the register. It also lists what to look at: answered items still open, two questions that look
+the same, a field whose choices differ from the ones the client listed in an answer, "the agreed …" or "to be
+confirmed" in a requirement with no `tbc` item behind it, and a side with nobody to sign. `issue` runs the
+same check and issues nothing while something stops it; `--anyway "<why>"` issues it all the same and keeps
+the reason with the issue. `issue` records that the current document version went to the client and locks it (its
 files become read-only and the generator refuses to overwrite it, so the next change needs a new version).
 It takes that version's Word file and PDF by their exact names, and needs the PDF: without one (the Word step
 did not finish) it stops, and `--without-pdf` issues the Word file alone. A version written without quotes in

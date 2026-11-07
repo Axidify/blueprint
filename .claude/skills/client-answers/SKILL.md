@@ -56,7 +56,11 @@ As in `apply-feedback`, one outcome per answer:
 Record each with `register.py update projects/<slug> R-0xx --set answer="..." --set status=<answered or
 resolved> --set resolved_in="<where: 'Client e-mail, 12 November', 'Workshop 2'>"` (`--help` for the
 fields). `resolved` when the answer settles it and is in the spec (or needs nothing), `answered` while a
-follow-up or a change is pending. `resolved_in` never names a comment id. Never edit `register.json` by
+follow-up or a change is pending. With `resolved`, also write the agreed decision in one line (`--set decision="..."`): what is agreed, in the
+client's terms, complete on its own, as it will be signed. The answer keeps the client's words; the requirements
+document's Decisions made shows the decision. When two people answered (business and IT), the decision is the
+one agreed outcome, not both answers. Check that the spec says the same (a list of choices the client gave is the
+field's options, a figure they gave is in the requirement). `resolved_in` never names a comment id. Never edit `register.json` by
 hand. Then `register.py render projects/<slug>`.
 
 An item a change request waits on (an Ambiguous CR in `_blueprint/changes/crs.json` names it): once it is answered,

@@ -97,6 +97,7 @@ the Excel file afterwards.
 | `recommendation` | Optional: your suggested answer or fix |
 | `effort_impact` | Optional: `none`, `low`, `medium`, `high`: the effect on mandays if resolved the costly way |
 | `status` | See above |
-| `answer` | Optional: the client's answer or the decision taken |
+| `answer` | Optional: the client's answer or the decision taken, in their words |
+| `decision` | Optional: what was agreed, in one line, as it is signed. The requirements document's Decisions made shows it instead of the raw answer, and `project.py ready` asks for it on every settled client item. Both sheets show it as **Agreed decision**; it is not read back from a returned file |
 | `raised` / `resolved_in` | Date raised; document version or meeting where it was closed |
 | `owner` / `due` | Optional: who must answer, and by when (shown in the Open Issues table) |

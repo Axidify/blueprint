@@ -11,6 +11,20 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+### Added
+- **Ready for sign-off.** `project.py ready <slug>` says whether a version can go to the client for signature,
+  and issuing runs it first. It holds the issue back when a client question still reads "Blocks sign-off", when
+  a settled question has no agreed decision written, or when the document is older than the spec or register.
+  It also points at what to look at: questions answered but still open, two questions asking the same thing, a
+  choice list on a screen that differs from the one the client gave ("Road or weather" left out, "No key" added),
+  "the agreed time" in a requirement with no time agreed anywhere, and a side with nobody to sign. If the client
+  really signs as it is, `issue --anyway "<why>"` issues it and keeps the reason.
+- **Agreed decisions, in one line.** A register item can carry its `decision`: what was agreed, written once, as it
+  is signed. The requirements document's Decisions made shows it instead of the client's raw answer (two people's
+  answers in one row, or a test prefix, used to go into the signed document as they were), and the generator
+  warns about any settled item still printed as a raw answer. The register's sheets show it as **Agreed
+  decision**. The client-answers and apply-feedback skills write it when they settle an item.
+
 ### Fixed
 - **No team references reach the client.** The client's copy of the questions (`Questions for the client.xlsx`,
   and the register's For client sheet) says "mock-up comment" and a screen's or dialog's title in the Where

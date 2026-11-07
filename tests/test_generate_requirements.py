@@ -639,7 +639,7 @@ def test_issued_version_refuses_to_regenerate(temp_workspace, monkeypatch, capsy
     project = support.make_project(temp_workspace / "projects" / "leave-request")
     first = support.generate(project)
     before = first.path.read_bytes()
-    monkeypatch.setattr(sys, "argv", ["project.py", "issue", "leave-request", "--date", "2026-11-10", "--without-pdf"])  # no Word here
+    monkeypatch.setattr(sys, "argv", ["project.py", "issue", "leave-request", "--date", "2026-11-10", "--without-pdf", "--anyway", "test fixture"])  # no Word here
     project_tool.main()
     assert "Issued v0.1 to SAMPLE on 2026-11-10" in capsys.readouterr().out
 
@@ -1347,7 +1347,7 @@ def test_a_company_that_lists_its_own_chapters_adds_scope_to_get_it(temp_workspa
 def test_only_answered_client_questions_are_listed_as_made(tmp_path):
     project = support.make_project(tmp_path / "made", support.WIDE)
     register = json.loads((project / "register.json").read_text(encoding="utf-8"))
-    template = next(it for it in register["items"] if it["id"] == "R-003")
+    template = {k: v for k, v in next(it for it in register["items"] if it["id"] == "R-003").items() if k != "decision"}
     register["items"] += [
         {**template, "id": "R-010", "answer": "", "question": "RESOLVED-WITHOUT-AN-ANSWER"},
         {**template, "id": "R-011", "status": "wont-fix", "question": "DROPPED-QUESTION"},
@@ -1361,6 +1361,25 @@ def test_only_answered_client_questions_are_listed_as_made(tmp_path):
     text = all_text(result.doc)
     for hidden in ("RESOLVED-WITHOUT-AN-ANSWER", "DROPPED-QUESTION", "INTERNAL-RESOLVED"):
         assert hidden not in text
+
+
+def test_decisions_made_shows_the_agreed_decision_and_warns_about_raw_answers(tmp_path):
+    """The client's raw answers were printed as what is signed, two people's answers in one row. A written
+    decision is printed instead; an item without one is still printed, with a warning naming it."""
+    project = support.make_project(tmp_path / "decided", support.WIDE)
+    register = json.loads((project / "register.json").read_text(encoding="utf-8"))
+    template = next(it for it in register["items"] if it["id"] == "R-003")
+    template["answer"] = "Business: seven years. IT: ten, for audit."
+    template["decision"] = "Closed bookings are kept for ten years."
+    register["items"].append({**template, "id": "R-013", "answer": "Yes, by e-mail.", "question": "A second answered question?"})
+    register["items"][-1].pop("decision")
+    (project / "register.json").write_text(json.dumps(register), encoding="utf-8")
+    result = support.generate(project)
+    made = rows(support.table_starting(chapter(result.doc, TITLES["decisions"]), "ID", nth=1))
+    assert made[1][:3] == ["R-003", "How long must closed bookings be kept?", "Closed bookings are kept for ten years."]
+    assert made[2][2] == "Yes, by e-mail."
+    assert "Business: seven years" not in all_text(result.doc)
+    assert "Decisions made prints the client's own answer for R-013" in result.log
 
 
 def test_no_answered_questions_means_no_decisions_made_table(example):
