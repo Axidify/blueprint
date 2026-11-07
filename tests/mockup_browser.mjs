@@ -907,5 +907,29 @@ await open("#/__flow?role=manager");
 out.flow = await page.evaluate(() => [...document.querySelectorAll(".flow-step")].map((s) => [s.querySelector(".flow-role").textContent,
   s.querySelector(".flow-status .chip").textContent, s.querySelector(".flow-status .chip").className]));
 
+// ---- carrying the open record: a button to a screen of the same data opens it on the record shown
+const shownRecord = () => page.evaluate(() => ({
+  screen: document.getElementById("app").dataset.screen,
+  record: new URLSearchParams(location.hash.split("?")[1] || "").get("record") || "",
+}));
+await open("#/application-details?role=manager&record=LV-2026-013");
+await page.click('[data-el="button:Open Review"]');
+await page.waitForTimeout(150);
+out.carryButton = await shownRecord();
+await open("#/application-details?role=manager&record=LV-2026-009");
+await page.click('[data-el="button:Review It"]');
+await page.waitForSelector(".modal");
+await page.click('.modal [data-el="button:Go to Review"]');
+await page.waitForTimeout(150);
+out.carryDialog = await shownRecord();
+await open("#/application-details?role=manager");
+await page.click('[data-el="button:Open Review"]');
+await page.waitForTimeout(150);
+out.carryDefault = await shownRecord();
+await open("#/application-details?role=employee&record=LV-2026-013");
+await page.click('[data-el="button:Back"]');
+await page.waitForTimeout(150);
+out.carryBack = await state();
+
 await browser.close();
 console.log(JSON.stringify(out));

@@ -267,7 +267,10 @@ button beside it. `toast` shows a
 message (e.g. "Draft saved"; `{id}` in it is the id of the record the button added or moved); `roles` limits who sees the button; `creates` decides
 whether a button of a new form adds a record (see [New records](#new-records)); `when` shows it only for matching
 records on detail screens and on forms opened on a record; `set_status` moves the record to another status,
-and `also_move` a record it names in another list with it (see [Status moves](#status-moves)). Put a label that starts with Yes, No, On or Off in quotes (`label: "Yes,
+and `also_move` a record it names in another list with it (see [Status moves](#status-moves)). On a detail screen, or a form opened on a record, a button whose `to`
+screen shows the same `data` opens that screen on the record shown, so details → progress → report stays
+on one record; so does the `confirm` button of a dialog opened there. Buttons to a list or dashboard take
+no record. Put a label that starts with Yes, No, On or Off in quotes (`label: "Yes,
 cancel it"`): YAML otherwise reads it as true or false, and the build stops. Primary, danger and dialog buttons appear as actions in the requirements document access matrix,
 except `example: true` buttons (demo-only buttons that open a dialog for screenshots).
 

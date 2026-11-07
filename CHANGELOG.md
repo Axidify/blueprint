@@ -156,6 +156,11 @@ See [docs/maintaining.md](docs/maintaining.md).
   round all of them, no longer each comment on one of its things or a comment from an earlier round nearby.
 
 ### Fixed
+- **Moving between the screens of one record in the mock-up stays on that record.** A button on a detail
+  screen (or on a form opened on a record), or the confirm button of a dialog opened there, that goes to
+  another screen of the same data (for example job details → job progress → work report) now opens it on
+  the record you were looking at. It used to jump to that screen's own sample record, so the client
+  suddenly saw a different job. Buttons that go to a list or a dashboard are unchanged; rebuild the mock-up.
 - **The next step follows the project to the end.** Once a version has gone to the client, the start-up summary
   follows the latest stage reached (UAT scripts, UAT results, change requests open or decided, close-out drafted)
   instead of still pointing at an old workshop. The summary also counts the change requests.

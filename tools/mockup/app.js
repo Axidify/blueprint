@@ -828,7 +828,19 @@
     const choice = b.style === "danger" && NORMAL_CHOICE.test(String(b.label).trim()) ? " normal-choice" : "";
     return `<button class="btn ${b.style || ""}${choice} ${b.example ? "fb-hide" : ""}" data-el="button:${esc(b.label)}" ${b.to ? `data-go="${b.to}"` : ""} ${b.toast ? `data-toast="${esc(b.toast)}"` : ""} ${b.dialog ? `data-dialog="${b.dialog}"` : ""} ${moveAttr(b)}${creates}${saveAttr(b, r, dialog)} ${attrs || ""}>${esc(b.label)}</button>`;
   }
-  const buttons = (list, r, rec) => (list && list.length ? `<div class="form-buttons" data-el="region:buttons">${list.map((b) => button(b, r, rec)).join("")}</div>` : "");
+  // A button on a screen that shows a record (a detail screen, or a form opened on a record), and the confirm
+  // button of a dialog opened there, takes that record along to its `to` screen when that screen shows the same
+  // data, so a walk-through stays on one record (details → progress → report) instead of jumping to the next
+  // screen's own sample record. Toolbar and dashboard buttons show no record, so they take none.
+  function carried(b, r, rec) {
+    const here = byId(S.screens, r.screen), there = b && b.to && byId(S.screens, b.to);
+    if (!here || !there || !here.data || here.data !== there.data) return "";
+    if (!(here.type === "detail" || (here.type === "form" && formOnRecord(here, r.q)))) return "";
+    const key = Object.keys(((S.data || {})[here.data] || [])[0] || {})[0];
+    const shown = rec && Object.keys(rec).length ? rec : record(here, r.q);
+    return key && shown[key] != null ? `data-record="${esc(shown[key])}"` : "";
+  }
+  const buttons = (list, r, rec) => (list && list.length ? `<div class="form-buttons" data-el="region:buttons">${list.map((b) => button(b, r, rec, carried(b, r, rec))).join("")}</div>` : "");
   // A form in steps: its main button (style primary) only on the last step, Next in its place on the others,
   // and Previous from the second step on. The other buttons (Cancel, Save as Draft) are on every step.
   function stepButtons(screen, r, rec) {
@@ -842,7 +854,7 @@
     const main = list.findIndex((b) => b.style === "primary");
     let html = list.map((b, i) => {
       if (b.style === "primary" && !last) return i === main ? prev + next : "";
-      return (i === main ? prev : "") + button(b, r, rec);
+      return (i === main ? prev : "") + button(b, r, rec, carried(b, r, rec));
     }).join("");
     if (main < 0) html += prev + next;
     return html ? `<div class="form-buttons" data-el="region:buttons">${html}</div>` : "";
@@ -923,7 +935,7 @@
     return `<div class="modal-back"><div class="modal" role="dialog" aria-modal="true" aria-label="${esc(d.title)}" data-el="dialog:${esc(d.title)}">
       <div class="modal-head">${esc(d.title)}<a href="#" class="modal-x" data-close>&times;</a></div>
       <div class="modal-body">${d.message ? `<p>${esc(d.message)}</p>` : ""}${(d.fields || []).map((f) => field(f, "", false)).join("")}${d.list ? renderList(d.list, route()) : ""}</div>
-      <div class="modal-foot"><button class="btn" data-close>Cancel</button>${button(d.confirm || { label: "OK" }, route(), null, "data-close", d.id)}</div>
+      <div class="modal-foot"><button class="btn" data-close>Cancel</button>${button(d.confirm || { label: "OK" }, route(), null, `data-close ${route().q.row != null ? "" : carried(d.confirm, route())}`, d.id)}</div>
     </div></div>`;
   }
 

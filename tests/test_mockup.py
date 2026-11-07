@@ -148,6 +148,13 @@ def mockup_spec():
     next(r for r in spec["data"]["applications"] if r["id"] == "LV-T-1")["timeline"] = [
         {"step": "Submitted", "by": "Nur Aisyah", "at": "2026-11-05 09:12", "status": "Done"}, {"step": "Second check", "by": "Somebody Else", "at": ""}]
     with_staff(spec)
+    # For the tests of carrying the open record: a button and a dialog that go from one detail screen to
+    # another of the same applications; Back to the dashboard takes no record.
+    details = next(s for s in spec["screens"] if s["id"] == "application-details")
+    details["buttons"] += [{"label": "Open Review", "to": "review-application", "roles": ["manager"]},
+                           {"label": "Review It", "dialog": "review-dialog", "roles": ["manager"]}]
+    spec["dialogs"].append({"id": "review-dialog", "title": "Review", "message": "Review this application?",
+                            "confirm": {"label": "Go to Review", "to": "review-application"}})
     return spec
 
 
@@ -2246,6 +2253,24 @@ def test_lan_addresses_are_this_machines_and_never_the_loopback(monkeypatch):
     monkeypatch.setattr(mockup.socket, "socket", NoNetwork)
     monkeypatch.setattr(mockup.socket, "getaddrinfo", lambda *a, **k: [(None, None, None, None, ("127.0.0.1", 0)), (None, None, None, None, ("192.168.1.20", 0))])
     assert mockup.lan_addresses() == ["192.168.1.20"]
+
+
+# Carrying the open record. application-details shows LV-2026-014 by default and review-application LV-2026-011.
+def test_a_button_takes_the_open_record_to_a_screen_of_the_same_data(browser):
+    """It used to open review-application on its own sample record, LV-2026-011."""
+    assert browser["carryButton"] == {"screen": "review-application", "record": "LV-2026-013"}
+
+
+def test_a_dialogs_confirm_button_takes_the_open_record_too(browser):
+    assert browser["carryDialog"] == {"screen": "review-application", "record": "LV-2026-009"}
+
+
+def test_a_detail_screen_on_its_default_record_takes_that_one(browser):
+    assert browser["carryDefault"] == {"screen": "review-application", "record": "LV-2026-014"}
+
+
+def test_a_button_to_a_dashboard_takes_no_record(browser):
+    assert browser["carryBack"]["screen"] == "my-applications" and "record=" not in browser["carryBack"]["hash"]
 
 
 def test_serving_for_the_room_prints_the_address_to_share(built, monkeypatch, capsys):
