@@ -11,6 +11,18 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+### Added
+- **Building blocks for a mobile app, offline working and planning.** The starter knowledge base has an
+  *All platforms* table that counts on any platform: mobile app foundation, mobile app screen, camera photo,
+  barcode or VIN scan, signature on the phone, location, push notification, offline working foundation,
+  offline data, sync conflict rule, planning board, scheduling rule and automatic grouping or assignment.
+  Each says what one unit is, what it includes and the questions that narrow it. No rate is set: the lead
+  developer sets them, and until then those lines are counted and not priced. A platform's own table can
+  give one of them a rate of its own.
+- `estimate.py inventory` now lists a spec's mobile app screens (`m-` screens) with the signatures, photos,
+  scans and locations on them, and where the spec mentions offline working or planning and scheduling, so
+  these are no longer missed in an estimate. `estimate.py blocks` lists the *All platforms* blocks too.
+
 ## [1.5.0] - 2026-11-07
 
 ### Added

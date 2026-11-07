@@ -366,9 +366,12 @@ python -I tools/estimate.py render    projects/<slug> ["<estimate.json>"] [--for
 python -I tools/estimate.py weeks     projects/<slug> --team 2 ["<estimate.json>"]
 python -I tools/estimate.py rates-from "<estimate.xlsx>" [--json]
 ```
-`blocks` lists the building blocks and rates for a platform, the shares set for other work, and how many
-delivered projects they rest on. `inventory` lists what a project has to count from: documents, screens,
-forms, lists, integrations and open register items. `render` checks an estimate file, works out the
+`blocks` lists the building blocks and rates for a platform, then those of the *All platforms* table (a
+mobile app, offline working, planning logic), the shares set for other work, and how many delivered
+projects they rest on. `inventory` lists what a project has to count from: documents, screens, forms,
+lists, integrations and open register items, and, when the spec has them, its mobile app screens (`m-`
+screens) with the signatures, photos, scans and locations on them, and where it mentions offline working
+or planning and scheduling. `render` checks an estimate file, works out the
 ranges, the confidence level and the comparison with the scope of work, and writes the Excel file into
 `Internal – estimates and change requests/`; lines with no rate or share are listed as not priced and left out of the total. While a building
 block has no rate, it gives no total at all: it says the build is not priced and shows what is priced so

@@ -131,12 +131,20 @@ def rate_problem(cell):
     return None
 
 
+ALL_PLATFORMS = "All platforms"  # the section of building blocks that counts on every platform
+
+
 def read_blocks(platform, kdir):
-    """Building blocks for a platform: ({id: {name, drivers, rate, confidence}}, platforms in the file)."""
+    """Building blocks for a platform: ({id: {name, drivers, rate, confidence, section}}, platforms in the file).
+
+    The blocks of the platform's own section, and those of the "All platforms" section (a mobile app, offline
+    working, planning logic ...), which count whatever the platform. A platform's own row with the same ID
+    takes precedence, so a platform can set its own rate for one of them. `section` says which table a block's
+    row is in: where its rate is set."""
     path = kdir / "building-blocks.md"
-    blocks, platforms, current, cols = {}, [], None, {}
+    own, shared, platforms, current, cols = {}, {}, [], None, {}
     if not path.exists():
-        return blocks, platforms
+        return own, platforms
     for line in path.read_text(encoding="utf-8").splitlines():
         m = re.match(r"^##\s+Platform:\s*(.+?)\s*$", line)
         if m:
@@ -144,8 +152,11 @@ def read_blocks(platform, kdir):
             platforms.append(current)
             continue
         if line.startswith("## "):
-            current = None
-        if current is None or current.lower() != (platform or "").lower() or not line.startswith("|"):
+            current = ALL_PLATFORMS if line[3:].strip().lower() == ALL_PLATFORMS.lower() else None
+            continue
+        if current is None or not line.startswith("|"):
+            continue
+        if current != ALL_PLATFORMS and current.lower() != (platform or "").lower():
             continue
         row = cells(line)
         if row and row[0].upper() == "ID":
@@ -156,10 +167,16 @@ def read_blocks(platform, kdir):
         get = lambda key, default: row[next((i for name, i in cols.items() if name.startswith(key)), default)] \
             if len(row) > next((i for name, i in cols.items() if name.startswith(key)), default) else ""
         conf = get("confidence", 4).lower()
-        blocks[row[0]] = {"name": get("building block", 1), "drivers": get("what drives", 2),
-                          "rate": parse_rate(get("rate", 3)), "rate_problem": rate_problem(get("rate", 3)),
-                          "confidence": conf if conf in LEVELS else None}
-    return blocks, platforms
+        (shared if current == ALL_PLATFORMS else own)[row[0]] = {
+            "name": get("building block", 1), "drivers": get("what drives", 2),
+            "rate": parse_rate(get("rate", 3)), "rate_problem": rate_problem(get("rate", 3)),
+            "confidence": conf if conf in LEVELS else None, "section": current}
+    return {**shared, **own}, platforms
+
+
+def platform_has_blocks(blocks):
+    """Whether the platform has building blocks of its own (not only those of the All platforms section)."""
+    return any(b.get("section") != ALL_PLATFORMS for b in blocks.values())
 
 
 def read_other_work(kdir):
@@ -271,7 +288,7 @@ def compute(est, project, kdir):
                 errors.append(f"{where}: count must be a number above 0")
                 continue
             known = blocks.get(line["block"])
-            if blocks and not known:
+            if platform_has_blocks(blocks) and not known:
                 errors.append(f"{where}: {line['block']} is not a building block for {platform} in building-blocks.md")
                 continue
             out["block_name"] = known["name"] if known else ""
@@ -483,7 +500,7 @@ def compute(est, project, kdir):
         "lines": lines, "risks": risks, "questions": questions, "drivers": drivers, "comparison": comparison,
         "sow_total": sow_total, "sow_covered": sow_covered, "build": (build_low, build_high), "other": (other_low, other_high),
         "total": (low, high), "risk": (risk_low, risk_high), "confidence": level, "reasons": reasons,
-        "projects_logged": sorted(on_platform), "platform_known": bool(blocks), "platforms": platforms,
+        "projects_logged": sorted(on_platform), "platform_known": platform_has_blocks(blocks), "platforms": platforms,
         "blocks": blocks, "blocks_used": used, "blocks_without_rate": no_rate, "register_flagged": flagged,
         "uncalibrated_share": share, "unpriced": unpriced, "other_work": other_work, "reading": reading,
         "build_unpriced": build_unpriced, "build_lines": len(build_lines),
@@ -1094,11 +1111,17 @@ def cmd_blocks(a):
     kdir = knowledge_dir(a.knowledge)
     blocks, platforms = read_blocks(a.platform, kdir)
     on_platform, everyone = logged_projects(a.platform, kdir)
-    if not blocks:
+    if not platform_has_blocks(blocks):
         print(f"No building blocks for '{a.platform}' in {kdir / 'building-blocks.md'}."
               + (f" Platforms there: {', '.join(platforms)}." if platforms else ""))
-        print("Lines for this platform are not priced unless the lead developer gives a rate for the estimate.")
-    for bid, b in blocks.items():
+        print("Lines for this platform are not priced unless the lead developer gives a rate for the estimate."
+              + (f" The {ALL_PLATFORMS} blocks below still count." if blocks else ""))
+    shown = None
+    for bid, b in sorted(blocks.items(), key=lambda kv: kv[1]["section"] == ALL_PLATFORMS):
+        if b["section"] == ALL_PLATFORMS and shown != ALL_PLATFORMS:
+            print(f"\n{ALL_PLATFORMS} (a mobile app, offline working, planning logic …; a rate set in the platform's own "
+                  "table wins):")
+        shown = b["section"]
         if b["rate"]:
             rate = f"{rng(*b['rate'])} per unit, {b['confidence'] or 'low'} confidence"
         elif b.get("rate_problem"):
@@ -1119,6 +1142,97 @@ def cmd_blocks(a):
     print(f"Delivered projects logged on {a.platform}: {len(on_platform)}"
           + (f" ({', '.join(sorted(on_platform))})" if on_platform else "")
           + f"; on any platform: {len(everyone)}. Below {MIN_PROJECTS}, every estimate is low-confidence.")
+
+
+# What a spec says about a mobile app, offline working and planning, for the blocks of the All platforms
+# section. Mobile screens are the spec's `m-` screens; the rest is found in the words of the spec, so it is a
+# pointer to where to look, never a count on its own.
+OFFLINE_WORDS = re.compile(r"offline|without (?:a |any )?(?:signal|connection|network|internet)|no (?:signal|connection|network)"
+                           r"|\bsync", re.I)
+# Not "route" alone: an approval is routed to a manager in nearly every spec.
+PLANNING_WORDS = re.compile(r"schedul|time ?slot|capacity|\broutes\b|route (?:planning|optimi|grouping)"
+                            r"|(?:delivery|driver|vehicle|trip) routes?\b|dispatch|planning board|\bplanner", re.I)
+SCAN_WORDS = re.compile(r"\bscan|barcode|\bQR\b", re.I)
+GPS_WORDS = re.compile(r"\bGPS\b|geo-?locat|current location|\bon a map\b", re.I)
+
+
+def spec_texts(spec):
+    """Every sentence of a spec with where it is: [(where, text)]."""
+    out = []
+    proj = spec.get("project") or {}
+    for key in ("platform", "stack"):
+        for v in proj.get(key) if isinstance(proj.get(key), list) else [proj.get(key)]:
+            if v:
+                out.append((f"project {key}", str(v)))
+    for para in spec.get("overview") or []:
+        out.append(("overview", str(para)))
+    for part, sentences in (spec.get("scope") or {}).items():
+        for t in sentences or []:
+            out.append((f"scope ({part.replace('_', ' ')})", str(t)))
+    for sc in spec.get("screens") or []:
+        for t in (sc.get("title"), sc.get("description")):
+            if t:
+                out.append((str(sc.get("id")), str(t)))
+    for g in spec.get("requirements") or []:
+        if g.get("title"):
+            out.append((str(g.get("id")), str(g["title"])))
+        for n, it in enumerate(g.get("items") or [], 1):
+            text = it.get("text") if isinstance(it, dict) else it
+            if text:
+                out.append((f"{g.get('id')}.{n}", str(text)))
+    for n in spec.get("nfr") or []:
+        out.append((f"NFR {n.get('area', '')}".strip(), str(n.get("requirement", ""))))
+    return out
+
+
+def app_inventory(spec):
+    """Mobile screens, device features on them, and where offline working and planning are mentioned."""
+    screens = spec.get("screens") or []
+    dialogs = {d.get("id"): d for d in spec.get("dialogs") or []}
+    mobile = [sc for sc in screens if str(sc.get("id", "")).startswith("m-")]
+    features = {"signature": [], "photo or file": [], "scan": [], "location": []}
+    for sc in mobile:
+        opened = [dialogs[b["dialog"]] for b in sc.get("buttons") or [] if b.get("dialog") in dialogs]
+        parts = [(sc.get("id"), [f for sec in sc.get("sections") or [] for f in sec.get("fields") or []],
+                  [sc.get("title"), sc.get("description")] + [b.get("label") for b in sc.get("buttons") or []])]
+        parts += [(d.get("id"), d.get("fields") or [], [d.get("title"), d.get("description")]) for d in opened]
+        for where, fields, words in parts:
+            words = " ".join(str(w) for w in words + [f.get("label") for f in fields] if w)
+            if any(f.get("type") == "signature" for f in fields):
+                features["signature"].append(where)
+            if any(f.get("type") == "file" for f in fields):
+                features["photo or file"].append(where)
+            if SCAN_WORDS.search(words):
+                features["scan"].append(where)
+            if GPS_WORDS.search(words):
+                features["location"].append(where)
+    texts = spec_texts(spec)
+    found = lambda rx: list(dict.fromkeys(where for where, t in texts if rx.search(t)))
+    return {"mobile": [sc.get("id") for sc in mobile],
+            "features": {k: list(dict.fromkeys(v)) for k, v in features.items() if v},
+            "offline": found(OFFLINE_WORDS), "planning": found(PLANNING_WORDS)}
+
+
+def places(found, most=8):
+    return ", ".join(found[:most]) + (f" and {len(found) - most} more" if len(found) > most else "")
+
+
+def print_app_inventory(spec):
+    app = app_inventory(spec)
+    if not (app["mobile"] or app["offline"] or app["planning"]):
+        return
+    print("Mobile app, offline working and planning (the All platforms blocks):")
+    if app["mobile"]:
+        print(f"  Mobile app screens: {len(app['mobile'])} ({places(app['mobile'], 12)}): one mobile app screen each, "
+              "and one mobile app foundation per app")
+        for kind, where in app["features"].items():
+            print(f"    {kind} on the phone: {places(where)}")
+    if app["offline"]:
+        print(f"  Offline working, mentioned in: {places(app['offline'])}: one offline foundation per app, offline data per "
+              "kind of record, a sync conflict rule per kind of record changed in two places")
+    if app["planning"]:
+        print(f"  Planning or scheduling, mentioned in: {places(app['planning'])}: check for a planning board, "
+              "scheduling rules (slots, capacity) and automatic grouping or assignment")
 
 
 def cmd_inventory(a):
@@ -1199,6 +1313,7 @@ def cmd_inventory(a):
         tbc = sum(1 for it in items if isinstance(it, dict) and it.get("tbc"))
         print(f"Requirements: {len(reqs)} groups, {len(items)} items, {tbc} waiting on a decision")
         print(f"NFRs: {len(spec.get('nfr') or [])}; timeline in the spec: {'yes' if spec.get('timeline') else 'no'}")
+        print_app_inventory(spec)
     else:
         print(f"\nNo spec yet: count from the brief or scope of work in {layout.shown(p, docs_dir)}/.")
     reg = read_register(p)
