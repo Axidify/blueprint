@@ -357,6 +357,36 @@ parts "Custom development" while presenting, with what each takes. `sheet` and `
 was checked. The tool never goes online itself: the `platform-fit` skill does the lookups. It writes to the
 starter knowledge in `templates/` only when given `--knowledge`.
 
+### contradictions.py
+
+```bash
+python -I tools/contradictions.py projects/<slug> [--out <folder>] [--json] [--strict]
+python -I tools/contradictions.py --text <review folder>/extract/text.md [--out <folder>] [--json]
+```
+Gathers everything the spec says about the same subject into a review pack, so requirements that contradict
+each other are seen before the document goes to the client. It writes `pack.md` (to read) and `pack.json`
+into `_blueprint/reviews/spec-v<version>-contradictions/` (or `--out`), in three parts that say which is which:
+
+1. **Clashes**, found mechanically from the spec's structure: a sentence (a requirement, a status's meaning, a
+   scope line, a note) saying a role may, or may not, cancel, edit or delete a record in a status when the
+   status rules say the opposite; a cancel button shown to a role the status's cancel rule leaves out; a status
+   that lets someone cancel but cannot move to the cancelled status, or the reverse; one field given two
+   limits (characters, KB, MB, GB); a required field called optional.
+2. **Look here**, pairs of statements about the same subject whose words suggest they disagree, for a person
+   to judge: one all-or-nothing and the other partial ("nothing is imported" against "import the good rows and
+   skip the bad ones"), one forbidding what the other allows, different numbers of the same unit, an
+   integration named under out of scope, and a negative sentence with a condition against the status rules.
+3. **Everything said about each subject**: each screen, dialog, status, field, integration and role, and
+   themes such as uploads and imports, cancelling, deleting, notifications and deadlines, every statement with
+   its location (`FR-APP-003.1`, `Status Approved: rules`, `Screen … : field … (help)`) and text.
+
+`--text` reads a document extracted with `extract.py` instead (a client's own requirements document): no
+clashes, as a document has no structure to check, but the look-here pairs and the themes, located by
+requirement id, else section heading and page. `--strict` exits with 1 when there is a clash. It cannot
+understand meaning: two sentences that disagree in other words, or by what one leaves out, are found only by
+reading part 3. Used by the `review-requirements` and `generate-requirements` skills, which record each real
+contradiction in the register with both places quoted.
+
 ### estimate.py
 
 ```bash
