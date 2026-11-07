@@ -87,7 +87,7 @@ def test_the_backslash_check_finds_one(tmp_path):
 def test_the_default_format_lists_every_setting_the_generator_reads():
     fmt = generate_requirements.default_format()
     assert set(fmt) == {"document", "fonts", "sizes", "colors", "tables", "numbering", "layout", "header_footer", "front", "chapters",
-                        "titles", "labels"}
+                        "titles", "labels", "required"}
     assert set(fmt["tables"]) == {"header_fill", "header_text", "borders"} and "heading" in fmt["colors"]
 
 

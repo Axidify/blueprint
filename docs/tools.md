@@ -285,10 +285,16 @@ writes a PDF.
   else the requirement ids its register `source` names when this spec has them. A source that names ids of
   another document (the client's original, say) is not printed; a note lists those items.
 - **Figures of the same screen have different captions.** An extra screenshot from the spec's
-  `screenshots` takes its `caption`, or says the role or record it shows; two figures still alike are warned about.
+  `screenshots` takes its `caption`, or says the role or record it shows; two figures still alike are warned about,
+  with a fix that tells them apart: a `caption` for the extra shot that names what differs ("…, showing record
+  LV-2026-013"), never the screen's own `caption` (both figures take it); a shot that differs in nothing is to be
+  taken out; two screens with one title each get their own `caption`.
 - **Parts still missing** are listed after the warnings, "before issuing": no non-functional requirements,
-  no timeline, nothing in scope, out of scope or assumed, and signatories with no name (or none listed).
-  A draft may lack them; a version for sign-off should not.
+  no timeline, nothing in scope, out of scope or assumed, signatories with no name (or none listed), and the
+  non-functional areas and sections the [document format](document-format.md#sections-every-document-must-have)
+  requires that the spec leaves empty. Those are still printed, as "To be confirmed" (with the decision they
+  wait on when the spec links one with `tbc`), so a missing one shows in the document. A draft may lack
+  them; a version for sign-off should not.
 - **Notes** are printed for things worth knowing that do not hold a version back: a spec with no status
   rules, no integration details or no formulas for its figures, and screens no requirement refers to.
   Warnings do hold it back.
@@ -310,7 +316,9 @@ python -I tools/workshop.py check  projects/<slug> ["<agenda.json>"]
 python -I tools/workshop.py render projects/<slug> ["<agenda.json>"]
 ```
 `gaps` lists what a workshop has to settle: the open client questions, what the spec does not say yet
-(including the scope of work's items that no requirement specifies) and the gap patterns with their evidence. `check` checks an agenda file in `_blueprint/workshops/`:
+(including the scope of work's items that no requirement specifies, and the required non-functional areas
+and sections it leaves empty with no register item behind them) and the gap patterns with their evidence.
+`check` checks an agenda file in `_blueprint/workshops/`:
 every reference is an open client question, every screen exists, the sections fit the time, no open
 high-severity question is left out without a reason, and nothing the client's agenda prints (the goal, the
 questions and options, what to bring, parked items) uses the team's words (mandays, rates, building blocks). `render` checks it and writes two Word documents into
@@ -510,8 +518,9 @@ python -I tools/project.py migrate <slug> | --all [--dry-run] [--undo]
 Project housekeeping. `ready` says whether the current version can go to the client for signature. It stops
 on a client question still marked "Blocks sign-off" (open or answered, high), on settled items with no agreed
 `decision` (the document would print the client's raw answer as what is signed), on a scope of work item
-(the spec's `sow`) that no requirement specifies and nobody agreed to leave out (`deferred`), and on a document
-older than the spec or the register. It also lists what to look at: answered items still open, two questions that look
+(the spec's `sow`) that no requirement specifies and nobody agreed to leave out (`deferred`), on a required
+non-functional area or section the spec leaves empty with no open register item linked to it (`tbc`), and on
+a document older than the spec or the register. It also lists what to look at: answered items still open, two questions that look
 the same, a field whose choices differ from the ones the client listed in an answer, "the agreed …" or "to be
 confirmed" in a requirement with no `tbc` item behind it, a requirement group that names no scope of work
 item (a possible change request), a spec with no `sow` at all, and a side with nobody to sign. `issue` runs the

@@ -899,7 +899,7 @@ def test_inventory_of_the_sample_project(tmp_path, kb, run):
             "Integrations: 2", "  Active Directory (Inbound): User sign-in and line manager lookup",
             "Notifications: 0 (none listed; check the requirements for e-mails)",
             "Requirements: 3 groups, 10 items, 0 waiting on a decision",
-            "NFRs: 4; timeline in the spec: no",
+            "NFRs: 7; timeline in the spec: no",
             "Register: no items",
             f"Earlier estimates: {SAMPLE_ESTIMATE.name}"):
         assert expected in out

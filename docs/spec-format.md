@@ -23,13 +23,34 @@ It is `_blueprint/spec/app.yaml` in the project folder (`spec/app.yaml` in a pro
 | `signoff` | Everyone who signs: `{name, designation, department, organisation, signing_for, status}`. Client signatories are listed first; `status` is `Pending` (default) or `Signed`. Without it the requirements document has one client and one supplier block to fill in |
 | `notifications` | `{event, recipient, template}`. document section 1.6 |
 | `integrations` | `{system, purpose, direction, notes}`, and how it works: `trigger` (what starts the exchange), `data` (what goes across) and `on_failure` (what happens when it fails). With these the document adds a table "How each exchange works"; one left out shows "To be confirmed" and is warned about |
-| `nfr` | `{area, requirement}` |
+| `nfr` | `{area, requirement}`. A row may wait on a register item instead: `{area, tbc: R-031}` is printed as "To be confirmed" with that decision. See [Required sections](#required-sections) |
 | `glossary` | `{term, meaning}`. document section 1.5 |
 | `process_flow` | `{title, steps: [{name, role, optional, status}], reject, notes: [...]}` (`notes` is a list, even of one note). Drawn as a diagram (mock-up URL `#/__flow`), screenshotted and placed in document section 1.3, so it always matches the statuses. A step's `role` and `status` may be the name or the id; the diagram shows names, and the generator warns about one that is neither |
 | `timeline` | The project timeline chapter (below) |
-| `extra_sections` | Free-form document sections after the NFRs: `{title, appendix, content: [{heading} \| {text} \| {bullets} \| {table: {header, rows}} \| {image, caption}]}`. `appendix: true` puts it after sign-off as Appendix A, B… Text may use `{client}` and `{system}`. In a table, an unquoted `No` or `Yes` is printed as that word (a first column headed `No` is the narrow numbering column); quote `"On"`, `"Off"`, `"True"` and `"False"` to keep those exact words |
+| `extra_sections` | Free-form document sections after the NFRs: `{title, appendix, covers, tbc, content: [{heading} \| {text} \| {bullets} \| {table: {header, rows}} \| {image, caption}]}`. `appendix: true` puts it after sign-off as Appendix A, B… Text may use `{client}` and `{system}`. `covers` names the [required section](#required-sections) it stands for when its title differs; `tbc: R-031` marks one still waiting on that register item. In a table, an unquoted `No` or `Yes` is printed as that word (a first column headed `No` is the narrow numbering column); quote `"On"`, `"Off"`, `"True"` and `"False"` to keep those exact words |
 
 Optional files next to `app.yaml`: `client-logo.png` (document cover, and the mock-up's logo when `logo` names it) and `process-flow.png` (document section 1.3).
+
+## Required sections
+
+Every requirements document must have certain parts, whatever the project: the non-functional requirements
+the requirements standard lists, and sections such as Environments or Data migration. The document format
+lists them under `required` (see [Document format](document-format.md#sections-every-document-must-have)):
+
+- `required.nfr` – areas the `nfr` table must have a row for (default: Users, Performance, Availability, Backup,
+  Retention, Security, Browsers). A row counts when its `area` contains the name, so "Backup and recovery"
+  counts for Backup.
+- `required.sections` – titles of `extra_sections` the document must have (default: Environments, Data
+  migration, Reports, Audit trail, Training and handover). A section counts when its `title` is the name, or
+  when it says `covers: <name>`, and it has content.
+
+A required part the spec does not have is still printed, as "To be confirmed", so it cannot disappear unseen.
+Write it in the spec, even when the answer is "None": a project with no reports says so under Reports. When the
+client still has to answer, link the register item: `{area: Backup, tbc: R-031}` or `{title: Reports, tbc: R-032}`.
+The document then reads "To be confirmed: decision needed R-032, see section 12".
+
+The generator lists what is still empty under PART(S) MISSING; `workshop.py gaps` lists the untracked ones for
+the next workshop; `project.py ready` stops on one that is empty with no open register item behind it.
 
 ## Themes
 

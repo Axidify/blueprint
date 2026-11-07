@@ -68,8 +68,10 @@ activities. An issued version is locked.
    - Two figures with one caption: give the extra one a `caption`. A screen no requirement refers to: a
      requirement or a `screens` link is missing. A register `source` naming requirement ids not in this
      spec: put `tbc: R-xxx` on the requirement each is about.
-   - MISSING parts (NFRs, timeline, scope, signatories): a workshop draft may go without them, a version for
-     sign-off may not: draft them as in step 1 and show the user.
+   - MISSING parts (NFRs, timeline, scope, signatories, and the required areas and sections the document
+     prints as "To be confirmed"): a workshop draft may go without them, a version for sign-off may not: draft
+     them as in step 1 and show the user. Never make up content for a required section: what the sources do not
+     say becomes a client question in the register, linked with `tbc: R-…` (docs/spec-format.md, Required sections).
 4. "Word step FAILED": no PDF; tell the user the reason it gives (usually the file is open) and generate
    again. "Word not available" only means the PDF and table of contents are missing. Pictures in the PDF
    not at full size: it says why; the PDF is still usable.

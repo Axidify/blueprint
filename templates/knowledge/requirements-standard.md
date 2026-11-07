@@ -31,6 +31,13 @@ high-severity internal finding.
 | 18 | Open issues | Every TBC with owner, due date and estimate impact |
 | 19 | Glossary | Every acronym used |
 | 20 | Sign-off | Client and supplier signatories |
+| 21 | Data migration | What moves from the old system or files, from where, who cleans and checks it, and when it is loaded; or "No data is migrated" |
+| 22 | Reports | Each report: purpose, who sees it, filters, columns or figures; or "No reports are in scope" |
+| 23 | Audit trail | What is recorded (who, what, when, old and new value), who can see it, how long it is kept, and that nobody can change it |
+| 24 | Training and handover | Training sessions and for whom, user guides, handover to the client's IT or support |
+
+The document format's `required` list (non-functional areas and sections) is what the generator enforces: a
+part the spec leaves empty prints as "To be confirmed" and holds sign-off back. Keep the two in step.
 
 ## Quality rules
 

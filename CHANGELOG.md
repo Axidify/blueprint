@@ -69,6 +69,17 @@ See [docs/maintaining.md](docs/maintaining.md).
   skip the bad ones", are listed to judge. With `--text` it reads a client's own document the same way. The
   review-requirements and generate-requirements skills now use it and record each real contradiction in the
   register with both places quoted.
+- **Sections every requirements document must have.** The document format now lists them under `required`:
+  the non-functional areas (users, performance, availability, backup, retention, security, browsers) and the
+  sections Environments, Data migration, Reports, Audit trail and Training and handover. One the spec leaves
+  empty is no longer quietly left out: the document prints it as "To be confirmed" and the generator lists it
+  under parts missing. `workshop.py gaps` lists it for the next workshop, and `project.py ready` stops on it
+  until it is written or a register item tracks it (`tbc: R-…` on the row or section, which the document
+  prints as the decision it waits on). A section can say which required one it stands for with `covers`.
+  A company changes the list in its own document format. The made-up sample now has every one of them.
+- **The requirements standard lists the new sections.** The starter knowledge base's
+  `requirements-standard.md` now asks for Data migration, Reports, Audit trail, and Training and handover, with
+  what each must include, so `review-requirements` checks a client's document for them too.
 
 ### Changed
 - **The client sees first what still needs an answer.** In `Questions for the client.xlsx` and the register,
@@ -96,6 +107,9 @@ See [docs/maintaining.md](docs/maintaining.md).
 - **The inbox names more kinds of file.** `project.py match` now says what a filled-in UAT workbook, a change-request
   e-mail, the lead developer's actuals, a returned register and a requirements document are (it used to say nothing
   for most of them), so filing and the next step are suggested right.
+- **Two figures with one caption: advice that works.** The generator's warning now suggests a caption for the
+  extra screenshot that says what differs (the record, role, page or dialog it shows), and says not to use the
+  screen's own `caption`, which both figures take. Following the old advice could leave the two still alike.
 
 ## [1.5.0] - 2026-11-07
 
