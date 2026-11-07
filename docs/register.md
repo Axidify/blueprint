@@ -11,9 +11,10 @@ The skills keep both up to date. (In a project still in the old folder layout th
 
 | Sheet | For | Contents |
 |---|---|---|
-| For client | The BA, to take to the client | Questions only the client can answer, with the observation behind each, a suggested answer and an empty **Client response** column |
+| For client | The BA, to take to the client | The questions still to answer (open or asked), with the observation behind each, a suggested answer and an empty **Client response** column |
+| Already answered | The BA and the client | The client's items they answered, settled or set aside, so the open ones stand alone; an answer can still be corrected here |
 | Internal fixes | Your team | Things you fix yourselves: document hygiene, figure mismatches, missing sections, tool issues |
-| All items | Anyone | Everything, including resolved items and answers |
+| All items | Anyone | Everything, including resolved items, answers and the earlier answers an item had |
 | Summary | Anyone | Counts by status, severity, audience and category |
 
 Open items come first, then by severity. The Status column has a drop-down.
@@ -27,8 +28,8 @@ Internal fixes never appear on the client sheet.
 
 ## The file for the client
 
-`Questions for the client.xlsx` is written with the register each time. It holds the **For client** sheet
-alone: no internal fixes, no All items or Summary, and its hidden note of what it held lists the client's
+`Questions for the client.xlsx` is written with the register each time. It holds the **For client** and
+**Already answered** sheets alone, so the client sees at once what still needs an answer: no internal fixes, no All items or Summary, and its hidden note of what it held lists the client's
 items only, and its Where column names places in the client's words ("mock-up comment", a screen's title)
 instead of the team's ids. Send this file, never the register: deleting the internal sheets from the register by hand
 still leaves a hidden record of every item's status and answer in it. When the client sends it back with
@@ -36,6 +37,10 @@ their answers, take them in with `register.py render projects/<slug> --from "<re
 `client-answers` skill does). Do not type into it yourself: type into the register, and render again. Before writing it, `render` warns
 about a client item whose finding, question or recommendation speaks of mandays, rates or building blocks:
 reword it, since those words would reach the client.
+
+**`recommendation` goes to the client.** On a client item it is printed as **Our recommendation**: write only
+what you would say to the client. A workshop agenda's own view of an answer is internal and has its own
+name, `internal_view` (an older agenda's `recommendation` is read as internal, as before).
 
 ## Statuses
 
@@ -75,6 +80,22 @@ empty value (`--set owner=`) removes an optional field. An answer on an open or 
 `answered`, as in Excel, unless the status is set too. Both commands write `register.json` only; render
 the Excel file afterwards.
 
+Answers that came by e-mail or in call notes are recorded together from one file:
+`python -I tools/register.py update projects/<slug> --file answers.json`, where the file holds
+
+```json
+[ {"id": "R-012", "set": {"answer": "Only HR may cancel.", "status": "resolved", "decision": "Only HR cancels an approved leave."}},
+  {"id": "R-019", "set": {"answer": "Weekly, on Mondays."}} ]
+```
+
+The whole file is checked first by the same rules; one bad change (an unknown item, a field or status not
+allowed, an item twice) and nothing is written. `--check` shows what would change and writes nothing.
+
+**A changed answer keeps the earlier one.** When an item's `answer` or `decision` is replaced, by `update`
+or by a returned file, the earlier text goes into the item's `history` with the day it was replaced, and the
+output says so ("CHANGED", or "Replaced an earlier answer or decision"). It can mean the client changed their
+mind: check it with the BA. The All items sheet shows them as **Earlier answers**.
+
 ## Severity
 
 - **High:** blocks sign-off, contradicts itself on scope or behaviour, or would cost mandays if guessed wrong.
@@ -94,10 +115,11 @@ the Excel file afterwards.
 | `source` | Where it was found: the document and version, then each place (section, requirement ID, page or figure) separated by `;`, e.g. `SRS v1.0 §2.1 (p12); Figure 5 (p30)` |
 | `finding` | What is wrong or missing, stated as fact |
 | `question` | For client items: the question in plain business language |
-| `recommendation` | Optional: your suggested answer or fix |
+| `recommendation` | Optional: your suggested answer or fix. On a client item it **goes to the client** (Our recommendation) |
 | `effort_impact` | Optional: `none`, `low`, `medium`, `high`: the effect on mandays if resolved the costly way |
 | `status` | See above |
 | `answer` | Optional: the client's answer or the decision taken, in their words |
+| `history` | Kept by `register.py`, never set by hand: each replaced answer or decision, `{"field", "text", "replaced"}` (the day it was replaced) |
 | `decision` | Optional: what was agreed, in one line, as it is signed. The requirements document's Decisions made shows it instead of the raw answer, and `project.py ready` asks for it on every settled client item. Both sheets show it as **Agreed decision**; it is not read back from a returned file |
 | `raised` / `resolved_in` | Date raised; document version or meeting where it was closed |
 | `owner` / `due` | Optional: who must answer, and by when (shown in the Open Issues table) |

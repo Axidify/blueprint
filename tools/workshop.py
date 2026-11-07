@@ -14,7 +14,7 @@ render  checks the agenda, then writes two Word documents into the project's "3 
         the agenda in a project not yet moved to the new folder layout):
           "<name> - agenda.docx"                       for the client: the questions, with room for each decision
           "<name> - facilitator notes (internal).docx" for the BA: the same, with why each question matters,
-                                                       your recommendation and the questions left for later
+                                                       your internal view and the questions left for later
         Without a file name it takes the newest agenda in the project's workshops folder (_blueprint/workshops/,
         or workshops/ in the old layout)
 
@@ -30,14 +30,17 @@ workshops/<date> <name>.json:
   "sections": [
     {"title": "Approval rules", "minutes": 30, "show": ["review-request"],     "show": mock-up screens to put up
      "items": [ {"ref": "R-012", "question": "...", "options": ["A", "B"],
-                 "why": "...", "recommendation": "...", "gap_pattern": "GP-02", "effort_impact": "high"} ]}
+                 "why": "...", "internal_view": "...", "gap_pattern": "GP-02", "effort_impact": "high"} ]}
   ],
   "parked": [ {"ref": "R-030", "question": "...", "reason": "needs the infrastructure team"} ],
   "after": ["We update the mock-up and send the requirements document within 5 working days."]
 }
 
-"why", "recommendation", "gap_pattern", "effort_impact" and "parked" are internal: they appear in the
+"why", "internal_view", "gap_pattern", "effort_impact" and "parked" are internal: they appear in the
 facilitator notes only, never in the client's agenda. Mandays, rates and cost go in neither.
+"internal_view" is the team's own view of the answer. Earlier versions called it "recommendation"; an agenda
+that still says "recommendation" is read the same way, as internal. (The register's "recommendation" is the
+opposite: on a client item it goes to the client.)
 """
 import json
 import re
@@ -51,7 +54,7 @@ import workspace  # noqa: E402
 
 CLOSED = ("resolved", "wont-fix")
 SEVERITY = {"high": 0, "medium": 1, "low": 2}
-INTERNAL_FIELDS = ("why", "recommendation", "gap_pattern", "effort_impact")
+INTERNAL_FIELDS = ("why", "internal_view", "recommendation", "gap_pattern", "effort_impact")  # recommendation: the old name of internal_view
 INTERNAL_MARK = "Internal: not for the client"
 # Words that are the team's, never the client's: the agenda's own text is checked for them.
 INTERNAL_WORDS = re.compile(r"\b(man-?days?|day rates?|rate card|building blocks?|BB-\d+|effort impact|platform[_ ]fit|internal fix(es)?)\b", re.I)
@@ -296,7 +299,7 @@ def render(agenda, project, path):
         w.page_title(str(agenda["workshop"]), after=4)
         w.para([(str(agenda["project"]), "sec")], size=w.s["body"] + 1, after=10)
         if internal:
-            w.para([("error", "dot"), (INTERNAL_MARK + ". It holds your reasons and recommendations; give the client the agenda.", "")], after=10)
+            w.para([("error", "dot"), (INTERNAL_MARK + ". It holds your reasons and your own view of each answer; give the client the agenda.", "")], after=10)
         total = sum(s["minutes"] for s in agenda["sections"])
         n_items = sum(len(s["items"]) for s in agenda["sections"])
         w.cards([(str(agenda["date"]), "Date", None), (f"{agenda['duration_minutes']:g} min", "Duration", None),
@@ -327,9 +330,10 @@ def render(agenda, project, path):
                 if internal:
                     known = by_id.get(item.get("ref")) or {}
                     notes = []
-                    for label, key in (("Why", "why"), ("We recommend", "recommendation")):
-                        if item.get(key):
-                            notes += ([("\n", "")] if notes else []) + [(f"{label}: ", "sec"), (str(item[key]), "")]
+                    view = item.get("internal_view") or item.get("recommendation")  # the old name, read the same
+                    for label, value in (("Why", item.get("why")), ("Our view (internal)", view)):
+                        if value:
+                            notes += ([("\n", "")] if notes else []) + [(f"{label}: ", "sec"), (str(value), "")]
                     facts = [x for x in (item.get("ref"), item.get("gap_pattern"),
                                          f"{known['severity']} severity" if known.get("severity") else "",
                                          f"{item['effort_impact']} effort impact" if item.get("effort_impact") else "") if x]

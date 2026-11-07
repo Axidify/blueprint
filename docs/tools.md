@@ -80,7 +80,8 @@ refused and nothing in it is touched.
 python -I tools/register.py add      projects/<slug> --file <items.json> [--check]
 python -I tools/register.py add      projects/<slug> [--check] < items.json
 python -I tools/register.py similar  projects/<slug> "<question or finding>" [--top 5]
-python -I tools/register.py update   projects/<slug> R-001 [R-002 ...] --set field=value [--set ...]
+python -I tools/register.py update   projects/<slug> R-001 [R-002 ...] --set field=value [--set ...] [--check]
+python -I tools/register.py update   projects/<slug> --file <changes.json> [--check]
 python -I tools/register.py validate projects/<slug>
 python -I tools/register.py render   projects/<slug> [--overwrite] [--from "<returned register.xlsx>"]
 python -I tools/register.py next-id  projects/<slug>
@@ -92,7 +93,12 @@ prints the next free item ID.
 `add` takes one item or a list (JSON, UTF-8, from a file or standard input), gives them the next IDs,
 fills `raised` and `status` where missing, refuses the whole batch if any item is invalid, names likely
 duplicates of existing items by the words of the question and finding, and prints the IDs given;
-`--check` reports without writing. `update` refuses unknown fields and values that are not allowed.
+`--check` reports without writing. `update` refuses unknown fields and values that are not allowed;
+`update --file` takes many changes at once (`[{"id": "R-012", "set": {"answer": "...", "status": "resolved"}}, ...]`),
+for answers that came by e-mail, and checks the whole file before it writes anything; `--check` reports
+without writing. When an answer or decision replaces an earlier one (by `update`, or taken from Excel by
+`render`), the earlier text is kept in the item's `history` with the day it was replaced, and the output
+says so, since the client may have changed their mind.
 Both write `register.json` in one step (a temporary file, then put in place) and leave the Excel file to
 `render`.
 
@@ -105,8 +111,10 @@ stops and lists them; `--overwrite` writes the file from `register.json` and dro
 their answers in **Client response** or a status changed), after the project's own file and by the same
 rules; the returned file is only read. An item that was also changed in `register.json` since the copy was
 written stops it, with both values. The `client-answers` skill uses it.
-Beside it, `render` writes `Questions for the client.xlsx`: the client's items alone, in no sheet, hidden or
-not, the only register file to send (the register's own file holds the internal fixes and a hidden record of
+In both files the client's items are in two sheets: **For client**, the questions still to answer (open or
+asked), and **Already answered**, the rest; both are read back. The All items sheet shows the earlier answers.
+Beside it, `render` writes `Questions for the client.xlsx`: the client's items alone, and no internal item in
+any sheet, hidden or not, the only register file to send (the register's own file holds the internal fixes and a hidden record of
 every item). A copy of it that comes back filled in is taken in with `--from` like the register itself.
 Its Where column, like the register's For client sheet, says places in the client's words: a mock-up
 comment's id becomes "mock-up comment", and a spec id of a screen or dialog becomes its title. `render`
@@ -304,7 +312,8 @@ every reference is an open client question, every screen exists, the sections fi
 high-severity question is left out without a reason, and nothing the client's agenda prints (the goal, the
 questions and options, what to bring, parked items) uses the team's words (mandays, rates, building blocks). `render` checks it and writes two Word documents into
 `3 Workshops/`: the agenda for the client, and the facilitator notes for the BA, which add why each question
-matters, your recommendation and what was left for later. The notes are internal; neither document holds
+matters, your own view of the answer (`internal_view`; an older agenda's `recommendation` is read the same
+way) and what was left for later. The notes are internal; neither document holds
 mandays or cost. The file format is at the top of the script. Used by the `prep-workshop` skill.
 
 ### uat.py

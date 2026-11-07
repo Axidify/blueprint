@@ -32,6 +32,23 @@ See [docs/maintaining.md](docs/maintaining.md).
   scans and locations on them, and where the spec mentions offline working, planning and scheduling, or a
   second language, so
   these are no longer missed in an estimate. `estimate.py blocks` lists the *All platforms* blocks too.
+- **Many answers at once.** `register.py update <project> --file answers.json` records a list of changes
+  (`[{"id": "R-012", "set": {"answer": "...", "status": "resolved"}}, ...]`), for answers that came by e-mail,
+  instead of one command per answer. The whole file is checked first: one bad change and nothing is written.
+  `--check` shows what would change. The client-answers skill uses it.
+
+### Changed
+- **The client sees first what still needs an answer.** In `Questions for the client.xlsx` and the register,
+  the client's questions still to answer are on the **For client** sheet, and the ones already answered,
+  settled or set aside on a new **Already answered** sheet, instead of mixed in one list. Answers typed into
+  either sheet are read back as before.
+- **A changed answer is no longer replaced silently.** When an item's answer or agreed decision changes (by
+  `register.py update`, or from a returned file), the earlier one is kept in the item's history with the day it
+  was replaced, the output says so, and the All items sheet shows it under **Earlier answers**. The
+  client-answers skill points it out, since the client may have changed their mind.
+- **"recommendation" now means one thing.** In a workshop agenda your own view of an answer is
+  `internal_view` (facilitator notes only, shown as "Our view (internal)"); in the register, a client item's
+  `recommendation` goes to the client. Older agendas that say `recommendation` are still read as internal.
 
 ## [1.5.0] - 2026-11-07
 

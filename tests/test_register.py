@@ -138,13 +138,13 @@ def workbook(tmp_path, monkeypatch, capsys):
 
 def test_workbook_has_the_four_sheets(workbook):
     shown = [ws.title for ws in workbook.worksheets if ws.sheet_state == "visible"]
-    assert shown == ["For client", "Internal fixes", "All items", "Summary"]
+    assert shown == ["For client", "Already answered", "Internal fixes", "All items", "Summary"]
     assert workbook[register.RENDERED].sheet_state == "veryHidden", "the note of what was written is out of sight"
 
 
 def test_internal_items_never_reach_the_client_sheet(workbook):
-    client = sheet_rows(workbook["For client"])
-    assert [r[0] for r in client[1:]] == ["R-001", "R-002", "R-003"]
+    client = sheet_rows(workbook["For client"]) + sheet_rows(workbook["Already answered"])
+    assert [r[0] for r in client[1:] if r[0] != "ID"] == ["R-001", "R-002", "R-003"]
     flat = " ".join(str(cell) for row in client for cell in row)
     assert "R-004" not in flat and INTERNAL_TEXT not in flat
     for internal_only in ("Type", "Category", "Fix / recommendation", "Effort impact", "Audience", "Stage"):
@@ -224,7 +224,7 @@ def test_an_answer_typed_into_excel_is_kept_when_the_file_is_written_again(rende
     assert "Taken from register.xlsx into register.json:" in out and f"{OPEN_CLIENT} answer: Only the requester, before approval." in out
     assert item(rendered, OPEN_CLIENT)["answer"] == "Only the requester, before approval."
     assert item(rendered, OPEN_CLIENT)["status"] == "answered", "an answer moves an open question to answered"
-    assert cell(rendered, "For client", OPEN_CLIENT, "Client response") == "Only the requester, before approval."
+    assert cell(rendered, "Already answered", OPEN_CLIENT, "Client response") == "Only the requester, before approval."
     assert cell(rendered, "All items", OPEN_CLIENT, "Answer / decision") == "Only the requester, before approval."
 
 
@@ -250,7 +250,7 @@ def test_a_change_in_the_register_since_the_file_was_written_is_not_an_edit_in_e
     run(monkeypatch, "render", rendered)
     assert "Taken from register.xlsx" not in capsys.readouterr().out
     assert item(rendered, OPEN_CLIENT)["answer"] == "Decided in workshop 2."
-    assert cell(rendered, "For client", OPEN_CLIENT, "Client response") == "Decided in workshop 2."
+    assert cell(rendered, "Already answered", OPEN_CLIENT, "Client response") == "Decided in workshop 2."
 
 
 def test_rendering_twice_changes_nothing(rendered, monkeypatch, capsys):
@@ -338,7 +338,7 @@ def test_a_register_returned_by_the_client_gives_up_its_answers(rendered, tmp_pa
     out = capsys.readouterr().out
     assert f"Taken from {returned.name} into register.json:" in out and f"{OPEN_CLIENT} answer: Only HR may cancel." in out
     assert (item(rendered, OPEN_CLIENT)["answer"], item(rendered, OPEN_CLIENT)["status"]) == ("Only HR may cancel.", "answered")
-    assert cell(rendered, "For client", OPEN_CLIENT, "Client response") == "Only HR may cancel."
+    assert cell(rendered, "Already answered", OPEN_CLIENT, "Client response") == "Only HR may cancel."
     assert returned.read_bytes() == before, "the returned file is only read"
     render_from(monkeypatch, rendered, returned)
     assert "Nothing new in" in capsys.readouterr().out, "taking the same copy twice changes nothing"
@@ -573,6 +573,109 @@ def test_new_commands_show_the_usage_when_misused(project, monkeypatch, args):
     assert "register.py add" in str(stop.value)
 
 
+# ---------------------------------------------------------------- answers: history, many at once
+def test_a_changed_answer_keeps_the_earlier_one(project, monkeypatch, capsys):
+    """A changed answer used to replace the earlier one without a word, though it can mean the client changed
+    their mind. The earlier text is kept with the day it was replaced, and the output says so."""
+    run_args(monkeypatch, "update", project, "R-001", "--set", "answer=Yes, both may book.")
+    assert "Replaced an earlier" not in capsys.readouterr().out, "a first answer replaces nothing"
+    assert "history" not in saved(project)["items"][0]
+    run_args(monkeypatch, "update", project, "R-001", "--set", "answer=No, only one booking.", "--set", "decision=One booking at a time.")
+    out = capsys.readouterr().out
+    assert "The client may have changed their mind" in out and "R-001 answer: the earlier one is kept in its history: Yes, both may book." in out
+    it = saved(project)["items"][0]
+    assert it["answer"] == "No, only one booking."
+    assert it["history"] == [{"field": "answer", "text": "Yes, both may book.", "replaced": register.date.today().isoformat()}]
+    assert list(it) == [f for f in register.FIELDS if f in it], "history goes in its documented place"
+    run_args(monkeypatch, "update", project, "R-001", "--set", "decision=Two bookings at a time.")
+    assert [h["field"] for h in saved(project)["items"][0]["history"]] == ["answer", "decision"]
+    assert register.validate(saved(project)) == []
+
+
+def test_history_is_never_set_by_hand(project, monkeypatch, capsys, tmp_path):
+    with pytest.raises(SystemExit):
+        run_args(monkeypatch, "update", project, "R-001", "--set", "history=x")
+    assert "history cannot be set" in capsys.readouterr().out
+    with pytest.raises(SystemExit):
+        run_args(monkeypatch, "add", project, "--file", items_file(tmp_path, [dict(NEW, history=[])]))
+    assert "history is kept by register.py" in capsys.readouterr().out
+
+
+def test_a_changed_answer_in_a_returned_file_is_pointed_out(rendered, tmp_path, monkeypatch, capsys):
+    """The client corrects an answer they gave before: render --from takes it, keeps the earlier one and says so."""
+    monkeypatch.setattr(sys, "argv", ["register.py", "update", str(rendered), OPEN_CLIENT, "--set", "answer=Monthly."])
+    register.main()
+    run(monkeypatch, "render", rendered)
+    returned = sent_to_client(rendered, tmp_path)
+    type_into_copy(returned, "Already answered", OPEN_CLIENT, "Client response", "Correction: weekly.")
+    capsys.readouterr()
+    render_from(monkeypatch, rendered, returned)
+    out = capsys.readouterr().out
+    assert f"{OPEN_CLIENT} answer CHANGED, replacing an earlier one" in out and "may have changed their mind" in out
+    it = item(rendered, OPEN_CLIENT)
+    assert it["answer"] == "Correction: weekly." and it["history"][0]["text"] == "Monthly."
+    assert "Monthly." in cell(rendered, "All items", OPEN_CLIENT, "Earlier answers")
+
+
+def test_the_client_sees_first_what_still_needs_an_answer(rendered):
+    """Open and settled rows were mixed: the client checked Status row by row. Open and asked questions are on
+    For client; answered, resolved and won't-fix ones on Already answered, in both files."""
+    statuses = {it["id"]: it["status"] for it in GOOD["items"] if it["audience"] == "client"}
+    for path in (rendered / "register.xlsx", rendered / "Questions for the client.xlsx"):
+        wb = load_workbook(path)
+        to_answer = [r[0] for r in sheet_rows(wb["For client"])[1:]]
+        done = [r[0] for r in sheet_rows(wb["Already answered"])[1:]]
+        assert to_answer and all(statuses[i] in ("open", "asked") for i in to_answer)
+        assert done and all(statuses[i] not in ("open", "asked") for i in done)
+        assert sorted(to_answer + done) == sorted(statuses)
+
+
+def changes_file(tmp_path, data):
+    return items_file(tmp_path, data, name="answers.json")
+
+
+def test_update_from_a_file_records_many_answers_at_once(project, tmp_path, monkeypatch, capsys):
+    path = changes_file(tmp_path, [
+        {"id": "R-001", "set": {"answer": "No overlapping bookings.", "status": "resolved", "resolved_in": "E-mail 13 Nov"}},
+        {"id": "R-002", "set": {"answer": "Yes, the storekeeper."}}])
+    run_args(monkeypatch, "update", project, "--file", path)
+    out = capsys.readouterr().out
+    assert "Changed in register.json:" in out and "R-002 status: asked -> answered" in out
+    items = saved(project)["items"]
+    assert (items[0]["status"], items[0]["resolved_in"]) == ("resolved", "E-mail 13 Nov")
+    assert (items[1]["answer"], items[1]["status"]) == ("Yes, the storekeeper.", "answered")
+
+
+def test_update_from_a_file_with_check_writes_nothing(project, tmp_path, monkeypatch, capsys):
+    before = (project / "register.json").read_bytes()
+    run_args(monkeypatch, "update", project, "--file", changes_file(tmp_path, [{"id": "R-001", "set": {"answer": "Yes."}}]), "--check")
+    assert "Checked, nothing written" in capsys.readouterr().out
+    assert (project / "register.json").read_bytes() == before
+
+
+@pytest.mark.parametrize("data, message", [
+    ([{"id": "R-001", "set": {"answer": "Yes."}}, {"id": "R-099", "set": {"answer": "No."}}], "R-099: no such item"),
+    ([{"id": "R-001", "set": {"answer": "Yes."}}, {"id": "R-002", "set": {"status": "done"}}], "R-002: status 'done' not in"),
+    ([{"id": "R-001", "set": {"answer": "Yes."}}, {"id": "R-001", "set": {"status": "resolved"}}], "R-001 is in the file twice"),
+    ([{"id": "R-001", "set": {"answer": 3}}], "the value must be text"),
+    ([{"id": "R-001", "answer": "Yes."}], 'write it as {"id": "R-012"'),
+    ([{"id": "R-001", "set": {}}], "set holds nothing to change")])
+def test_update_from_a_file_is_checked_as_a_whole(project, tmp_path, monkeypatch, capsys, data, message):
+    before = (project / "register.json").read_bytes()
+    with pytest.raises(SystemExit) as stop:
+        run_args(monkeypatch, "update", project, "--file", changes_file(tmp_path, data))
+    out = capsys.readouterr().out
+    assert stop.value.code == 1 and "Nothing was changed" in out and message in out
+    assert (project / "register.json").read_bytes() == before, "not even the good changes are written"
+
+
+@pytest.mark.parametrize("args", [["--file", "x.json", "--set", "status=asked"], ["R-001", "--file", "x.json"]])
+def test_update_takes_either_set_or_a_file(project, monkeypatch, args):
+    with pytest.raises(SystemExit) as stop:
+        run_args(monkeypatch, "update", project, *args)
+    assert "Nothing was changed" in str(stop.value)
+
+
 # ---------------------------------------------------------------- readable references
 @pytest.mark.parametrize("source, document, where", [
     ("SRS v1.0 Appendix A item 4 (p82); Figure 5 (p30); Figure 8 T&Cs (p36)",
@@ -633,7 +736,8 @@ def test_the_file_for_the_client_holds_the_client_items_alone_in_every_sheet(ren
     out = rendered / "Questions for the client.xlsx"
     assert out.exists()
     wb = load_workbook(out)
-    assert wb.sheetnames == ["For client", register.RENDERED] and wb["For client"].sheet_state == "visible"
+    assert wb.sheetnames == ["For client", "Already answered", register.RENDERED]
+    assert wb["For client"].sheet_state == wb["Already answered"].sheet_state == "visible"
     ids = {row[0] for ws in wb.worksheets for row in sheet_rows(ws)[1:] if row and row[0]}
     assert ids == {it["id"] for it in GOOD["items"] if it["audience"] == "client"}
     raw = b"".join(zipfile.ZipFile(out).read(n) for n in zipfile.ZipFile(out).namelist())

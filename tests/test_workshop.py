@@ -42,7 +42,7 @@ AGENDA = {
             {"ref": "R-001", "question": "Who approves when the line manager is on leave?",
              "options": ["The manager's manager", "A named delegate"],
              "why": "Without a stand-in, applications wait until the manager is back.",
-             "recommendation": "A named delegate, set by the manager.", "gap_pattern": "GP-08", "effort_impact": "medium"}]},
+             "internal_view": "A named delegate, set by the manager.", "gap_pattern": "GP-08", "effort_impact": "medium"}]},
         {"title": "Reports", "minutes": 20, "items": [
             {"ref": "R-002", "question": "Which columns does HR need in the export?", "why": "Each column is a rule to build."}]}],
     "parked": [{"ref": "R-003", "question": "How long are applications kept?", "reason": "Needs the records manager, who is not attending."}],
@@ -273,7 +273,7 @@ def test_the_clients_agenda_has_the_questions_and_room_for_each_decision(pack):
 
 def test_nothing_internal_reaches_the_clients_agenda(pack):
     _, _, text, _ = pack
-    for internal in ("Without a stand-in", "A named delegate, set by the manager", "We recommend", "Why:", "GP-08", "effort impact",
+    for internal in ("Without a stand-in", "A named delegate, set by the manager", "Our view", "Why:", "GP-08", "effort impact",
                      "severity", "R-001", "R-003", "How long are applications kept?", "records manager", "Left for later",
                      "Notes for you", workshop.INTERNAL_MARK, "Facilitator notes", "0:00", "spare"):
         assert internal not in text, internal
@@ -283,7 +283,7 @@ def test_the_facilitator_notes_add_the_reasons_and_what_waits(pack):
     _, notes, _, text = pack
     for said in ("Facilitator notes", workshop.INTERNAL_MARK, "Who approves when the line manager is on leave?",
                  "Why: Without a stand-in, applications wait until the manager is back.",
-                 "We recommend: A named delegate, set by the manager.", "R-001 · GP-08 · high severity · medium effort impact",
+                 "Our view (internal): A named delegate, set by the manager.", "R-001 · GP-08 · high severity · medium effort impact",
                  "R-002 · medium severity", "30 minutes  ·  0:00 to 0:30", "20 minutes  ·  0:30 to 0:50",
                  "Planned: 50 of 60 minutes, 10 spare", "Left for later", "How long are applications kept?",
                  "Needs the records manager, who is not attending."):
@@ -365,3 +365,16 @@ def test_the_agendas_own_words_are_checked_for_the_teams(project):
     errors = workshop.check(agenda, project)
     assert any(e.startswith("goal: 'mandays'") for e in errors), errors
     assert any("section 2, item 2: 'BB-07'" in e for e in errors), errors
+
+
+def test_an_agenda_that_still_says_recommendation_keeps_it_internal(project):
+    """The agenda's internal view was called recommendation, the word the register uses for what goes to the
+    client. It is internal_view now; an older agenda is read the same way, in the notes and never the agenda."""
+    import copy
+
+    old = copy.deepcopy(AGENDA)
+    item = old["sections"][0]["items"][0]
+    item["recommendation"] = item.pop("internal_view")
+    client, notes = workshop.render(old, project, write_agenda(project))
+    assert "Our view (internal): A named delegate, set by the manager." in support.all_text(Document(str(notes)))
+    assert "A named delegate, set by the manager" not in support.all_text(Document(str(client)))

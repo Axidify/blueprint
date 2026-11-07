@@ -15,7 +15,8 @@ it is in the register and, where it changes behaviour, in the spec. This skill g
   items with their questions), or leave it out and say so.
 - Record the answer as the client gave it, in their words (lightly tidied); never improve or extend it.
 - An answer that adds to the agreed scope is not built until the user agrees: it is a possible change request.
-- Nothing internal (mandays, rates, recommendations, internal items) goes to the client.
+- Nothing internal (mandays, rates, internal views, internal items) goes to the client. A client item's
+  `recommendation` is printed in the client's file: write it only as you would say it to them.
 
 ## 1. Collect the answers
 
@@ -25,7 +26,8 @@ Work out the project (ask if unsure). Then, by where the answers are:
   "client answers to the register"`), then take it in:
   `python -I tools/register.py render projects/<slug> --from "<the filed copy>"` (`--help` says how). It
   takes the client's Client response and Status changes made since the copy was written (after anything the
-  BA typed into the project's own `Questions and fixes register.xlsx`) and lists them. If it stops because an item was also
+  BA typed into the project's own `Questions and fixes register.xlsx`) and lists them; answers come from both
+  sheets, For client and Already answered. If it stops because an item was also
   changed here since, show the user both values, record the right one with `register.py update`, and run it
   again. A copy without the hidden note (pasted into a new workbook) only gives answers to items that had
   none: read the rest yourself, as text.
@@ -53,15 +55,25 @@ As in `apply-feedback`, one outcome per answer:
 | **Follow-up question** | Partial, unclear, or it raises a new question | Keep the item `answered`, and add the new question (`register.py add`, `--check` first) |
 | **Possible change request** | It goes beyond the scope of work | An internal register item (`type: gap`, `category: scope`, `effort_impact`), not built. Tell the user. If a version was issued (`project.py issued <slug>`), point to `change-request` |
 
-Record each with `register.py update projects/<slug> R-0xx --set answer="..." --set status=<answered or
-resolved> --set resolved_in="<where: 'Client e-mail, 12 November', 'Workshop 2'>"` (`--help` for the
-fields). `resolved` when the answer settles it and is in the spec (or needs nothing), `answered` while a
+Record them all at once: write the changes to a JSON file in the scratchpad,
+`[{"id": "R-0xx", "set": {"answer": "...", "status": "<answered or resolved>", "resolved_in": "<where: 'Client
+e-mail, 12 November', 'Workshop 2'>", "decision": "..."}}, ...]`, run `register.py update projects/<slug>
+--file <file> --check`, fix what it reports, then run it without `--check` (the whole file is checked first;
+one bad change and nothing is written). For a single answer, `register.py update projects/<slug> R-0xx --set
+answer="..." --set status=...` does the same. `resolved` when the answer settles it and is in the spec (or needs nothing), `answered` while a
 follow-up or a change is pending. With `resolved`, also write the agreed decision in one line (`--set decision="..."`): what is agreed, in the
 client's terms, complete on its own, as it will be signed. The answer keeps the client's words; the requirements
 document's Decisions made shows the decision. When two people answered (business and IT), the decision is the
 one agreed outcome, not both answers. Check that the spec says the same (a list of choices the client gave is the
 field's options, a figure they gave is in the requirement). `resolved_in` never names a comment id. Never edit `register.json` by
 hand. Then `register.py render projects/<slug>`.
+
+**A changed answer.** When an answer replaces one the item already had (the client corrects an earlier answer,
+in a returned file or an e-mail), the tools keep the earlier one in the item's history and say so (render marks it
+CHANGED; update lists it under "Replaced an earlier answer or decision"). Never let it pass silently: tell the
+user which items, quoting the earlier answer and the new one, since the client may have changed their mind. Check
+the spec, the agreed decision and anything built on the earlier answer, and treat a change to something signed as
+a possible change request.
 
 An item a change request waits on (an Ambiguous CR in `_blueprint/changes/crs.json` names it): once it is answered,
 continue with `change-request` to set that CR's verdict to in scope or new.
@@ -80,9 +92,10 @@ note).
 
 ## Hand over
 
-- **What changed:** how many answers were recorded (resolved, answered with a follow-up), what changed in the
-  spec, the follow-up questions added, any possible change requests, and any answer you could not place.
-- **Where and for whom:** the register (`Questions and fixes register.xlsx`, internal, and `Questions for the client.xlsx`, the file to send, both now show the answers;
+- **What changed:** how many answers were recorded (resolved, answered with a follow-up), any answer that
+  replaced an earlier one (with both), what changed in the spec, the follow-up questions added, any possible change requests, and any answer you could not place.
+- **Where and for whom:** the register (`Questions and fixes register.xlsx`, internal, and `Questions for the client.xlsx`, the file to send: its
+  For client sheet holds what is still to answer, Already answered the rest;
   possible change requests are **internal**), the spec and mock-up, and the client's file filed in `1 Client documents`.
   `Project overview.html` lists them.
 - **Next step, in the words to say:** with follow-up questions open, "prepare the workshop"; when the spec

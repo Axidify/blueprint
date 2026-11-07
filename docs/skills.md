@@ -136,7 +136,11 @@ recorded as the client gave it, and acted on: a change to the spec, a decision, 
 possible change request (flagged, internal, not built until you agree; with `change-request` once a version
 was signed). It then says whether the requirements document needs generating again and whether the lead
 developer should revisit the estimate.
-**Output:** the register (answers on the **For client** sheet, and in `Questions for the client.xlsx`), the spec and mock-up where an answer
+**Answers by e-mail** are recorded together from one file (`register.py update --file`), checked as a whole
+first. An answer that replaces an earlier one is pointed out, with both, since the client may have changed
+their mind; the earlier one is kept in the item's history.
+**Output:** the register (open questions on the **For client** sheet, answered ones on **Already answered**,
+in both the register and `Questions for the client.xlsx`), the spec and mock-up where an answer
 changed them, and the client's file filed in the project's `1 Client documents`.
 
 ### apply-feedback

@@ -39,9 +39,11 @@ It produces two Word documents: the **agenda** for the client and the **facilita
 - **Fit the time.** Allow about five minutes a decision and leave a tenth of the session spare. Twelve to
   fifteen questions is a full two-hour session. Park what does not fit; do not shorten every section to
   squeeze it in.
-- **Never answer for the client.** Your view goes in `recommendation`, which only the BA sees.
+- **Never answer for the client.** Your view goes in `internal_view`, which only the BA sees. (Not
+  `recommendation`: in the register that word goes to the client. An older agenda that says
+  `recommendation` is still read as internal.)
 
-Internal fields: `why` (what goes wrong if it is left open, in a sentence), `recommendation`,
+Internal fields: `why` (what goes wrong if it is left open, in a sentence), `internal_view`,
 `gap_pattern` and `effort_impact` (`none`, `low`, `medium`, `high`: a word, never mandays or cost). They
 and the `parked` list appear in the facilitator notes only.
 
