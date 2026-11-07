@@ -63,7 +63,9 @@ Item fields (required unless marked optional):
   recommendation  optional: your suggested answer or fix
   effort_impact   optional: none | low | medium | high - effect on mandays if resolved the costly way
   status          open | asked | answered | resolved | wont-fix
-  answer          optional: the client's answer or the decision taken
+  answer          optional: the client's answer or the decision taken, in their words
+  decision        optional: what was agreed, in one line as it is signed; the requirements document's
+                  Decisions made shows it instead of the raw answer (project.py ready asks for it)
   raised          date raised, YYYY-MM-DD
   resolved_in     optional: document version or meeting where it was closed
   owner           optional: who must answer or fix it (default in the Open Issues table: the client)
@@ -89,7 +91,7 @@ STAGES = {"sow", "workshop-1", "mockup", "workshop-2", "requirements-draft", "re
           "srs-draft", "srs-final"}  # the last two are the names used before 0.4.0
 REQUIRED = ["id", "type", "audience", "severity", "category", "stage", "source", "finding", "status", "raised"]
 FIELDS = ["id", "type", "audience", "severity", "category", "stage", "source", "finding", "question", "recommendation",
-          "effort_impact", "status", "answer", "raised", "resolved_in", "owner", "due"]  # every field, in the order written
+          "effort_impact", "status", "answer", "decision", "raised", "resolved_in", "owner", "due"]  # every field, in the order written
 EFFORTS = {"none", "low", "medium", "high"}
 DUPLICATE = 0.5  # similarity from which add names an existing item as a likely duplicate
 SEV_ORDER = {"high": 0, "medium": 1, "low": 2}
@@ -623,7 +625,7 @@ def render(project, reg, overwrite=False, returned=None):
     client_cols = [
         ("ID", 8, "id"), ("Severity", 10, cap("severity")), ("Document", 12, doc_of), ("Where", 34, client_where_of),
         ("Observation", 55, "finding"), ("Question for client", 55, "question"),
-        ("Our recommendation", 40, "recommendation"), ("Client response", 45, "answer"),
+        ("Our recommendation", 40, "recommendation"), ("Client response", 45, "answer"), ("Agreed decision", 45, "decision"),
         ("Status", 12, "status"), ("Raised", 12, "raised"),
     ]
     internal_cols = [
@@ -633,7 +635,7 @@ def render(project, reg, overwrite=False, returned=None):
         ("Raised", 12, "raised"),
     ]
     finding_at = next(i for i, c in enumerate(internal_cols) if c[0] == "Finding")
-    all_cols = internal_cols[:finding_at] + [("Audience", 11, "audience"), ("Stage", 12, "stage")] +         internal_cols[finding_at:finding_at + 1] + [("Question for client", 50, "question")] +         internal_cols[finding_at + 1:] + [("Answer / decision", 40, "answer"), ("Resolved in", 16, "resolved_in")]
+    all_cols = internal_cols[:finding_at] + [("Audience", 11, "audience"), ("Stage", 12, "stage")] +         internal_cols[finding_at:finding_at + 1] + [("Question for client", 50, "question")] +         internal_cols[finding_at + 1:] + [("Answer / decision", 40, "answer"), ("Agreed decision", 40, "decision"), ("Resolved in", 16, "resolved_in")]
 
     wb = Workbook()
     ws = wb.active

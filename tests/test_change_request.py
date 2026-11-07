@@ -81,7 +81,7 @@ def new_project(projects, issued=True, run=None):
     (p / "output" / f"{DOC}.pdf").write_bytes(b"%PDF-1.4 generated")
     shutil.copy(p / "spec" / "app.yaml", p / "output" / "spec-v0.1.yaml")  # as the generator leaves it
     if issued:
-        run(project_tool, "issue", "leave-request", "--date", "2026-11-10")
+        run(project_tool, "issue", "leave-request", "--date", "2026-11-10", "--anyway", "test fixture")
     return p
 
 

@@ -1,7 +1,8 @@
 """Project folder housekeeping: issue versions, file client documents, archive, and check the layout.
 
 Usage:
-    python -I tools/project.py issue    <slug> [--to "<recipient>"] [--date YYYY-MM-DD] [--note "<text>"] [--without-pdf]
+    python -I tools/project.py ready    <slug>
+    python -I tools/project.py issue    <slug> [--to "<recipient>"] [--date YYYY-MM-DD] [--note "<text>"] [--without-pdf] [--anyway "<why>"]
     python -I tools/project.py issued   <slug>
     python -I tools/project.py file     <slug> "<file>" --kind "<what it is>" [--responds-to 1.3] [--date YYYY-MM-DD] [--copy]
     python -I tools/project.py archive  <slug>
@@ -12,10 +13,17 @@ Usage:
     python -I tools/project.py check    [<slug>] [--fix]
     python -I tools/project.py migrate  <slug> | --all [--dry-run] [--undo]
 
+ready    whether the current version can go to the client for signature. It stops on a client question still
+         marked "Blocks sign-off" (open, high), a settled item with no agreed decision (the document would
+         print the client's raw answer as what is signed), or a document older than the spec or register.
+         It also lists what to look at: answered items still open, questions that look the same, a field
+         whose choices differ from the ones the client listed, "the agreed …" or "to be confirmed" in a
+         requirement with nothing tracking it, and a side with nobody to sign.
 issue    records that the current document version (the spec's project.version) went to the client, and makes
          its files read-only. The generator then refuses to overwrite that version: bump the version first.
          It needs the version's PDF (--without-pdf issues the Word file alone), and refuses a version written
-         without quotes in the spec (1.10 would read as 1.1).
+         without quotes in the spec (1.10 would read as 1.1). It runs ready first and issues nothing while
+         something stops it, unless --anyway "<why>" is given; the reason is kept with the issue.
 issued   lists the versions issued so far.
 file     moves a document into the project's client documents ("1 Client documents", docs/ in a project
          not yet migrated) with a dated, descriptive name, e.g. "2026-11-12 client comments on v1.3.docx".
@@ -722,6 +730,174 @@ def drop_note(path):
 
 
 # ------------------------------------------------------------------ commands
+# ------------------------------------------------------------------ ready for sign-off
+# What a version needs before it goes to the client for signature, from what an end-to-end test found in a
+# version that went out too early: a question still marked "Blocks sign-off", the client's raw answers printed
+# as the agreed decisions, a field offering other choices than the ones the client listed, "the agreed time"
+# with no time agreed anywhere. "stop" holds the issue back; "check" is for the BA to look at.
+PLACEHOLDER = re.compile(r"\b(?:the agreed(?: \w+)?|as agreed|to be (?:confirmed|agreed|decided|defined)|TBC|TBD)\b", re.I)
+LIST_SPLIT = re.compile(r"\s*[,;]\s*")
+LAST_SPLIT = re.compile(r"\s+(?:or|and)\s+", re.I)
+
+
+def answer_list(text):
+    """The choices a client listed in an answer ("Vehicle problem, Dealer closed, Other (with remarks)"), lower
+    case, without remarks in brackets; only the short ones, as a list of choices is made of."""
+    text = re.sub(r"\([^)]*\)", "", str(text or ""))
+    text = re.sub(r"^\s*TEST ANSWER:\s*", "", text, flags=re.I)
+    if ":" in text:
+        text = text.split(":", 1)[1]
+    parts = [c for c in LIST_SPLIT.split(text) if c.strip(" .")]
+    # "A, B or C": the last "or" joins the last two choices. Inside the list "Road or weather" is one choice.
+    if len(parts) > 1:
+        parts = parts[:-1] + LAST_SPLIT.split(parts[-1])
+    return {c.strip(" .").lower() for c in parts if c.strip(" .") and len(c.split()) <= 5}
+
+
+def spec_fields(spec):
+    """(where, field) for every field of every screen section and dialog."""
+    for s in spec.get("screens") or []:
+        for sec in s.get("sections") or []:
+            for f in sec.get("fields") or []:
+                yield f"screen '{s.get('title') or s.get('id')}'", f
+    for d in spec.get("dialogs") or []:
+        for f in d.get("fields") or []:
+            yield f"dialog '{d.get('title') or d.get('id')}'", f
+
+
+def readiness(p):
+    """What stands between the current version and the client's signature, as (level, text): "stop" or "check"."""
+    import yaml
+
+    out = []
+    spec_path = layout.spec_file(p)
+    spec = yaml.safe_load(spec_path.read_text(encoding="utf-8")) if spec_path.exists() else {}
+    spec = spec or {}
+    P = spec.get("project") or {}
+    reg_path = layout.register_json(p)
+    items = (_json(reg_path) or {}).get("items", []) if reg_path.exists() else []
+    client = [it for it in items if it.get("audience") == "client"]
+
+    # The document must show the spec and register as they are now.
+    version = str(P.get("version") or "")
+    docs = [f for f in issued_files(p, version) if f.suffix == ".docx"] if version and layout.output_dir(p).exists() else []
+    if not docs:
+        out.append(("stop", f"There is no requirements document for v{version} yet: generate it first."))
+    else:
+        changed = [x for x in (spec_path, reg_path) if x.exists() and x.stat().st_mtime > docs[0].stat().st_mtime]
+        if changed:
+            out.append(("stop", f"The {' and the '.join('spec' if x == spec_path else 'register' for x in changed)} changed "
+                                f"after v{version} was generated: generate it again so the document shows them."))
+
+    # Open questions: one the client must answer before signing holds it back; an answer waiting for us is ours.
+    for it in client:
+        if it.get("status") in ("open", "asked", "answered") and it.get("severity") == "high":
+            # An answered item still prints as "Blocks sign-off" until it is resolved.
+            got = " It has an answer: resolve it with its decision if that settles it." if it.get("status") == "answered" else ""
+            out.append(("stop", f"{it['id']} still blocks sign-off: {short_text(it.get('question') or it.get('finding'))}{got} "
+                                "Otherwise settle it, or lower its severity if the client agrees to sign without it."))
+        elif it.get("status") == "answered":
+            out.append(("check", f"{it['id']} has an answer but is still open in the document: resolve it with its decision "
+                                 "if the answer settles it, or keep it and add the follow-up question."))
+    # Settled items go into the signed document as decisions: in one agreed line, not the client's raw answer.
+    raw = [it["id"] for it in client
+           if it.get("status") == "resolved" and str(it.get("answer") or "").strip() and not str(it.get("decision") or "").strip()]
+    if raw:
+        which = f"{raw[0]} is" if len(raw) == 1 else f"{len(raw)} items are"
+        listed = "" if len(raw) == 1 else f" ({', '.join(raw)})"
+        out.append(("stop", f"{which} settled with no agreed decision, so the document prints the client's own answer as what "
+                            f"is signed{listed}. Write each one's decision in one line: "
+                            f"register.py update {p.name} {raw[0]} --set decision=\"...\""))
+
+    # Two open questions asking the same thing.
+    open_q = [it for it in client if it.get("status") in ("open", "asked", "answered") and it.get("question")]
+    try:
+        import register as register_tool
+        for i, one in enumerate(open_q):
+            for other in open_q[i + 1:]:
+                if register_tool.similarity(one, other) >= register_tool.DUPLICATE:
+                    out.append(("check", f"{one['id']} and {other['id']} look like the same question: merge them, or close one."))
+    except Exception:
+        pass
+
+    # A choice list on a screen that differs from the one the client gave.
+    fields = [(w, f) for w, f in spec_fields(spec) if isinstance(f.get("options"), list) and len(f["options"]) >= 2]
+    for it in client:
+        if it.get("status") not in ("resolved", "answered"):
+            continue
+        said = answer_list(it.get("decision") or it.get("answer"))
+        if len(said) < 2:
+            continue
+        for where, f in fields:
+            offered = {str(o).strip().lower() for o in f["options"]}
+            both = said & offered
+            if len(both) >= 2 and len(both) * 2 >= len(offered) and said != offered:
+                missing = sorted(o for o in said - offered)
+                extra = [str(o) for o in f["options"] if str(o).strip().lower() not in said]
+                parts = ([f"leaves out {', '.join(missing)}"] if missing else []) + ([f"adds {', '.join(extra)}"] if extra else [])
+                if parts:
+                    out.append(("check", f"{where}, field '{f.get('label') or f.get('id')}': its choices differ from {it['id']}'s answer "
+                                         f"(it {' and '.join(parts)}). Make them match, or record why they differ."))
+
+    # "The agreed time" with no time agreed: a requirement that waits on something must say what, through a register item.
+    for g in spec.get("requirements") or []:
+        for n, item in enumerate(g.get("items") or [], 1):
+            text_ = item.get("text") if isinstance(item, dict) else item
+            if isinstance(text_, str) and PLACEHOLDER.search(text_) and not (isinstance(item, dict) and item.get("tbc")):
+                found = PLACEHOLDER.search(text_).group(0)
+                out.append(("check", f"{g.get('id')}.{n} says \"{found}\" with nothing tracking it: write the value, or link the "
+                                     "register item that settles it (tbc: R-…)."))
+
+    # Both sides sign.
+    signers = spec.get("signoff") or []
+    orgs = " ".join(str(s.get("organisation") or "") for s in signers).lower()
+    client_names = [str(P.get(k) or "").lower() for k in ("client", "client_short") if P.get(k)]
+    try:
+        import workspace
+        co = workspace.company()
+        own_names = [str(co.get(k) or "").lower() for k in ("name", "short_name") if co.get(k)]
+    except Exception:
+        own_names = []
+    if not signers:
+        out.append(("check", "The spec names nobody to sign (signoff): add the client's signatories and your own."))
+    else:
+        if client_names and not any(n and n in orgs for n in client_names):
+            out.append(("check", "Nobody signs for the client in the spec's signoff."))
+        if own_names and not any(n and n in orgs for n in own_names):
+            out.append(("check", "Nobody signs for your side in the spec's signoff."))
+    return out
+
+
+def short_text(text, width=110):
+    text = " ".join(str(text or "").split())
+    return text if len(text) <= width else text[:width - 1].rstrip() + "…"
+
+
+def show_readiness(found):
+    stops = [t for level, t in found if level == "stop"]
+    checks = [t for level, t in found if level == "check"]
+    if stops:
+        print(f"Not ready for sign-off ({len(stops)} to fix first):")
+        for t in stops:
+            print(f"  - {t}")
+    if checks:
+        print(f"To look at before it goes out ({len(checks)}):")
+        for t in checks:
+            print(f"  - {t}")
+    if not found:
+        print("Ready for sign-off: nothing open blocks it, every decision is written, and the document is up to date.")
+    return stops
+
+
+def cmd_ready(a):
+    p = project_dir(a.slug)
+    stops = show_readiness(readiness(p))
+    if stops:
+        print("Fix those, generate the document again, and run this again. To issue it anyway: "
+              f"project.py issue {a.slug} --anyway \"<why>\".")
+        sys.exit(1)
+
+
 def cmd_issue(a):
     p = project_dir(a.slug)
     P = spec_project(p)
@@ -737,9 +913,16 @@ def cmd_issue(a):
         sys.exit(f"v{version} has no PDF (the Word step did not finish), so its contents and page numbers may not be "
                  "up to date. Generate it again where Word is available, then issue it. To issue the Word file alone, "
                  "add --without-pdf. Nothing was issued.")
+    stops = show_readiness(readiness(p))
+    if stops and not (a.anyway or "").strip():
+        sys.exit(f"Nothing was issued. Fix the points above first, or, if the client signs it as it is, issue it with "
+                 f"--anyway \"<why>\" (the reason is kept with the issue).")
+    note = a.note or ""
+    if stops:
+        note = (note + " " if note else "") + f"Issued with {len(stops)} point(s) open: {a.anyway.strip()}"
     issues = load_issues(p)
     record = {"version": version, "date": a.date or dt.date.today().isoformat(),
-              "to": a.to or P.get("client_short") or P.get("client", ""), "files": [f.name for f in files], "note": a.note or ""}
+              "to": a.to or P.get("client_short") or P.get("client", ""), "files": [f.name for f in files], "note": note}
     issues.append(record)
     write_issues(p, issues)
     snap = layout.snapshot(p, version)
@@ -1041,7 +1224,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("issue"); s.add_argument("slug"); s.add_argument("--to"); s.add_argument("--date"); s.add_argument("--note")
-    s.add_argument("--without-pdf", action="store_true")
+    s.add_argument("--without-pdf", action="store_true"); s.add_argument("--anyway")
+    s = sub.add_parser("ready"); s.add_argument("slug")
     s = sub.add_parser("issued"); s.add_argument("slug")
     s = sub.add_parser("file"); s.add_argument("slug"); s.add_argument("file"); s.add_argument("--kind", required=True)
     s.add_argument("--responds-to"); s.add_argument("--date"); s.add_argument("--copy", action="store_true")
@@ -1054,7 +1238,7 @@ def main():
     s = sub.add_parser("migrate"); s.add_argument("slug", nargs="?"); s.add_argument("--all", action="store_true")
     s.add_argument("--dry-run", action="store_true"); s.add_argument("--undo", action="store_true")
     a = ap.parse_args()
-    {"issue": cmd_issue, "issued": cmd_issued, "file": cmd_file, "archive": cmd_archive, "restore": cmd_restore, "find": cmd_find,
+    {"issue": cmd_issue, "ready": cmd_ready, "issued": cmd_issued, "file": cmd_file, "archive": cmd_archive, "restore": cmd_restore, "find": cmd_find,
      "match": cmd_match, "hold": cmd_hold, "check": cmd_check, "migrate": cmd_migrate}[a.cmd](a)
 
 

@@ -42,6 +42,7 @@
       "question": "How long must closed bookings be kept?",
       "status": "resolved",
       "answer": "Seven years.",
+      "decision": "Seven years.",
       "raised": "2026-10-20",
       "resolved_in": "v1.2"
     },

@@ -160,8 +160,11 @@ signatories), then reviews the document with `review-requirements`.
 See [Document format](document-format.md).
 **Output:** `5 Requirements document/<System> – System Requirement Specifications v<version>.docx`, a PDF
 when Word is installed, and a snapshot of the spec used.
+Before it goes for signature, Blueprint checks it is ready (`project.py ready`): nothing still blocks sign-off,
+every settled question has its agreed decision written in one line, and the document is up to date; it also
+points at choices that differ from the client's answer, duplicate questions and "the agreed …" with no value.
 When the document goes to the client, say "issue v1.3 to the client": the version is recorded and
-locked, so later changes become a new version.
+locked, so later changes become a new version. Issuing runs the same check first.
 
 ### document-format
 

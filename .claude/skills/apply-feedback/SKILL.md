@@ -39,7 +39,8 @@ For every comment or note, choose one:
 
 Add the register items with `python -I tools/register.py add projects/<slug> --file <items.json>` (run with
 `--check` first and drop the likely duplicates it names), and record decisions on existing items with
-`register.py update ... --set status=resolved --set answer="..."`; never edit `register.json` by hand.
+`register.py update ... --set status=resolved --set answer="..." --set decision="<what was agreed, in one line>"`;
+never edit `register.json` by hand.
 
 Check each change against the gap patterns: a new role needs a data scope, a new status needs its edit,
 cancel and delete rules, a new KPI needs a formula, a new list needs its columns. What the spec cannot

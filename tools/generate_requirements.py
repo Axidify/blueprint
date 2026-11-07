@@ -1507,11 +1507,16 @@ def build(project):
     reg_file = layout.register_json(project)
     items = json.loads(reg_file.read_text(encoding="utf-8"))["items"] if reg_file.exists() else []
     open_items = [it for it in items if it["audience"] == "client" and it["status"] not in ("resolved", "wont-fix")]
-    made_items = [it for it in items if it["audience"] == "client" and it["status"] == "resolved" and str(it.get("answer") or "").strip()]
+    made_items = [it for it in items if it["audience"] == "client" and it["status"] == "resolved"
+                  and (str(it.get("answer") or "").strip() or str(it.get("decision") or "").strip())]
     chapters, refs = plan_sections(spec, fmt, items)
     labels = fmt["labels"]
     warnings = ["screenshots: " + problem for problem in mockup.screenshot_problems(project, spec)]
     warnings += flow_names(spec)[1]
+    raw = [it["id"] for it in made_items if not str(it.get("decision") or "").strip()]
+    if raw and "decisions" in [k for k, *_ in chapters]:
+        warnings.append(f"Decisions made prints the client's own answer for {', '.join(raw)}: write each one's agreed decision "
+                        "in one line (register.py update ... --set decision=\"...\"), as it is what the client signs")
     notes = []  # worth knowing, but no reason to hold a version back
     roles = spec["roles"]
     role_ids = [r["id"] for r in roles]
@@ -2333,7 +2338,8 @@ def build(project):
                 w.lead(fill(bp.get("decisions_made_intro") or DECISIONS_MADE_INTRO))
                 half = (tw - 1.6 - 2.6) / 2
                 w.table(["ID", "Question", "Decision", "Agreed in"],
-                        [[[(it["id"], "mono")], it.get("question") or it.get("finding", ""), it["answer"], str(it.get("resolved_in") or "–")]
+                        [[[(it["id"], "mono")], it.get("question") or it.get("finding", ""),
+                          str(it.get("decision") or "").strip() or it["answer"], str(it.get("resolved_in") or "–")]
                          for it in made_items], [1.6, half, half, 2.6])
 
         # ---------------------------------------------------------------- sign-off

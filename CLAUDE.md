@@ -139,7 +139,7 @@ tools/<script>.py`, the environment `setup.sh` makes; wherever these instruction
 `python`, use that, and `./setup.sh` and `./present.sh` for `setup.cmd` and `present.cmd`): `doctor.py` (machine check), `status.py`
 (projects and next steps), `new_project.py`, `extract.py` (documents to text and images), `register.py`
 (register validation and Excel), `mockup.py` (build, serve, screenshot, feedback, live session, the mock-up's look and its preview), `generate_requirements.py`,
-`document_format.py` (show, learn, preview the document format), `project.py` (issue, file, archive, find earlier work, match an inbox file to its project, hold a file in the inbox, check, migrate a project to the new folder layout),
+`document_format.py` (show, learn, preview the document format), `project.py` (ready for sign-off, issue, file, archive, find earlier work, match an inbox file to its project, hold a file in the inbox, check, migrate a project to the new folder layout),
 `estimate.py` (rates, project inventory, estimate checks and Excel, weeks for the timeline),
 `workshop.py` (what a workshop has to settle, agenda checks and the two workshop documents),
 `platform_fit.py` (a spec against what its platform gives, and the platform sheets),
