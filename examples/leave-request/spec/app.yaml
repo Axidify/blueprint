@@ -272,3 +272,31 @@ nfr:
   - {area: Availability, requirement: "Business hours, 8am to 6pm on working days"}
   - {area: Retention, requirement: "Applications and audit trail kept for 7 years"}
   - {area: Browsers, requirement: "Latest Microsoft Edge and Google Chrome"}
+  - {area: Performance, requirement: "A screen opens within 3 seconds for 30 concurrent users"}
+  - {area: Backup, requirement: "Daily backup kept for 30 days; restored within one working day"}
+  - {area: Security, requirement: "Sign-in with the company's Active Directory account; every page over HTTPS"}
+
+# The sections every requirements document must have (`required` in the document format). One left out would
+# print as "To be confirmed".
+extra_sections:
+  - title: Environments
+    content:
+      - text: "{system} runs in two environments: UAT, where {client_short} tests each release, and Production."
+      - bullets:
+          - "{client_short} IT provides both servers and the Active Directory service account two weeks before UAT starts."
+          - "The SMTP relay accepts e-mail from both environments."
+  - title: Data migration
+    content:
+      - text: "No applications are moved from the current paper forms. HR Admin loads each employee's leave balance for the current year once, before go-live, from a spreadsheet the project team provides the format of; HR checks the balances before they are loaded."
+  - title: Reports
+    content:
+      - text: "No reports are in scope in this version. HR Admin sees every application, with its status, in the system."
+  - title: Audit trail
+    content:
+      - text: "Every status change of an application is recorded with who made it, when, and any comment. HR Admin can see the history on the application; nobody can change or delete it."
+  - title: Training and handover
+    content:
+      - bullets:
+          - "One train-the-trainer session for HR Admin before UAT."
+          - "A short user guide for employees and line managers."
+          - "Handover to {client_short} IT: installation notes and the administrator guide, at go-live."

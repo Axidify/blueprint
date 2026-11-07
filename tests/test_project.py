@@ -487,6 +487,33 @@ def test_ready_points_at_what_to_check_before_it_goes_out(projects, run, capsys)
     assert "Not ready" not in out, "none of these stops the issue"
 
 
+def test_ready_stops_on_a_required_section_still_empty_unless_an_open_register_item_tracks_it(projects, run, capsys):
+    p = new_project(projects)
+
+    def without_reports(spec):
+        spec["extra_sections"] = [e for e in spec["extra_sections"] if e["title"] != "Reports"]
+        spec["nfr"] = [x for x in spec["nfr"] if x["area"] != "Backup"] + [{"area": "Backup", "tbc": "R-005"}]
+    with_items(p, [{"id": "R-005", "status": "open", "question": "How long are backups kept?"}], without_reports)
+    with pytest.raises(SystemExit):
+        run("ready", "leave-request")
+    out = capsys.readouterr().out
+    assert ("The document prints the section Reports as To be confirmed: write it in the spec, or open a register item "
+            "for it and link it there (tbc: R-…).") in out
+    assert "Backup" not in out, "an open register item tracks it"
+
+    def tracked(spec):
+        without_reports(spec)
+        spec["extra_sections"].append({"title": "Reports", "tbc": "R-006"})
+    with_items(p, [{"id": "R-005", "status": "resolved", "question": "How long are backups kept?", "decision": "30 days."},
+                   {"id": "R-006", "status": "open", "question": "Which reports does HR need?"}], tracked)
+    with pytest.raises(SystemExit):
+        run("ready", "leave-request")
+    out = capsys.readouterr().out
+    assert ("The document still prints the non-functional requirement Backup as To be confirmed, but R-005 is settled: "
+            "write what was agreed into the spec.") in out
+    assert "section Reports" not in out
+
+
 def test_a_list_of_choices_keeps_an_or_inside_it():
     assert project_tool.answer_list("TEST ANSWER: Vehicle problem, Road or weather, Other (with remarks).") == \
         {"vehicle problem", "road or weather", "other"}

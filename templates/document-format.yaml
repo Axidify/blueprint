@@ -56,6 +56,13 @@ front: [cover, at_a_glance, about, contents]
 # Numbered chapters, in order. Remove an entry to leave it out (sign-off is never numbered).
 chapters: [users_access, scope, by_role, requirements, screens, nfr, timeline, extras, decisions, signoff]
 
+# What every requirements document must have (the knowledge base's requirements standard). One the spec leaves
+# empty is printed as "To be confirmed" and warned about; the workshop asks about it; sign-off waits for it,
+# unless a register item tracks it (`tbc: R-...` on the entry). Set a list to [] to require nothing.
+required:
+  nfr: [Users, Performance, Availability, Backup, Retention, Security, Browsers]   # areas in the nfr chapter
+  sections: [Environments, Data migration, Reports, Audit trail, Training and handover]  # extra_sections titles
+
 titles:
   users_access: Users and access
   scope: Scope and assumptions

@@ -79,7 +79,7 @@ def open_client_items(items):
     return sorted(found, key=lambda it: (SEVERITY.get(it.get("severity"), 9), str(it.get("raised", "")), str(it.get("id", ""))))
 
 
-def spec_gaps(spec):
+def spec_gaps(spec, fmt=None):
     """What the spec does not say yet that a workshop can settle: [(topic, what is missing, gap pattern or "")]."""
     if not spec:
         return []
@@ -122,7 +122,24 @@ def spec_gaps(spec):
         loose_screens = [s.get("title", s.get("id")) for s in spec.get("screens") or [] if s.get("type") != "login" and s.get("id") not in linked]
         if loose_screens:
             gaps.append(("Requirements", f"no requirement refers to: {', '.join(loose_screens)}", ""))
+    gaps += required_gaps(spec, fmt)
     return gaps
+
+
+def required_gaps(spec, fmt=None):
+    """The parts every requirements document must have (the document format's `required`) that the spec leaves
+    empty and no register item tracks yet: [(topic, what is missing, gap pattern or "")]."""
+    import generate_requirements as gr
+
+    found = [g for g in gr.section_gaps(spec, fmt or gr.load_format()) if not g["tbc"]]
+    areas = [g["name"] for g in found if g["kind"] == "nfr"]
+    out = []
+    if areas and spec.get("nfr"):  # with no nfr at all, "none recorded" already says it
+        out.append(("Non-functional requirements", f"nothing recorded for: {', '.join(areas)}", "GP-12"))
+    sections = [g["name"] for g in found if g["kind"] == "section"]
+    if sections:
+        out.append(("Required sections", f"nothing written yet for: {', '.join(sections)}", ""))
+    return out
 
 
 def knowledge_dir():

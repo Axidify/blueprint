@@ -38,6 +38,7 @@ def expected_chapter_titles(spec, fmt=FORMAT):
     for key in fmt["chapters"]:
         if key == "extras":
             out += [e["title"] for e in spec.get("extra_sections") or [] if not e.get("appendix")]
+            out += [g["name"] for g in generate_requirements.section_gaps(spec, fmt) if g["kind"] == "section" and not g["present"]]
         elif key not in ("timeline", "scope") or spec.get(key):
             out.append(fmt["titles"][key])
     return out
@@ -122,7 +123,8 @@ def test_chapters_follow_the_document_format(built):
 def test_example_has_exactly_the_default_chapters(example):
     assert support.headings(example.doc, 1) == [
         "1 Users and access", "2 Scope and assumptions", "3 Requirements by role", "4 Functional requirements", "5 Screens",
-        "6 Non-functional requirements", "7 Decisions needed before sign-off", "Client acknowledgement and sign-off"]
+        "6 Non-functional requirements", "7 Environments", "8 Data migration", "9 Reports", "10 Audit trail",
+        "11 Training and handover", "12 Decisions needed before sign-off", "Client acknowledgement and sign-off"]
 
 
 def test_extra_sections_and_appendix(wide):
@@ -588,8 +590,8 @@ def test_timeline_in_the_spec_adds_the_chapter_after_the_nfrs(tmp_path):
     result = support.generate(project_from_example(tmp_path / "with-timeline", timeline=SHORT_TIMELINE))
     assert support.headings(result.doc, 1) == [
         "1 Users and access", "2 Scope and assumptions", "3 Requirements by role", "4 Functional requirements", "5 Screens",
-        "6 Non-functional requirements", "7 Project timeline", "8 Decisions needed before sign-off",
-        "Client acknowledgement and sign-off"]
+        "6 Non-functional requirements", "7 Project timeline", "8 Environments", "9 Data migration", "10 Reports",
+        "11 Audit trail", "12 Training and handover", "13 Decisions needed before sign-off", "Client acknowledgement and sign-off"]
     blocks = chapter(result.doc, TITLES["timeline"])
     chart = support.table_starting(blocks, "Week")
     assert len(chart.columns) == 1 + 12, "one column per week up to 40 weeks"
@@ -1061,7 +1063,7 @@ def test_the_format_file_is_still_read_under_its_old_name(temp_workspace, tmp_pa
     (lambda s: s["requirements"].append({"id": "FR-NEW-001", "title": "New group", "items": ["", {"note": "x"}]}), "requirement group FR-NEW-001, item 2: needs its text"),
     (lambda s: s["requirements"].append(dict(s["requirements"][0])), "the id is used twice"),
     (lambda s: s.update(notifications=[{"event": "Submitted"}]), "notification 1: missing 'recipient'"),
-    (lambda s: s.update(nfr=[{"area": "Security"}]), "non-functional requirement 1: missing 'requirement'"),
+    (lambda s: s.update(nfr=[{"area": "Security"}]), "non-functional requirement Security: missing 'requirement'"),
     (lambda s: s.update(glossary=[{"term": "LM"}]), "glossary entry 1: missing 'meaning'"),
     (lambda s: s["screens"][1].pop("title"), "missing 'title'"),
     (lambda s: s.update(extra_sections=[{"title": "Notes", "content": [{"text": "a"}]}, {"title": "Notes", "content": [{"text": "b"}]}]),
@@ -1741,7 +1743,10 @@ def test_parts_the_standard_asks_for_are_listed_before_issuing(example, wide):
     assert "2 PART(S) MISSING - add these to the spec before issuing:" in example.log
     assert "- timeline: none in the spec" in example.log
     assert "- sign-off: nobody is named, so the forms are blank" in example.log
-    assert "1 PART(S) MISSING" in wide.log and "- scope: nothing says what is in scope, out of scope and assumed" in wide.log
+    assert "3 PART(S) MISSING" in wide.log and "- scope: nothing says what is in scope, out of scope and assumed" in wide.log
+    assert ("- non-functional requirements: nothing for Performance, Availability, Backup, Retention, Security, "
+            "printed as To be confirmed") in wide.log
+    assert "- sections: nothing written for Environments, Reports, Audit trail, Training and handover" in wide.log
 
 
 def test_empty_scope_lists_no_nfrs_and_unnamed_signatories_are_listed(tmp_path):
@@ -1754,7 +1759,8 @@ def test_empty_scope_lists_no_nfrs_and_unnamed_signatories_are_listed(tmp_path):
     for said in ("scope: nothing listed as out of scope", "scope: nothing listed as assumptions",
                  "non-functional requirements: none recorded", "sign-off: no name for Business owner", "sign-off: no name for IT"):
         assert "- " + said in log, said
-    assert "5 PART(S) MISSING" in log
+    assert "6 PART(S) MISSING" in log
+    assert "nothing for Users" not in log, "with no nfr at all, 'none recorded' says it once"
 
 
 def test_nothing_is_listed_as_missing_when_the_spec_has_every_part(tmp_path):
@@ -1762,6 +1768,78 @@ def test_nothing_is_listed_as_missing_when_the_spec_has_every_part(tmp_path):
                            signoff=[{"name": "Aminah Yusof", "organisation": "Sample Client Sdn. Bhd.", "signing_for": "Business owner"}])
     log = support.generate(support.make_project(tmp_path / "complete", spec=spec)).log
     assert "MISSING" not in log and "WARNING" not in log
+
+
+# ====================================================================== sections every document must have
+def without_required_parts(spec):
+    """The sample with Backup and Reports gone, as a spec written before they were asked for."""
+    spec["nfr"] = [x for x in spec["nfr"] if x["area"] != "Backup"]
+    spec["extra_sections"] = [e for e in spec["extra_sections"] if e["title"] != "Reports"]
+    return spec
+
+
+def test_a_required_section_the_spec_leaves_out_is_printed_as_to_be_confirmed(tmp_path):
+    result = support.generate(support.make_project(tmp_path / "gaps", spec=without_required_parts(support.load_spec(support.EXAMPLE))))
+    assert "11 Reports" in support.headings(result.doc, 1), "after the sections the spec has, before the decisions"
+    assert support.paragraphs(chapter(result.doc, "Reports")) == ["● To be confirmed."]
+    nfr = support.table_starting(chapter(result.doc, TITLES["nfr"]), "Area")
+    assert ["Backup", "● To be confirmed."] in rows(nfr)
+    assert ("- non-functional requirements: nothing for Backup, printed as To be confirmed (write each under `nfr`, "
+            "or link the register item that settles it with `tbc: R-...`)") in result.log
+    assert "- sections: nothing written for Reports, printed as To be confirmed" in result.log
+
+
+def test_a_required_section_waiting_on_a_decision_names_it(tmp_path):
+    spec = without_required_parts(support.load_spec(support.EXAMPLE))
+    spec["nfr"].append({"area": "Backup", "tbc": "R-031"})
+    spec["extra_sections"].append({"title": "Reports", "tbc": "R-032"})
+    project = support.make_project(tmp_path / "tracked", spec=spec)
+    item = {"audience": "client", "status": "open", "severity": "medium", "type": "question", "category": "GP-12",
+            "stage": "workshop-1", "source": "Test", "finding": "Not said.", "raised": "2026-11-01"}
+    generate_requirements.layout.register_json(project).write_text(json.dumps({"project": "Leave Request System", "items": [
+        {**item, "id": "R-031", "question": "How often is the data backed up, and for how long is it kept?"},
+        {**item, "id": "R-032", "question": "Which reports does HR need?"}]}), encoding="utf-8")
+    result = support.generate(project)
+    number = next(h.split(" ", 1)[0] for h in support.headings(result.doc, 1) if h.endswith(TITLES["decisions"]))
+    assert support.paragraphs(chapter(result.doc, "Reports")) == [f"● To be confirmed: decision needed R-032, see section {number}."]
+    assert ["Backup", f"● To be confirmed: decision needed R-031, see section {number}."] in rows(
+        support.table_starting(chapter(result.doc, TITLES["nfr"]), "Area"))
+    assert "- non-functional requirements: Backup is printed as To be confirmed, waiting on R-031" in result.log
+    assert "- sections: Reports is printed as To be confirmed, waiting on R-032" in result.log
+    assert "nothing written for" not in result.log and "nothing for Backup" not in result.log
+
+
+def test_a_section_may_say_which_required_section_it_covers():
+    spec = support.load_spec(support.EXAMPLE)
+    for e in spec["extra_sections"]:
+        if e["title"] == "Training and handover":
+            e["title"], e["covers"] = "Handing over the system", "Training and handover"
+    spec["nfr"] = [dict(x, area="Backup and recovery") if x["area"] == "Backup" else x for x in spec["nfr"]]
+    assert generate_requirements.section_gaps(spec, FORMAT) == [], "covers, and an area that contains the name"
+    spec["extra_sections"][0]["content"] = []
+    assert generate_requirements.section_gaps(spec, FORMAT) == [
+        {"kind": "section", "name": "Environments", "present": True, "tbc": ""}], "a section with nothing in it is still empty"
+
+
+def test_what_is_required_comes_from_the_document_format():
+    spec = without_required_parts(support.load_spec(support.EXAMPLE))
+    fmt = copy.deepcopy(FORMAT)
+    fmt["required"] = {"nfr": ["Disaster recovery"], "sections": []}
+    assert [g["name"] for g in generate_requirements.section_gaps(spec, fmt)] == ["Disaster recovery"]
+    fmt["chapters"] = [c for c in fmt["chapters"] if c != "nfr"]
+    assert generate_requirements.section_gaps(spec, fmt) == [], "nothing is required where the document has no place for it"
+    fmt = copy.deepcopy(FORMAT)
+    fmt["required"]["sections"] = "Reports"
+    assert generate_requirements.format_errors(fmt) == [
+        "required.sections: must be a list of names, for example [Environments, Data migration]"]
+
+
+def test_a_tbc_on_a_required_part_must_be_a_register_id():
+    spec = generate_requirements.json.loads(generate_requirements.json.dumps(support.load_spec(support.EXAMPLE), default=str))
+    spec["nfr"].append({"area": "Capacity", "tbc": "R-040"})
+    assert generate_requirements.document_errors(spec) == [], "a row waiting on a register item needs no requirement yet"
+    spec["extra_sections"].append({"title": "Hosting", "tbc": "later"})
+    assert generate_requirements.document_errors(spec) == ["extra section 'Hosting': 'tbc' must be a register id, for example R-019"]
 
 
 # ====================================================================== captions of extra screenshots
@@ -1781,7 +1859,29 @@ def test_two_figures_with_the_same_caption_are_warned_about(tmp_path):
     spec = support.load_spec(support.EXAMPLE)
     spec["screenshots"] += [{"screen": "approvals", "name": "approvals-again"}]
     log = support.generate(support.make_project(tmp_path / "same-caption", spec=spec)).log
-    assert "screen approvals: two figures have the caption 'Pending Approvals'" in log and "name approvals-again" in log
+    assert ("screen approvals: two figures have the caption 'Pending Approvals' (`screenshots` entry approvals-again "
+            "shows the same screen, role and record as approvals: take it out") in log
+
+
+def test_the_advice_for_two_alike_captions_names_what_differs_and_leads_to_distinct_captions(tmp_path):
+    """Following the old advice (set a `caption`) on the screen made both figures take it: still alike."""
+    spec = support.load_spec(support.EXAMPLE)
+    spec["screenshots"] += [{"screen": "application-details", "record": "LV-2026-013", "name": "details-approved",
+                             "caption": "Leave Application Details"}]
+    for screen in spec["screens"]:
+        if screen["id"] == "application-details":
+            screen["caption"] = "Leave Application Details"
+    log = support.generate(support.make_project(tmp_path / "alike", spec=spec)).log
+    advice = re.search(r"two figures have the caption 'Leave Application Details' \(.*\)", log).group(0)
+    assert ("give `screenshots` entry details-approved its own `caption`, for example "
+            "\"Leave Application Details, showing record LV-2026-013\"") in advice
+    assert "not the screen's `caption`" in advice
+
+    for shot in spec["screenshots"]:
+        if shot["name"] == "details-approved":
+            shot["caption"] = "Leave Application Details, showing record LV-2026-013"
+    log = support.generate(support.make_project(tmp_path / "apart", spec=spec)).log
+    assert "two figures have the caption" not in log, "the suggested caption tells them apart"
 
 
 # ====================================================================== plain messages

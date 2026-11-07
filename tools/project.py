@@ -848,6 +848,21 @@ def readiness(p):
                 out.append(("check", f"{g.get('id')}.{n} says \"{found}\" with nothing tracking it: write the value, or link the "
                                      "register item that settles it (tbc: R-…)."))
 
+    # Every part the requirements standard asks for (the document format's `required`) is written, or an open
+    # register item tracks it; the document prints the others as To be confirmed.
+    import generate_requirements
+    open_ids = {it.get("id") for it in items if it.get("status") not in ("resolved", "wont-fix")}
+    for g in generate_requirements.section_gaps(spec, generate_requirements.load_format()):
+        what = f"the non-functional requirement {g['name']}" if g["kind"] == "nfr" else f"the section {g['name']}"
+        if g["tbc"] in open_ids:
+            continue
+        if g["tbc"]:
+            out.append(("stop", f"The document still prints {what} as To be confirmed, but {g['tbc']} is settled: write what "
+                                "was agreed into the spec."))
+        else:
+            out.append(("stop", f"The document prints {what} as To be confirmed: write it in the spec, or open a register "
+                                "item for it and link it there (tbc: R-…)."))
+
     # Both sides sign.
     signers = spec.get("signoff") or []
     orgs = " ".join(str(s.get("organisation") or "") for s in signers).lower()

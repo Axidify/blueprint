@@ -16,7 +16,8 @@ Writes <System> – <document title> v<version>.docx into the project's "5 Requi
        an earlier run is removed first, so the Word file and the PDF are always the same version of the content.
 Warns  when the screenshots were taken before the spec's screens last changed, or one is missing, and about
        team-only text in what the client reads (the mock-up, "proposed", FB-/R- ids, requirement ids of
-       another document); lists the parts still missing before issuing (NFRs, timeline, scope, signatories).
+       another document); lists the parts still missing before issuing (NFRs, timeline, scope, signatories, and the sections the format requires,
+       which it prints as To be confirmed).
 
 Everything (access matrix, roles, statuses, screens, field tables) comes from the same spec as the
 mock-up, so the document cannot contradict the screens. Format reference: docs/document-format.md.
@@ -190,6 +191,12 @@ def format_errors(fmt):
     for key in base["labels"]:
         if not str(fmt["labels"].get(key) or "").strip():
             errors.append(f"labels.{key}: needs a wording")
+    for key in base["required"]:
+        value = fmt["required"].get(key)
+        if value is None:
+            fmt["required"][key] = []
+        elif not isinstance(value, list) or any(not isinstance(x, str) or not x.strip() for x in value):
+            errors.append(f"required.{key}: must be a list of names, for example [{', '.join(base['required'][key][:2])}]")
     return errors
 
 
@@ -280,7 +287,9 @@ def document_errors(spec):
     for i, n in each("notifications"):
         need(f"notification {i}", n, "event", "recipient")
     for i, x in each("nfr"):
-        need(f"non-functional requirement {i}", x, "area", "requirement")
+        # A row may wait on a register item (tbc: R-...) instead of its requirement: printed as To be confirmed.
+        if need(f"non-functional requirement {i}", x, "area") and not x.get("tbc"):
+            need(f"non-functional requirement {x['area']}", x, "requirement")
     for i, x in each("glossary"):
         need(f"glossary entry {i}", x, "term", "meaning")
     for i, x in each("integrations"):
@@ -294,6 +303,15 @@ def document_errors(spec):
     for i, x in each("signoff"):
         if not isinstance(x, dict):
             errors.append(f"signatory {i}: must have name, organisation and signing_for")
+    for where, x in ([(f"non-functional requirement {x.get('area', i) if isinstance(x, dict) else i}", x) for i, x in each("nfr")]
+                     + [(f"extra section '{x.get('title', i) if isinstance(x, dict) else i}'", x) for i, x in each("extra_sections")]):
+        if not isinstance(x, dict):
+            continue
+        if x.get("tbc") is not None and not REGISTER_ID.fullmatch(str(x["tbc"])):
+            errors.append(f"{where}: 'tbc' must be a register id, for example R-019")
+        covers = x.get("covers")
+        if covers is not None and not (isinstance(covers, str) or isinstance(covers, list) and all(isinstance(c, str) for c in covers)):
+            errors.append(f"{where}: 'covers' must be the name of a required section, or a list of them")
     titles = set()
     for i, e in each("extra_sections"):
         if not need(f"extra section {i}", e, "title"):
@@ -1401,6 +1419,71 @@ def requirement_ids(spec):
     return ids
 
 
+def required_names(fmt):
+    """What the format's `required` asks every document to have, as (non-functional areas, sections). Only what
+    the document has a place for: no areas when the format leaves out the nfr chapter, no sections without extras."""
+    req = fmt.get("required") if isinstance(fmt.get("required"), dict) else {}
+    listed = lambda key: req.get(key) if isinstance(req.get(key), list) else []
+    chapters = fmt.get("chapters") or []
+    areas = [str(a).strip() for a in listed("nfr") if str(a).strip()] if "nfr" in chapters else []
+    sections = [str(x).strip() for x in listed("sections") if str(x).strip()] if "extras" in chapters else []
+    return areas, sections
+
+
+def _names(entry, key):
+    """The names a spec entry answers to: its own `area` or `title`, and whatever it `covers`."""
+    covers = entry.get("covers")
+    return [str(entry.get(key) or "")] + ([covers] if isinstance(covers, str) else [str(c) for c in covers or []])
+
+
+def _covers(names, required, word=False):
+    """Whether one of an entry's names is the required name: the same words, ignoring case, or (word=True, for
+    an area) containing them as words, so "Backup and recovery" counts for Backup."""
+    want = required.strip().lower()
+    for name in names:
+        name = name.strip().lower()
+        if name == want or (word and re.search(rf"\b{re.escape(want)}\b", name)):
+            return True
+    return False
+
+
+def section_gaps(spec, fmt):
+    """The parts the requirements standard asks for (the format's `required`) that the spec leaves empty:
+    [{kind: "nfr" | "section", name, tbc, present}]. `tbc` is the register id the spec links to it (or "");
+    `present` says whether the spec has an entry for it at all (an empty one, or one waiting on `tbc`)."""
+    spec = spec or {}
+    areas, sections = required_names(fmt)
+    gaps = []
+    rows = [x for x in spec.get("nfr") or [] if isinstance(x, dict)]
+    for area in areas:
+        found = [x for x in rows if _covers(_names(x, "area"), area, word=True)]
+        if not any(str(x.get("requirement") or "").strip() for x in found):
+            gaps.append({"kind": "nfr", "name": area, "present": bool(found),
+                         "tbc": next((str(x["tbc"]) for x in found if x.get("tbc")), "")})
+    extras = [e for e in spec.get("extra_sections") or [] if isinstance(e, dict)]
+    for name in sections:
+        found = [e for e in extras if _covers(_names(e, "title"), name)]
+        if not any(e.get("content") for e in found):
+            gaps.append({"kind": "section", "name": name, "present": bool(found),
+                         "tbc": next((str(e["tbc"]) for e in found if e.get("tbc")), "")})
+    return gaps
+
+
+def with_required_parts(spec, fmt):
+    """The spec as the document prints it: every required area and section the spec has no entry for is added,
+    empty, so it shows as To be confirmed instead of quietly not being there. Changes `spec` in place (the
+    generator's own copy; the spec file is not touched) and returns the gaps."""
+    gaps = section_gaps(spec, fmt)
+    for g in gaps:
+        if g["present"]:
+            continue
+        if g["kind"] == "nfr":
+            spec.setdefault("nfr", []).append({"area": g["name"], "requirement": ""})
+        else:
+            spec.setdefault("extra_sections", []).append({"title": g["name"], "content": []})
+    return gaps
+
+
 def missing_parts(spec, fmt):
     """The parts the requirements standard asks for that the spec does not have yet, as sentences: the
     document is still generated (a draft may lack them), but a version for sign-off should not."""
@@ -1408,11 +1491,24 @@ def missing_parts(spec, fmt):
 
     chapters = fmt.get("chapters") or []
     topics = {"Scope": "scope", "Non-functional requirements": "nfr"}
-    found = [f"{topic.lower()}: {what}" for topic, what, _ in workshop.spec_gaps(spec)
+    found = [f"{topic.lower()}: {what}" for topic, what, _ in workshop.spec_gaps(spec, {**fmt, "required": {}})
              if topic in topics and topics[topic] in chapters]
     if "timeline" in chapters and not ((spec.get("timeline") or {}).get("stages") if isinstance(spec.get("timeline"), dict) else None):
         found.append("timeline: none in the spec, so the document has no timeline chapter (add `timeline`, "
                      "see docs/spec-format.md)")
+    gaps = section_gaps(spec, fmt)
+    areas = [g["name"] for g in gaps if g["kind"] == "nfr" and not g["tbc"]]
+    if areas and spec.get("nfr"):  # with no nfr at all, "none recorded" above says it for every area
+        found.append(f"non-functional requirements: nothing for {', '.join(areas)}, printed as To be confirmed "
+                     "(write each under `nfr`, or link the register item that settles it with `tbc: R-...`)")
+    sections = [g["name"] for g in gaps if g["kind"] == "section" and not g["tbc"]]
+    if sections:
+        found.append(f"sections: nothing written for {', '.join(sections)}, printed as To be confirmed (write each "
+                     "under `extra_sections`, or link the register item that settles it with `tbc: R-...`)")
+    for g in gaps:
+        if g["tbc"]:
+            found.append(f"{'non-functional requirements' if g['kind'] == 'nfr' else 'sections'}: {g['name']} is printed "
+                         f"as To be confirmed, waiting on {g['tbc']}")
     if "signoff" in chapters:
         signoff = [s for s in spec.get("signoff") or [] if isinstance(s, dict)]
         if not signoff:
@@ -1509,6 +1605,8 @@ def build(project):
     open_items = [it for it in items if it["audience"] == "client" and it["status"] not in ("resolved", "wont-fix")]
     made_items = [it for it in items if it["audience"] == "client" and it["status"] == "resolved"
                   and (str(it.get("answer") or "").strip() or str(it.get("decision") or "").strip())]
+    parts_missing = missing_parts(spec, fmt)  # of the spec as written, before the required parts are added
+    with_required_parts(spec, fmt)
     chapters, refs = plan_sections(spec, fmt, items)
     labels = fmt["labels"]
     warnings = ["screenshots: " + problem for problem in mockup.screenshot_problems(project, spec)]
@@ -1832,6 +1930,15 @@ def build(project):
                 rows.append([f["label"], t, "✓" if f.get("required") else "", fill(rule, f"field {f['id']}")])
         return rows, group
 
+    def to_be_confirmed(entry):
+        """A required part with nothing written yet: To be confirmed, and the decision it waits on when the
+        document lists that decision."""
+        tbc = str(entry.get("tbc") or "")
+        if tbc in listed:
+            return [("warning", "dot"), (f"To be confirmed: decision needed {tbc}, see ", ""),
+                    (refs.get("section:open-issues", "the decisions section"), "ref", "section:open-issues"), (".", "")]
+        return [("warning", "dot"), ("To be confirmed.", "")]
+
     def extra_content(extra):
         for block in extra.get("content", []):
             where = f"section '{extra['title']}'"
@@ -1854,7 +1961,34 @@ def build(project):
                 else:
                     warnings.append(f"{where}: image {block['image']} not found")
 
-    captions = set()  # of the screens' figures: two alike and the reader cannot tell the pictures apart
+    captions = {}  # of the screens' figures, with the screen and shot of each: two alike and the reader cannot tell the pictures apart
+
+    def caption_advice(cap, s, shot, first):
+        """How to tell two figures with one caption apart, as a fix that cannot make it worse: a `caption` for the
+        extra shot that says what differs (its record, role, page or dialog), never the screen's own `caption`,
+        which every figure of the screen takes. Two screens that share a title each get their own `caption`."""
+        other_screen, other = first
+        if other_screen != s["id"]:
+            return (f"screen {other_screen} has a figure with it too: give one of the two screens its own `caption` "
+                    "that says what it is for")
+        names = {r["id"]: r["name"] for r in roles}
+        differs = []
+        if shot.get("record") and shot.get("record") != other.get("record"):
+            differs.append(f"showing record {shot['record']}")
+        if shot.get("role") and shot.get("role") != other.get("role"):
+            differs.append(f"as seen by {names.get(shot['role'], shot['role'])}")
+        if shot.get("page") and shot.get("page") != other.get("page"):
+            differs.append(f"page {shot['page']}")
+        if shot.get("dialog") and shot.get("dialog") != other.get("dialog") and shot["dialog"] in dialogs:
+            differs.append(f"with the {dialogs[shot['dialog']]['title'].lower()} dialog")
+        if "dialog" not in shot:  # the screen's own figure: the extra one is the other
+            return (f"give the extra one a `caption` in `screenshots`, name {other.get('name')}, that says what it shows "
+                    "differently (not the screen's `caption`: both figures take it)")
+        if not differs:
+            return (f"`screenshots` entry {shot['name']} shows the same screen, role and record as {other.get('name')}: "
+                    "take it out, or set the `record` or `role` it should show")
+        return (f"give `screenshots` entry {shot['name']} its own `caption`, for example \"{cap}, {' and '.join(differs)}\" "
+                "(not the screen's `caption`: both figures take it)")
     by_screen = {}
     for s in shots:
         by_screen.setdefault(s["screen"], []).append(s)
@@ -2168,9 +2302,9 @@ def build(project):
                                     ([f"showing record {shot['record']}"] if shot.get("record") else [])
                             cap += (", " + " and ".join(parts)) if parts else ""
                     if cap in captions:
-                        warnings.append(f"screen {s['id']}: two figures have the caption '{cap}' (give the extra one a "
-                                        f"`caption` in `screenshots`, name {shot['name']})")
-                    captions.add(cap)
+                        warnings.append(f"screen {s['id']}: two figures have the caption '{cap}' "
+                                        f"({caption_advice(cap, s, shot, captions[cap])})")
+                    captions.setdefault(cap, (s["id"], shot))
                     pending.append((img, cap))
                 # Two phone screens in a row share one figure row; anything else has a row of its own.
                 placed = []
@@ -2249,7 +2383,10 @@ def build(project):
         elif key == "nfr":
             w.heading(f"{number} {title}", 1, key=chapter_key(key, title))
             if spec.get("nfr"):
-                w.table(["Area", "Requirement"], [[[(x["area"], "medium")], fill(x["requirement"], f"non-functional requirement {x['area']}")] for x in spec["nfr"]],
+                w.table(["Area", "Requirement"], [[[(x["area"], "medium")],
+                                                    fill(x["requirement"], f"non-functional requirement {x['area']}")
+                                                    if str(x.get("requirement") or "").strip() else to_be_confirmed(x)]
+                                                   for x in spec["nfr"]],
                         [4.0, tw - 4.0])
             else:
                 w.para([("warning", "dot"), ("To be confirmed: number of users, performance, availability, backup, retention, security and "
@@ -2303,6 +2440,8 @@ def build(project):
             extra = next(e for e in spec["extra_sections"] if e["title"] == title and not e.get("appendix"))
             w.heading(f"{number} {title}", 1, key=chapter_key(key, title))
             extra_content(extra)
+            if not extra.get("content"):
+                w.para(to_be_confirmed(extra))
 
         # ---------------------------------------------------------------- decisions needed
         elif key == "decisions":
@@ -2370,6 +2509,8 @@ def build(project):
     for i, extra in enumerate([e for e in (spec.get("extra_sections") or []) if e.get("appendix")]):
         w.heading(f"Appendix {chr(65 + i)}  {extra['title']}", 1, key=f"extra:{extra['title']}")
         extra_content(extra)
+        if not extra.get("content"):
+            w.para(to_be_confirmed(extra))
 
     w.unlink_missing()
     out_dir = layout.output_dir(project)
@@ -2400,10 +2541,9 @@ def build(project):
         print(f"  {len(warnings)} WARNING(S) - fix these before issuing:")
         for x in warnings:
             print("   - " + x)
-    missing = missing_parts(spec, fmt)
-    if missing:
-        print(f"  {len(missing)} PART(S) MISSING - add these to the spec before issuing:")
-        for x in missing:
+    if parts_missing:
+        print(f"  {len(parts_missing)} PART(S) MISSING - add these to the spec before issuing:")
+        for x in parts_missing:
             print("   - " + x)
     done, why = finish_in_word(out)
     try:

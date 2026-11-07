@@ -135,6 +135,20 @@ def test_each_thing_a_spec_leaves_open_is_named_with_its_gap_pattern(change, top
     assert len(found) == 1 and detail in found[0][1] and found[0][2] == pattern
 
 
+def test_required_sections_the_spec_leaves_empty_are_asked_about_unless_a_register_item_tracks_them():
+    spec = support.load_spec(support.EXAMPLE)
+    spec["nfr"] = [x for x in spec["nfr"] if x["area"] not in ("Backup", "Security")]
+    spec["extra_sections"] = [e for e in spec["extra_sections"] if e["title"] not in ("Reports", "Audit trail")]
+    gaps = workshop.spec_gaps(spec)
+    assert ("Non-functional requirements", "nothing recorded for: Backup, Security", "GP-12") in gaps
+    assert ("Required sections", "nothing written yet for: Reports, Audit trail", "") in gaps
+    spec["nfr"].append({"area": "Security", "tbc": "R-010"})
+    spec["extra_sections"].append({"title": "Reports", "tbc": "R-011"})
+    gaps = workshop.spec_gaps(spec)
+    assert ("Non-functional requirements", "nothing recorded for: Backup", "GP-12") in gaps
+    assert ("Required sections", "nothing written yet for: Audit trail", "") in gaps, "a tracked one is already a question"
+
+
 def test_notification_wording_still_to_confirm_and_screens_without_a_requirement_are_named():
     gaps = workshop.spec_gaps(support.load_spec(support.WIDE))
     assert ("Notifications", "the wording is to be confirmed for: Booking approved or rejected", "GP-14") in gaps

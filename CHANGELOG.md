@@ -11,6 +11,21 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+### Added
+- **Sections every requirements document must have.** The document format now lists them under `required`:
+  the non-functional areas (users, performance, availability, backup, retention, security, browsers) and the
+  sections Environments, Data migration, Reports, Audit trail and Training and handover. One the spec leaves
+  empty is no longer quietly left out: the document prints it as "To be confirmed" and the generator lists it
+  under parts missing. `workshop.py gaps` lists it for the next workshop, and `project.py ready` stops on it
+  until it is written or a register item tracks it (`tbc: R-…` on the row or section, which the document
+  prints as the decision it waits on). A section can say which required one it stands for with `covers`.
+  A company changes the list in its own document format. The made-up sample now has every one of them.
+
+### Fixed
+- **Two figures with one caption: advice that works.** The generator's warning now suggests a caption for the
+  extra screenshot that says what differs (the record, role, page or dialog it shows), and says not to use the
+  screen's own `caption`, which both figures take. Following the old advice could leave the two still alike.
+
 ## [1.5.0] - 2026-11-07
 
 ### Added

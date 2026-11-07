@@ -100,6 +100,7 @@ titles:
 | `header_footer` | `generated` (system, version, status / company, page) or `template` (keep the header and footer of `branding/document-template.docx`; `{company}` in it is replaced) |
 | `front` | Front matter in order: `cover`, `at_a_glance`, `about`, `contents` |
 | `chapters` | Chapters in order: `users_access`, `scope`, `by_role`, `requirements`, `screens`, `nfr`, `timeline`, `extras`, `decisions`, `signoff`. A company file that lists its own chapters must add `timeline` to get the timeline |
+| `required.nfr`, `required.sections` | What every document must have: the non-functional areas and the extra sections (see [Sections every document must have](#sections-every-document-must-have)). `[]` requires nothing |
 | `titles.*` | Chapter and page titles |
 | `labels.*` | Words used in the document: impact levels, "Decision needed" and its plural `decisions_needed`, `sow_mandays` (the title of the timeline's mandays table), "Decisions made", the default status, "Confidential", and the sign-off cards: `signing` ("What you are signing", under the version and its date), `not_signed` ("Not part of this sign-off", under the decisions still open, with their section), `nothing_left_out` (when none are open) and `how_to_sign` |
 
@@ -118,6 +119,24 @@ file does not have falls back to the built-in sentence.
 Other branding files in `workspace/branding/`: `logo.png` (cover), `document-template.docx` (styles, page
 set-up, and the header and footer when `header_footer: template`), `document-boilerplate.yaml` (standard
 wording). See [Workspace and company profile](workspace.md).
+
+## Sections every document must have
+
+`required` lists what every requirements document must contain, from the knowledge base's
+`requirements-standard.md`:
+
+```yaml
+required:
+  nfr: [Users, Performance, Availability, Backup, Retention, Security, Browsers]
+  sections: [Environments, Data migration, Reports, Audit trail, Training and handover]
+```
+
+A part the spec leaves empty is printed as "To be confirmed" (a row of the non-functional requirements, or a
+chapter of its own among the extra sections) and listed by the generator, so it never quietly drops out. The
+workshop asks about it and sign-off waits for it unless a register item tracks it. How a spec fills them:
+[Required sections](spec-format.md#required-sections). A company that requires more (Disaster recovery,
+Accessibility) or less sets its own lists in `branding/document-format.yaml`; areas count only when the
+format has the `nfr` chapter, sections only when it has `extras`.
 
 ## Learning an existing format
 
