@@ -10,7 +10,7 @@ _blueprint/reviews/, or reviews/ in a project not yet moved to the new folder la
 review.md in the old layout): headings,
 lists, tables, bold, italic and code spans, in the company's Word template and document format, the way the
 workshop documents are made. Every page says it is internal: the review holds your team's reasons, risks
-and commercial notes. The client gets the register's "For client" sheet, never the review.
+and commercial notes. The client gets "Questions for the client.xlsx", never the review.
 
 review.md stays the source: change it (or ask Claude to), then run this again. The project's overview page
 links the Word file when there is one.
@@ -233,7 +233,6 @@ def render_note(project, note):
 def render_markdown(project, source, out, label, title):
     """A markdown file of the team's as an internal Word file: `label` above the page title (the file's first
     heading), `title` in the header. Returns `out`."""
-    from docx import Document
 
     import generate_requirements as gen
 
@@ -243,7 +242,7 @@ def render_markdown(project, source, out, label, title):
     if problems:
         raise ValueError("The document format has mistakes:\n  " + "\n  ".join(problems))
     co = workspace.company()
-    doc = Document(str(workspace.asset("document-template.docx")))
+    doc = gen.template_document()
     w = gen.Writer(doc, fmt)
     w.setup_styles()
     doc.core_properties.title = title

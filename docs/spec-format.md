@@ -479,7 +479,9 @@ nearly spells a real one, such as `colums` or `tittle`, with the name it expects
 Settings the format does not know at all are **warnings**: the build goes on and lists them, because the
 mock-up ignores them. A key with no value is pointed out as a likely comma inside unquoted text between
 `{ }` (`{label: Yes, approve}` becomes a label and a stray `approve`). Start a note of your own with an
-underscore (`_note: ask about the balance`) and it is never warned about.
+underscore (`_note: ask about the balance`) and it is never warned about. Such notes, a requirement item's
+`note`, the `timeline` (with the scope of work's mandays) and `platform_fit` are left out of the built
+mock-up, which anyone in the room can read.
 
 When `mockup.py screenshots` finds a screen the mock-up cannot draw, it stops with the name of that screen,
 the error the browser reported and the likely cause, instead of waiting in vain.

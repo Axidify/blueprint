@@ -3,7 +3,7 @@
 Usage:
     python -I tools/uat.py draft   projects/<slug> [--current] [--date YYYY-MM-DD] [--force]
     python -I tools/uat.py check   projects/<slug> ["<scripts.json>"]
-    python -I tools/uat.py render  projects/<slug> ["<scripts.json>"]
+    python -I tools/uat.py render  projects/<slug> ["<scripts.json>"] [--force]
     python -I tools/uat.py results projects/<slug> ["<filled-in workbook.xlsx>"]
 
 draft    writes <date> uat scripts v<version>.json into the project's _blueprint/uat/ (uat/ in a project not yet
@@ -20,7 +20,10 @@ render   checks the scripts, then writes into the project's "6 UAT" folder (next
            "<name>.xlsx"  the workbook for the testers: one row per step, with Actual result, Pass/Fail,
                           Tester, Date and Defect ref to fill in, and a summary of coverage and results
            "<name>.docx"  the test scripts for the client, in the company's document format
-         Without a file name it takes the newest scripts in the project's UAT folder
+         Without a file name it takes the newest scripts in the project's UAT folder.
+         When the testers have already filled in steps of that workbook (a result, an actual result, a tester,
+         a date or a defect), it stops, because writing it again would lose them; --force writes it anyway and
+         first keeps the filled-in workbook as "<name> - results kept <date> <time>.xlsx" beside it
 results  reads a workbook the testers filled in and lists the failed and blocked steps
 
 uat/<date> uat scripts v<version>.json:
@@ -48,6 +51,7 @@ neither.
 """
 import datetime as dt
 import json
+import os
 import re
 import sys
 from collections import Counter, OrderedDict
@@ -1100,7 +1104,6 @@ def render_xlsx(scripts, spec, out):
 
 
 def render_docx(scripts, spec, out):
-    from docx import Document
 
     import generate_requirements as gen
 
@@ -1112,7 +1115,7 @@ def render_docx(scripts, spec, out):
     m = Model(spec)
     sm = summary(scripts, spec)
     system, client = scripts["project"], scripts.get("client") or m.names["client"] or "the client"
-    doc = Document(str(workspace.asset("document-template.docx")))
+    doc = gen.template_document()
     w = gen.Writer(doc, fmt)
     w.setup_styles()
     w.header_footer(f"{system} · User acceptance test", f"v{scripts['spec_version']} · {readable(scripts['date'])}",
@@ -1209,6 +1212,44 @@ def read_results(path):
     return rows
 
 
+def filled_in(path):
+    """How many steps of a workbook the testers have filled in (anything typed in their columns)."""
+    try:
+        rows = read_results(path)
+    except SystemExit:
+        return 0
+    return sum(1 for r in rows if r["result"] != "Not run"
+               or any(str(r.get(k) or "").strip() for k in ("actual", "tester", "date", "defect")))
+
+
+def keep_results(workbook, force):
+    """Before the testers' workbook is written again: stop if they filled any of it in, or with `force` keep
+    their copy beside it first. Their results are never lost to a new render."""
+    workbook = Path(workbook)
+    if not workbook.exists():
+        return None
+    try:
+        steps = filled_in(workbook)
+    except Exception as e:  # open in Excel, or not a workbook: do not write over what cannot be read
+        sys.exit(f"Cannot read {workbook.name} to see whether the testers filled it in ({type(e).__name__}). "
+                 "Close it in Excel and run this again. Nothing was written.")
+    if not steps:
+        return None
+    if not force:
+        sys.exit(f"The testers have filled in {steps} step{'s' if steps != 1 else ''} of {workbook.name}: writing it again "
+                 "would lose their results. Nothing was written. Read them first (uat.py results), or add --force to "
+                 "write it anyway: the filled-in workbook is then kept beside it under a new name.")
+    kept = workbook.with_name(f"{workbook.stem} - results kept {dt.datetime.now().strftime('%Y-%m-%d %H%M')}.xlsx")
+    if kept.exists():
+        sys.exit(f"{kept.name} exists already: run this again in a minute. Nothing was written.")
+    try:
+        os.replace(workbook, kept)
+    except PermissionError:
+        sys.exit(f"Cannot move {workbook.name} aside: close it in Excel and run this again. Nothing was written.")
+    print(f"  The testers' filled-in workbook is kept as {kept.name}")
+    return kept
+
+
 def cmd_results(project, name):
     import layout
 
@@ -1255,7 +1296,7 @@ def main():
         del args[i:i + 2]
     args = [a for a in args if a not in flags]
     if len(args) not in (2, 3) or args[0] not in ("draft", "check", "render", "results") or (args[0] == "draft" and len(args) != 2) \
-            or flags - {"--current", "--force"} or (flags and args[0] != "draft"):
+            or flags - {"--current", "--force"} or (args[0] not in ("draft", "render") and flags)             or (args[0] == "render" and flags - {"--force"}):
         sys.exit(__doc__)
     command, project = args[0], args[1]
     if not Path(project).is_dir():
@@ -1299,6 +1340,7 @@ def main():
 
     out = layout.uat_output(project) if path.parent.resolve() == layout.uat_source(project).resolve() else path.parent
     out.mkdir(parents=True, exist_ok=True)
+    keep_results(out / path.with_suffix(".xlsx").name, "--force" in flags)
     xlsx = render_xlsx(scripts, spec, out / path.with_suffix(".xlsx").name)
     docx = render_docx(scripts, spec, out / path.with_suffix(".docx").name)
     print(f"UAT scripts for {scripts['project']}: {line}")

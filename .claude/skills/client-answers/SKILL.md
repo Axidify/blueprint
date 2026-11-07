@@ -78,7 +78,7 @@ note).
 
 - **What changed:** how many answers were recorded (resolved, answered with a follow-up), what changed in the
   spec, the follow-up questions added, any possible change requests, and any answer you could not place.
-- **Where and for whom:** the register (`Questions and fixes register.xlsx`: the **For client** sheet now shows the answers;
+- **Where and for whom:** the register (`Questions and fixes register.xlsx`, internal, and `Questions for the client.xlsx`, the file to send, both now show the answers;
   possible change requests are **internal**), the spec and mock-up, and the client's file filed in `1 Client documents`.
   `Project overview.html` lists them.
 - **Next step, in the words to say:** with follow-up questions open, "prepare the workshop"; when the spec

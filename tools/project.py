@@ -651,13 +651,25 @@ def cmd_file(a):
         pass
 
 
+def move_whole(src, dest, done):
+    """Move a project folder in one step, or not at all. A rename never copies: when something in the folder is
+    open (the register in Excel, a document in Word, OneDrive syncing), Windows refuses it and nothing moves,
+    where a copy-then-delete would leave half the project in each place."""
+    try:
+        os.rename(src, dest)
+    except OSError as e:
+        sys.exit(f"Nothing was {done}: {src.name} could not be moved ({e.strerror or type(e).__name__}). Something in "
+                 "the folder is probably open: close its files in Excel and Word, let OneDrive finish syncing, "
+                 "then run this again.")
+
+
 def cmd_archive(a):
     p = project_dir(a.slug)
     if (ARCHIVE / a.slug).exists():
         sys.exit(f"An archived project called '{a.slug}' already exists (projects/_archive/{a.slug}), so nothing was "
                  f"moved. To keep both, rename this project's folder first (for example {a.slug}-phase-2), then archive it.")
     ARCHIVE.mkdir(exist_ok=True)
-    shutil.move(str(p), str(ARCHIVE / a.slug))
+    move_whole(p, ARCHIVE / a.slug, "archived")
     print(f"Archived {a.slug} to projects/_archive/. Restore with: python -I tools/project.py restore {a.slug}")
 
 
@@ -667,7 +679,7 @@ def cmd_restore(a):
         sys.exit(f"No archived project '{a.slug}'.")
     if (PROJECTS / a.slug).exists():
         sys.exit(f"projects/{a.slug} already exists.")
-    shutil.move(str(src), str(PROJECTS / a.slug))
+    move_whole(src, PROJECTS / a.slug, "restored")
     print(f"Restored {a.slug} to projects/.")
 
 

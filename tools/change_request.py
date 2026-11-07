@@ -643,7 +643,6 @@ def price_text(cr):
 
 def write_note(project, log, cr):
     """The client's change request note, in the company's document format. Returns its path."""
-    from docx import Document
 
     import generate_requirements as gen
 
@@ -655,7 +654,7 @@ def write_note(project, log, cr):
     basis = signed_basis(project, cr.get("basis_version") if cr.get("basis_version") and project_tool.is_issued(Path(project), cr["basis_version"]) else None)
     P = basis["spec"].get("project") or {}
     system = P.get("name") or log.get("project", "")
-    doc = Document(str(workspace.asset("document-template.docx")))
+    doc = gen.template_document()
     w = gen.Writer(doc, fmt)
     w.setup_styles()
     w.header_footer(f"{system} · Change request {cr['id']}", gen.readable_date(cr["raised"]), f"{co['name']} · {fmt['labels']['confidential']}")

@@ -777,6 +777,32 @@ await page.waitForTimeout(400);
 out.commentEdits.after = { panel: await page.evaluate(() => document.getElementById("fb-panel").innerText), pins: await page.locator(".fb-pin").count(),
   room: await page.evaluate(() => fetch("api/feedback").then((r) => r.json()).then((list) => list.map((c) => c.text))) };
 
+// ---- the first load of the comments fails (the server restarting): what is typed still goes to the project,
+// never into this browser for good
+const roomTexts = () => page.evaluate(() => fetch("api/feedback").then((r) => r.json()).then((list) => list.map((c) => c.text)));
+const loadDown = (route) => (route.request().method() === "GET" ? route.abort() : route.continue());
+await page.route("**/api/feedback", loadDown);
+await open("#/approvals?role=manager");
+await page.waitForTimeout(300);
+await page.unroute("**/api/feedback", loadDown);
+await comment("typed after a failed load");
+out.failedLoad = { room: await roomTexts(), errorToasts: (await feedbackState()).errorToasts,
+  local: await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("mock-feedback:"))
+    .flatMap((k) => JSON.parse(localStorage.getItem(k))).map((c) => c.text)) };
+
+// ---- two comments saved while the server is slow: each saved once, neither dropped
+let slowOnce = true;
+const slowServer = async (route) => {
+  if (route.request().method() === "POST" && slowOnce) { slowOnce = false; await new Promise((r) => setTimeout(r, 1200)); }
+  return route.continue();
+};
+await page.route("**/api/feedback", slowServer);
+await comment("slow one");
+await comment("right after");
+await page.waitForTimeout(2000);
+await page.unroute("**/api/feedback", slowServer);
+out.slowServer = { room: await roomTexts(), kept: (await feedbackState()).kept };
+
 // ---- a new request left half empty is not the twin of the open one at the same stage
 out.fresh = {};
 await open("#/new-application?role=employee");

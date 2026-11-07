@@ -52,8 +52,8 @@ Then the three folders, one line each: **inbox** (drop files here and say "proce
    `python -I tools/register.py add .tour/leave-request --file .tour/leave-request/_blueprint/reviews/draft-v0.1/findings.json`
    and `python -I tools/register.py render .tour/leave-request`.
 4. Show three findings, one line each: where, the quote, the question for the client. Say the questions are
-   now in an Excel register (`.tour/leave-request/Questions and fixes register.xlsx`, its "For client" sheet goes to the client;
-   internal fixes never do) and offer to open it (Windows: `start "" "<path>"`, Mac: `open "<path>"`).
+   now in an Excel register (`.tour/leave-request/Questions and fixes register.xlsx`, for the team) and in the file to send,
+   `Questions for the client.xlsx`, which holds the client's questions alone (internal fixes never go out) and offer to open it (Windows: `start "" "<path>"`, Mac: `open "<path>"`).
    One line: a real review also writes a report and checks the whole document, page by page.
 
 ## 3. The mock-up
@@ -106,7 +106,7 @@ Then the three folders, one line each: **inbox** (drop files here and say "proce
 - **What they saw**, in three or four lines: a review into an Excel register, a mock-up to act the process
   out, a comment turned into a change, a document built from the same spec.
 - **What is left:** nothing, unless they kept the copy to explore; their projects and the workspace were
-  never touched. In a real project the Excel register's **For client** sheet and the requirements document
+  never touched. In a real project `Questions for the client.xlsx` and the requirements document
   go to the client; everything else is internal, and each project's `Project overview.html` says which.
 - **Next step, in the words to say:** drop a brief, scope of work or draft into the **inbox** and say
   **"process my inbox"**, or say **"start a new project"**. `/start` shows the menu at any time.

@@ -41,7 +41,8 @@ is; every tool goes through it.
 - `Project overview.html` – every document in process order, who it is for and the next step; rebuilt by
   the tools whenever they change the project. `Open the mock-up.cmd`/`.command` starts the mock-up from the
   shared folder.
-- `Questions and fixes register.xlsx` – the register rendered for the BA (only its "For client" sheet goes out).
+- `Questions and fixes register.xlsx` – the register rendered for the BA (internal: never sent).
+- `Questions for the client.xlsx` – the client's questions alone, written with the register: the file to send.
 - `1 Client documents/` – the client's documents, filed with dated names. Never modify them.
 - `2 Reviews/` – each review as an internal Word file, the mock-up's change notes as Word files, and
   `Mock-up comments.xlsx`: every comment on the mock-up and what became of it.

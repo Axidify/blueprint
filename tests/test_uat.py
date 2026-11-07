@@ -318,3 +318,22 @@ def test_the_workbook_follows_the_design_language(rendered):
     result = ws.cell(row=2, column=header.index("Pass/Fail") + 1)
     assert result.number_format == sheets.DOT_FORMAT
     assert {'"Pass"', '"Fail"', '"Blocked"', '"Not run"'} <= {rule.formula[0] for rng in ws.conditional_formatting for rule in rng.rules}
+
+
+def test_render_never_writes_over_the_testers_results(rendered, project, run):
+    """Writing the scripts again replaced the workbook the testers fill in, and every result was gone."""
+    path, _, _ = rendered
+    book = path.with_suffix(".xlsx")
+    wb = load_workbook(book)
+    ws = wb[uat.STEPS_SHEET]
+    head = [c.value for c in ws[1]]
+    ws.cell(2, head.index("Pass/Fail") + 1, "Fail")
+    ws.cell(2, head.index("Actual result") + 1, "The button did nothing")
+    wb.save(book)
+    with pytest.raises(SystemExit, match="filled in 1 step"):
+        run("render", project)
+    assert uat.filled_in(book) == 1, "the workbook is untouched"
+    out = run("render", project, "--force")
+    kept = [f for f in book.parent.glob("* - results kept *.xlsx")]
+    assert len(kept) == 1 and uat.filled_in(kept[0]) == 1 and kept[0].name in out
+    assert uat.filled_in(book) == 0, "a fresh workbook beside the kept one"

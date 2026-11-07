@@ -71,8 +71,8 @@ To act on comments while the client is still in the room, use the `present` skil
   the estimate.
 - **Where and for whom:** the new mock-up version (for the client, shown in the next session), the change
   note (in `2 Reviews` as a Word file, made when the overview page is built) and the register's internal sheets (**internal**), `Mock-up comments.xlsx` in `2 Reviews`
-  (every comment and what became of it, written as each comment is marked; **internal**), the questions on
-  the register's **For client** sheet. `Project overview.html` lists them.
+  (every comment and what became of it, written as each comment is marked; **internal**), the questions in
+  `Questions for the client.xlsx` (**for the client**: the one register file to send). `Project overview.html` lists them.
 - **Next step, in the words to say:** "present the mock-up" to walk the client through the new version, or
   "prepare the workshop" for the open questions; for the lead developer, with scope items: "estimate this
   project" again.

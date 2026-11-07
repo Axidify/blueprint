@@ -60,7 +60,8 @@ and every gap pattern in the knowledge base. Every finding cites its location.
 A document the client already signed is reviewed too: its findings become possible change requests for
 change control. A scope-of-work or manday appendix inside the document is used as the SOW. For a document
 Blueprint generated, fixes go into the spec and most findings are internal.
-**Output:** findings in the [register](register.md), `Questions and fixes register.xlsx` for the BA, and a review report in
+**Output:** findings in the [register](register.md), `Questions and fixes register.xlsx` for the BA,
+`Questions for the client.xlsx` to send, and a review report in
 `_blueprint/reviews/<review>/review.md` with the verdict, top risks and the screens to walk through
 with users, also as a Word file in `2 Reviews` (`<document> review.docx`, marked internal on every page); and
 the next step (usually preparing the workshop or building the mock-up).
@@ -135,7 +136,7 @@ recorded as the client gave it, and acted on: a change to the spec, a decision, 
 possible change request (flagged, internal, not built until you agree; with `change-request` once a version
 was signed). It then says whether the requirements document needs generating again and whether the lead
 developer should revisit the estimate.
-**Output:** the register (answers on the **For client** sheet), the spec and mock-up where an answer
+**Output:** the register (answers on the **For client** sheet, and in `Questions for the client.xlsx`), the spec and mock-up where an answer
 changed them, and the client's file filed in the project's `1 Client documents`.
 
 ### apply-feedback

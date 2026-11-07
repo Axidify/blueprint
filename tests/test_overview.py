@@ -185,7 +185,8 @@ def test_internal_files_are_marked_internal_and_client_files_say_who_they_are_fo
     assert any("facilitator notes" in h for h in internal)
     assert any(h.startswith("reviews/srs-v1.0/") for h in internal)
     assert "reviews/mockup-v0.1-changes.md" in internal
-    assert "Client sheet only" in tags["register.xlsx"]
+    assert "register.xlsx" in internal, "the register has internal sheets: never sent"
+    assert "For the client" in tags["Questions for the client.xlsx"], "the client's questions alone: the file to send"
     assert "From the client" in tags["docs/2026-10-22 SRS v1.0.pdf"]
     assert any("For the client" in w for h, w in tags.items() if h.endswith(" - agenda.docx"))
     assert "Show the client" in tags["mockup/index.html"] and "Can be shared" in tags["mockup/screenshots/"]

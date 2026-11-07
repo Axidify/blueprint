@@ -160,8 +160,27 @@ def look_css(spec, project, theme_text):
         css.append(f'@font-face {{ font-family: "{family}"; src: url(data:font/{mime};base64,{data}) format("{fmt}"); '
                    f'font-weight: {weights}; font-style: normal; font-display: block; }}')
     return "\n".join(css) + ("\n" if css else ""), missing
-# Parts of a spec that are internal: never written into the mock-up, which anyone in the room can read.
-INTERNAL_SPEC = ("platform_fit",)
+# Parts of a spec that are not for the mock-up, which anyone in the room can read (view the page's source):
+# what the platform check found, and the timeline with the scope of work's mandays (for the requirements
+# document only). A team's own notes (any key starting with "_") and a requirement's internal `note` go too.
+INTERNAL_SPEC = ("platform_fit", "timeline")
+
+
+def spec_for_the_room(spec):
+    """The spec as the built mock-up carries it: without its internal parts and the team's own notes."""
+    def clean(value):
+        if isinstance(value, dict):
+            return {k: clean(v) for k, v in value.items() if not str(k).startswith("_")}
+        if isinstance(value, list):
+            return [clean(v) for v in value]
+        return value
+
+    shown = clean({k: v for k, v in spec.items() if k not in INTERNAL_SPEC})
+    for group in shown.get("requirements") or []:
+        for item in (group.get("items") or []) if isinstance(group, dict) else []:
+            if isinstance(item, dict):
+                item.pop("note", None)
+    return shown
 # A project's own mock-up code, for what the spec cannot describe: in spec/, and in the built mock-up's assets/.
 PROJECT_CODE = {"mockup.css": "project.css", "mockup.js": "project.js"}
 
@@ -1001,7 +1020,7 @@ def build(project):
     logo = look_file(project, spec, "logo")
     if logo is not None:
         shutil.copy(logo, out / "assets" / f"logo{logo.suffix.lower()}")
-    shown = {k: v for k, v in spec.items() if k not in INTERNAL_SPEC}
+    shown = spec_for_the_room(spec)
     creating = new_records(spec)
     custom = custom_work(spec, project)
     # What the build worked out for the engine: the buttons that add a record, and what to tag as custom work.
@@ -1146,6 +1165,31 @@ def read_feedback(fb_file):
     return json.loads(Path(fb_file).read_text(encoding="utf-8")) if Path(fb_file).exists() else []
 
 
+def write_feedback(fb_file, items):
+    """Write the feedback file in one step: the new content goes to a file of its own beside it, which then takes
+    its place. A reader never sees half a file, and a program stopped part-way leaves the old file whole (and a
+    stray .tmp at most). On Windows the swap waits while someone is reading the file (a few seconds at most)."""
+    fb_file = Path(fb_file)
+    fd, tmp = tempfile.mkstemp(prefix=".feedback-", suffix=".tmp", dir=fb_file.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(json.dumps(items, indent=2, ensure_ascii=False))
+            f.flush()
+            os.fsync(f.fileno())
+        give_up = time.time() + 5
+        while True:
+            try:
+                os.replace(tmp, fb_file)
+                return
+            except PermissionError:  # a reader has it open just now (Windows)
+                if time.time() > give_up:
+                    raise
+                time.sleep(0.05)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+
+
 def standing(comments):
     """The comments that count: every one except those their writer or the presenter took back (withdrawn)."""
     return [c for c in comments if isinstance(c, dict) and not c.get("withdrawn")]
@@ -1188,7 +1232,7 @@ def change_comment(fb_file, action, body, presenter):
         else:
             found["withdrawn"] = now
             found["withdrawn_by"] = str(body.get("by") or "").strip() or ("the presenter" if presenter else "its writer")
-        fb_file.write_text(json.dumps(items, indent=2, ensure_ascii=False), encoding="utf-8")
+        write_feedback(fb_file, items)
     try:
         print(f"  feedback {found['id']} " + (f"edited: {found.get('text')}" if action == "edit" else "withdrawn"))
     except Exception:
@@ -1293,7 +1337,7 @@ def save_comment(fb_file, item):
         item["id"] = f"FB-{len(items) + 1:03d}"
         item["received"] = dt.datetime.now().isoformat(timespec="seconds")
         items.append(item)
-        fb_file.write_text(json.dumps(items, indent=2, ensure_ascii=False), encoding="utf-8")
+        write_feedback(fb_file, items)
     try:
         print(f"  feedback {item['id']} on {item.get('screen')} / {item.get('element') or 'screen'}: {item.get('text')}")
     except Exception:  # a console that cannot show the characters must not turn a saved comment into an error
@@ -2006,7 +2050,7 @@ def live_mark(project, comment, status, note=None, register=None):
             found["note"] = note
         if register:
             found["register_id"] = register
-        fb_file.write_text(json.dumps(items, indent=2, ensure_ascii=False), encoding="utf-8")
+        write_feedback(fb_file, items)
     live_alive(project)
     refresh_comments_workbook(project)
     print(f"{found['id']}: {status}" + (f" ({note})" if note else "") + f". In the mock-up it reads \"{ROOM_WORDS[room_state(found)]}\".")
@@ -2102,8 +2146,13 @@ def live_undo(project):
     data = live_session(project)
     if not data.get("changes"):
         sys.exit("Nothing to undo: no change was made in this session.")
-    last = data["changes"].pop()
+    last = data["changes"][-1]
     kept = layout.feedback_dir(project) / "live" / last["before"]
+    if not (kept / "app.yaml").is_file():
+        # Without the copy kept before the change, every file would look added by it and be deleted.
+        sys.exit(f"Cannot undo: the copy of the spec kept before the change ({layout.shown(project, kept)}) is missing, "
+                 "so nothing was changed. Undo the change by hand instead: ask Claude to put the spec back as it was.")
+    data["changes"].pop()
     for file in KEPT:
         now = layout.spec_dir(project) / file
         if (kept / file).is_file():

@@ -478,6 +478,48 @@ def add_field(paragraph, instr):
     return run
 
 
+# Parts of a Word file that carry the template's own words, never wanted in a generated document.
+TEMPLATE_TEXT_PARTS = ("/comments", "/commentsExtended", "/commentsIds", "/commentsExtensible", "/people",
+                       "/glossaryDocument", "/custom-properties", "/extended-properties")
+NOTE_KEEP = ("separator", "continuationSeparator", "continuationNotice")
+
+
+def template_document(path=None):
+    """The company's Word template with only what Blueprint uses from it: its styles, page set-up, header and
+    footer. Its body (often an earlier client's document copied in as the template), its comments, footnotes,
+    quick parts and file properties (title, subject, comments, last saved by, company) are taken out, so
+    nothing of another document reaches a generated one. Every generated Word file starts here."""
+    from lxml import etree
+
+    doc = Document(str(path or workspace.asset("document-template.docx")))
+    body = doc.element.body
+    for child in list(body):
+        if child.tag != qn("w:sectPr"):
+            body.remove(child)
+    for owner in (doc.part, doc.part.package):
+        for rid, rel in list(owner.rels.items()):
+            if not rel.is_external and rel.reltype.endswith(TEMPLATE_TEXT_PARTS):
+                owner.rels.pop(rid)
+    for rel in doc.part.rels.values():
+        if rel.is_external or not rel.reltype.endswith(("/footnotes", "/endnotes")):
+            continue
+        part = rel.target_part
+        root = part.element if hasattr(part, "element") else etree.fromstring(part.blob)
+        for note in list(root):
+            if note.get(qn("w:type")) not in NOTE_KEEP:
+                root.remove(note)
+        if not hasattr(part, "element"):
+            part._blob = etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
+    cp = doc.core_properties
+    for name in ("title", "subject", "author", "keywords", "comments", "category", "content_status",
+                 "identifier", "language", "last_modified_by", "version"):
+        setattr(cp, name, "")
+    now = __import__("datetime").datetime.now().replace(microsecond=0)
+    cp.created = cp.modified = now
+    cp.revision = 1
+    return doc
+
+
 # ====================================================================== the document writer
 class Writer:
     """Writes styled content. Text segments are (text, style) pairs so one line can mix plain words,
@@ -1512,7 +1554,7 @@ def build(project):
                 continue
             team_check(str(it.get(key) or ""), f"register {it['id']}, {key}")
 
-    doc = Document(str(workspace.asset("document-template.docx")))
+    doc = template_document()
     w = Writer(doc, fmt)
     w.setup_styles()
     cp = doc.core_properties

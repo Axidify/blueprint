@@ -349,10 +349,15 @@ def stage_review(m):
     xlsx = layout.register_xlsx(p)
     if xlsx.exists():
         rows.append(row("sheet", "Questions and fixes register",
-                        ['Send only the "For client" sheet. Type the client\'s answers into it'], "client-sheet", file_day(xlsx), link(p, xlsx)))
+                        ["For the team: never send it. Type the client's answers into its \"For client\" sheet"],
+                        "internal", file_day(xlsx), link(p, xlsx)))
+        to_send = layout.client_register_xlsx(p)
+        if to_send.exists():
+            rows.append(row("sheet", "Questions for the client", ["The client's questions alone: the file to send"],
+                            "for-client", file_day(to_send), link(p, to_send)))
     elif m["items"]:
         rows.append(row("sheet", "Questions and fixes register", says("Not made into Excel yet: say 'render the register'"),
-                        "client-sheet", file_day(layout.register_json(p))))
+                        "internal", file_day(layout.register_json(p))))
     for review_dir in reversed(m["reviews"]):
         import review_doc
 
@@ -633,7 +638,6 @@ ICONS = {
 TAGS = {  # who a file is for: (words, icon, css class)
     "from-client": ("From the client", None, ""),
     "for-client": ("For the client", "send", ""),
-    "client-sheet": ("Client sheet only", "send", ""),
     "show": ("Show the client", "send", ""),
     "shareable": ("Can be shared", "send", ""),
     "internal": ("Internal", "lock", " internal"),

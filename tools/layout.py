@@ -10,7 +10,8 @@ The **new layout** (a project with a `_blueprint` folder) puts what people open 
 order of the process, and Blueprint's working files out of the way:
 
     Project overview.html, Open the mock-up.cmd / .command
-    Questions and fixes register.xlsx
+    Questions and fixes register.xlsx    the register for the BA (internal sheets too)
+    Questions for the client.xlsx        the client's questions alone: the file to send
     1 Client documents/          the client's documents, never changed
     2 Reviews/                   each review as a Word file, and the mock-up's change notes
     3 Workshops/                 the agenda for the client and the facilitator notes (internal)
@@ -52,6 +53,7 @@ UAT = "6 UAT"
 CHANGES = "7 Change requests"
 INTERNAL = "Internal – estimates and change requests"  # an en dash, as in the generated documents' names
 REGISTER_XLSX = "Questions and fixes register.xlsx"
+CLIENT_REGISTER_XLSX = "Questions for the client.xlsx"  # the client's items only: the file to send; same place in both layouts
 OVERVIEW = "Project overview.html"
 SHORTCUTS = ("Open the mock-up.cmd", "Open the mock-up.command")
 CR_LOG = "CR log (internal).xlsx"
@@ -107,6 +109,11 @@ def register_json(project):
 
 def register_xlsx(project):
     return _people(project, REGISTER_XLSX, "register.xlsx")
+
+
+def client_register_xlsx(project):
+    """The register's client items alone, the file that goes to the client (written with register.xlsx)."""
+    return Path(project) / CLIENT_REGISTER_XLSX
 
 
 def docs_dir(project):
@@ -718,6 +725,7 @@ def main():
         sys.exit(f"No project folder {p}")
     print(f"{p.name}: {name(p)} layout")
     for label, where in (("spec", spec_file(p)), ("register", register_json(p)), ("register for the BA", register_xlsx(p)),
+                         ("register for the client", client_register_xlsx(p)),
                          ("client documents", docs_dir(p)), ("reviews (sources)", reviews_dir(p)), ("workshops (sources)", workshops_source(p)),
                          ("workshop documents", workshops_output(p)), ("mock-up", mockup_dir(p)), ("screenshots", screenshots_dir(p)),
                          ("comments", feedback_file(p)), ("requirements documents", output_dir(p)), ("issued versions", issued_file(p)),

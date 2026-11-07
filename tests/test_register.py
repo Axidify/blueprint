@@ -623,3 +623,30 @@ def test_the_workbook_follows_the_design_language(rendered):
     rules = {rule.formula[0] for rng in ws.conditional_formatting for rule in rng.rules}
     assert {'"High"', '"asked"', '"resolved"'} <= rules
     assert "Internal" in wb["Internal fixes"].oddHeader.center.text and not ws.oddHeader.center.text
+
+
+def test_the_file_for_the_client_holds_the_client_items_alone_in_every_sheet(rendered, monkeypatch, capsys):
+    """The register's own file has internal sheets and a hidden one with every item's answer, so cutting it by
+    hand still sent internal work. The file to send is written apart, with nothing of an internal item in it."""
+    import zipfile
+
+    out = rendered / "Questions for the client.xlsx"
+    assert out.exists()
+    wb = load_workbook(out)
+    assert wb.sheetnames == ["For client", register.RENDERED] and wb["For client"].sheet_state == "visible"
+    ids = {row[0] for ws in wb.worksheets for row in sheet_rows(ws)[1:] if row and row[0]}
+    assert ids == {it["id"] for it in GOOD["items"] if it["audience"] == "client"}
+    raw = b"".join(zipfile.ZipFile(out).read(n) for n in zipfile.ZipFile(out).namelist())
+    assert b"R-004" not in raw and INTERNAL_TEXT.encode() not in raw, "not in any sheet, hidden or not"
+    # The client fills it in and sends it back: their answer is taken in like one typed into the register.
+    ws = wb["For client"]
+    header = [c.value for c in ws[1]]
+    row = next(r for r in range(2, ws.max_row + 1) if ws.cell(r, 1).value == OPEN_CLIENT)
+    ws.cell(row, header.index("Client response") + 1, "Answered by the client")
+    returned = rendered / "returned.xlsx"
+    wb.save(returned)
+    monkeypatch.setattr(sys, "argv", ["register.py", "render", str(rendered), "--from", str(returned)])
+    register.main()
+    assert "Send this one to the client" in capsys.readouterr().out
+    reg = json.loads((rendered / "register.json").read_text(encoding="utf-8"))
+    assert next(it for it in reg["items"] if it["id"] == OPEN_CLIENT)["answer"] == "Answered by the client"

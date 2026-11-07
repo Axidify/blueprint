@@ -241,7 +241,6 @@ def clock(minutes):
 
 def render(agenda, project, path):
     """Write the client's agenda and the facilitator notes next to the agenda file. Returns the two paths."""
-    from docx import Document
 
     import generate_requirements as gen
 
@@ -255,7 +254,7 @@ def render(agenda, project, path):
     by_id = {it.get("id"): it for it in read_register(project)}
     outputs = []
     for internal in (False, True):
-        doc = Document(str(workspace.asset("document-template.docx")))
+        doc = gen.template_document()
         w = gen.Writer(doc, fmt)
         w.setup_styles()
         w.header_footer(f"{agenda['project']} · {agenda['workshop']}", INTERNAL_MARK if internal else str(agenda["date"]),

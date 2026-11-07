@@ -2046,7 +2046,22 @@ def test_try_again_saves_the_kept_comment_once(browser):
     assert state["kept"] == [] and state["unsentPins"] == 0 and state["pins"] == 2
     assert "Saved to the project folder." in state["panel"] and "not saved" not in state["toggle"]
     assert [c["text"] for c in state["file"]] == ["saved while the server is up", "typed while the server is down", "from another laptop",
-                                                  "saved with the keyboard", "second thought"]  # the later Ctrl + Enter and edit checks
+                                                  "saved with the keyboard", "second thought", "typed after a failed load",
+                                                  "slow one", "right after"]  # the later checks
+
+
+def test_a_comment_typed_after_the_comments_failed_to_load_still_reaches_the_project(browser):
+    """One failed load used to switch the page to keeping comments in the browser for good, without a word."""
+    state = browser["failedLoad"]
+    assert "typed after a failed load" in state["room"], "saved to the project's feedback file"
+    assert state["local"] == [] and state["errorToasts"] == []
+
+
+def test_two_comments_saved_while_the_server_is_slow_are_each_saved_once(browser):
+    """A second send started while the first waited used to save the first comment twice and drop the second."""
+    state = browser["slowServer"]
+    assert state["room"].count("slow one") == 1 and state["room"].count("right after") == 1
+    assert state["kept"] == [], "nothing left waiting in the browser"
 
 
 def test_a_comment_saved_by_someone_else_appears_without_a_reload(browser):
@@ -2902,3 +2917,51 @@ def test_a_box_for_something_new_keeps_its_place_when_the_layout_changes(tmp_pat
     assert seen["shownDone"], "Show on the screen brings a done comment's mark back, faded"
     assert seen["clickThrough"] not in ("box", ""), "a box never takes a click: the thing inside it does"
     assert any("these two together" in x for x in seen["earlier"]), "the comment box shows the earlier comment on the same thing"
+
+
+# ---------------------------------------------------------------------- QC pass 1: leaks and lost work
+def test_the_built_mockup_carries_no_internal_notes_or_the_timeline(tmp_path, capsys):
+    """Only the platform check was held back: a requirement's internal note, the team's `_` notes and the
+    timeline's mandays were in spec.js, which anyone in the room can open."""
+    spec = sample()
+    spec["project"]["_note"] = "SECRET-RATE 900 a day"
+    spec["requirements"][0]["items"][0] = {"text": "Shown", "note": "SECRET-NOTE pad 3 mandays"}
+    spec["screens"][0]["_why"] = "SECRET-WHY"
+    spec["timeline"] = {"stages": [{"name": "Build", "items": [{"ref": "1", "name": "Build", "start": 1, "end": 4, "mandays": 23}]}]}
+    project = tmp_path / "leave-request"
+    support.write_spec(project, spec)
+    mockup.build(project)
+    capsys.readouterr()
+    for built in (project / "mockup" / "spec.js", project / "mockup" / "versions" / "v0.1" / "spec.js"):
+        text = built.read_text(encoding="utf-8")
+        assert "SECRET-" not in text and '"mandays"' not in text and '"timeline": {' not in text, built
+        assert '"text": "Shown"' in text and spec["screens"][0]["id"] in text, "the rest is still there"
+
+
+def test_a_feedback_write_that_fails_leaves_the_file_whole(tmp_path, monkeypatch):
+    """The file was written in place: a reader could catch it half written, and a program stopped part-way
+    left a broken file that stopped every later comment."""
+    fb = tmp_path / "feedback" / "feedback.json"
+    mockup.save_comment(fb, {"screen": "approvals", "text": "kept"})
+    before = fb.read_bytes()
+
+    def stopped(*args):
+        raise OSError("stopped part-way")
+
+    monkeypatch.setattr(mockup.os, "replace", stopped)
+    with pytest.raises(OSError):
+        mockup.save_comment(fb, {"screen": "approvals", "text": "lost"})
+    assert fb.read_bytes() == before and [c["text"] for c in mockup.read_feedback(fb)] == ["kept"]
+    assert sorted(p.name for p in fb.parent.iterdir() if not p.name.startswith(".feedback.lock")) == ["feedback.json"], "no half file left"
+
+
+def test_undo_refuses_when_the_copy_kept_before_the_change_is_missing(session, capsys):
+    """Every file then looked added by the change, and the spec itself was deleted."""
+    spec_file = session / "spec" / "app.yaml"
+    mockup.live_take(session, ["FB-001"])
+    spec_file.write_bytes(spec_file.read_bytes().replace(b"label: Employee", b"label: Staff"))
+    shutil.rmtree(session / "feedback" / "live" / mockup.live_session(session)["changes"][-1]["before"])
+    with pytest.raises(SystemExit, match="Cannot undo"):
+        mockup.live_undo(session)
+    assert spec_file.exists() and b"label: Staff" in spec_file.read_bytes(), "nothing was changed"
+    assert mockup.live_session(session)["changes"], "the change is still on the list"

@@ -29,7 +29,8 @@ removes an optional field. An answer on an open or asked item moves it to answer
 
 add and update write register.json only. Run render afterwards for the Excel file.
 
-render writes register.xlsx from register.json. First it takes over what was typed into the existing
+render writes register.xlsx from register.json, and beside it "Questions for the client.xlsx": the client
+items alone, the only register file to send (register.xlsx has internal sheets). First it takes over what was typed into the existing
 register.xlsx since it was written: a client's answer (Client response, Answer / decision) or a changed
 Status. Those go into register.json, so they are not lost when the Excel file is written again. When
 Excel and register.json both changed the same thing, it stops and says so; --overwrite writes the file
@@ -575,6 +576,23 @@ def render(project, reg, overwrite=False, returned=None):
         wb.save(out)
     except PermissionError:
         sys.exit(f"Cannot write {out}: close it in Excel and run this again.")
+
+    # The file to send: the client's items and nothing else, in no sheet, hidden or not. Its hidden note holds
+    # only those items, so a copy the client sends back is taken in with --from like the BA's file.
+    for_client = [it for it in items if it["audience"] == "client"]
+    cwb = Workbook()
+    sheet(cwb.active, client_cols, for_client, fill_in=("Client response",))
+    cwb.active.title = "For client"
+    note = cwb.create_sheet(RENDERED)
+    note.append(["id", "status", "answer"])
+    for it in for_client:
+        note.append([it["id"], it["status"], it.get("answer") or ""])
+    note.sheet_state = "veryHidden"
+    client_out = layout.client_register_xlsx(project)
+    try:
+        cwb.save(client_out)
+    except PermissionError:
+        sys.exit(f"Wrote {out.name}, but cannot write {client_out}: close it in Excel and run this again.")
     return out
 
 
@@ -703,7 +721,9 @@ def main():
         sys.exit("Give one --from file. Nothing was written.")
     out = render(project, reg, overwrite="--overwrite" in opts, returned=returned[0] if returned else None)
     c = Counter(it["audience"] for it in reg["items"])
-    print(f"Wrote {out}: {c['client']} client items, {c['internal']} internal fixes")
+    print(f"Wrote {out}: {c['client']} client items, {c['internal']} internal fixes (for the team)")
+    print(f"Wrote {layout.client_register_xlsx(project)}: the {c['client']} client items alone. Send this one to the client, "
+          "never the register itself.")
     refresh_overview(project)
 
 

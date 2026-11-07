@@ -1218,34 +1218,54 @@
     store(key, list) {
       try { localStorage.setItem(key, JSON.stringify(list)); } catch (e) { /* storage full or switched off */ }
     },
+    // This browser's unsent comments, kept across a reload. Another tab of the same mock-up keeps its own in the
+    // same place: theirs are kept too, never written over (a comment is known by its writer, time and text).
+    keepUnsent() {
+      const sig = (c) => `${c.owner || ""}|${c.time || ""}|${c.text || ""}`;
+      this.known = this.known || new Set();
+      this.unsent.forEach((c) => this.known.add(sig(c)));
+      const others = this.stored(this.unsentKey).filter((c) => !this.known.has(sig(c)));
+      this.store(this.unsentKey, others.concat(this.unsent));
+    },
     async load() {
-      if (this.remote) {
-        try {
-          const res = await fetch("api/feedback");
-          if (!res.ok) throw new Error(res.status);
-          this.items = await res.json();
-        } catch (e) { this.remote = false; }
-      }
       if (!this.remote) { this.items = this.stored(this.key); return; }
+      // Served by the mock-up server, comments always go to it. When it does not answer just now (restarting,
+      // busy), the page does not fall back to keeping comments in this browser for good: what is typed waits
+      // here only until the server takes it, and the list comes with the next sync (every few seconds).
       this.unsent = this.stored(this.unsentKey);
-      this.items = this.items.concat(this.unsent);
+      this.keepUnsent();
+      let list = [];
+      try {
+        const res = await fetch("api/feedback");
+        if (!res.ok) throw new Error(res.status);
+        list = await res.json();
+      } catch (e) { /* the list comes with the next sync, a few seconds from now */ }
+      this.items = list.concat(this.unsent);
       if (this.unsent.length) await this.resend();
     },
-    // Send the unsent comments, oldest first. True when none are left.
-    async resend() {
+    // Send the unsent comments, oldest first. True when none are left. One run at a time: two at once would
+    // send the same comment twice and could drop another from the list.
+    resend() {
+      const run = () => this.sendUnsent();
+      this.sending = (this.sending || Promise.resolve()).then(run, run);
+      return this.sending;
+    },
+    async sendUnsent() {
       while (this.unsent.length) {
+        const item = this.unsent[0];
         let saved;
         try {
-          const res = await fetch("api/feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(this.unsent[0]) });
+          const res = await fetch("api/feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item) });
           if (!res.ok) throw new Error(res.status);
           saved = await res.json();
         } catch (e) { break; }
         // The comment as the server saved it carries its number (FB-007): show that from now on.
-        const at = this.items.indexOf(this.unsent[0]);
+        const at = this.items.indexOf(item);
         if (at >= 0 && saved && saved.id) this.items[at] = saved;
         if (saved && saved.id) this.store(this.mineKey, [...this.stored(this.mineKey), saved.id].slice(-500));
-        this.unsent.shift();
-        this.store(this.unsentKey, this.unsent);
+        const i = this.unsent.indexOf(item);
+        if (i >= 0) this.unsent.splice(i, 1);
+        this.keepUnsent();
       }
       return !this.unsent.length;
     },
@@ -1274,7 +1294,7 @@
       this.items.push(item);
       if (this.remote) {
         this.unsent.push(item);
-        this.store(this.unsentKey, this.unsent);
+        this.keepUnsent();
         if (!(await this.resend())) toast("Comment NOT saved to the project: the mock-up server is not answering. It is kept in this browser. Open Feedback to try again or export it.", true);
       } else {
         this.store(this.key, this.items);
@@ -1320,7 +1340,7 @@
           c.edited = now;
         }
         c.text = text;
-        if (waiting) this.store(this.unsentKey, this.unsent);
+        if (waiting) this.keepUnsent();
         else this.store(this.key, this.items);
         return this.refresh();
       }
@@ -1335,7 +1355,7 @@
       if (this.unsent.includes(c)) {
         this.unsent = this.unsent.filter((x) => x !== c);
         this.items = this.items.filter((x) => x !== c);
-        this.store(this.unsentKey, this.unsent);
+        this.keepUnsent();
         return this.refresh();
       }
       if (!this.remote) {  // kept, marked as taken back: an export still shows it was there

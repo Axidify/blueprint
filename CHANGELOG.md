@@ -11,7 +11,39 @@ See [docs/maintaining.md](docs/maintaining.md).
 
 ## [Unreleased]
 
+### Added
+- **A register file made to send: `Questions for the client.xlsx`.** Each time the register is rendered, this
+  file is written beside `Questions and fixes register.xlsx`. It holds the client's questions and nothing else,
+  in no sheet, hidden or not. Send it instead of cutting the register by hand: the register's own file also
+  holds the internal fixes and a hidden record of every item's answer, which deleting sheets did not remove.
+  When the client sends it back filled in, take their answers in as before (`render --from`). The project
+  overview now marks the register Internal and this file For the client.
+
 ### Fixed
+- **Nothing of the Word template but its look reaches a generated document.** The requirements document, the
+  UAT document, the client's change request note, the workshop agenda and the review kept the template's body
+  text, comments and file properties (title, subject, last saved by). A template made from an earlier client's
+  requirements document, as the document format tool suggested, put that document, with its mandays and
+  rates, into every new one. Only the template's styles, page set-up, header and footer are used now.
+- **The mock-up no longer carries the team's notes.** A requirement's internal `note`, any `_note` of your own
+  and the timeline with its mandays were written into the built mock-up, where anyone in the room could read
+  them in the page source. They stay in the spec (and the timeline in the requirements document).
+- **Archiving or restoring a project with a file open no longer splits it in two.** When the register was open
+  in Excel, a document in Word or OneDrive was syncing, the move copied the project and then deleted it part
+  way, so client documents went missing from the active folder and both commands then refused. The project
+  now moves in one step or not at all, and the message says to close its files.
+- **Mock-up comments can no longer be lost to a half-written file.** The comments file is written in one step,
+  so a mock-up asking for the comments never reads half of it, and a program stopped while saving leaves the
+  file as it was instead of a broken one that stopped every later comment.
+- **A mock-up whose comments failed to load once still saves comments to the project.** It used to switch to
+  keeping comments in that browser for good, without a word, so Claude never saw them. Two comments saved
+  while the server is slow are each saved once (the first was saved twice and the second could be dropped),
+  and two tabs of the same mock-up no longer wipe each other's unsaved comments.
+- **Writing the UAT scripts again never wipes the testers' results.** When the workbook already has results,
+  an actual result, a tester, a date or a defect typed in, `uat.py render` stops and says so; with `--force`
+  it keeps the filled-in workbook beside the new one ("… - results kept <date> <time>.xlsx").
+- **Undo in a live session no longer deletes the spec** when the copy kept before the change is missing; it
+  stops and changes nothing.
 - **Edit and Delete in the Feedback panel always act on the comment they sit on.** A card, its buttons and its
   pin now name their comment instead of counting its place in the list, so a comment saved or taken back in
   another browser at the same moment can never shift them onto a neighbour. (The mock-up's comment code was

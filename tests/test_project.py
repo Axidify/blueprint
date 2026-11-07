@@ -357,3 +357,26 @@ def test_new_project_warns_about_earlier_work_on_the_same_system(temp_workspace,
     assert "Warning: earlier work on a system like 'Leave Request System':" in out
     assert "projects/_archive/leave-old" in out and "knowledge/actuals/leave-old.md" in out
     assert (projects / "leave-request-phase-2" / "_blueprint" / "register.json").exists(), "a warning, not a refusal"
+
+
+def test_archive_moves_the_whole_folder_or_nothing(projects, run, monkeypatch):
+    """When something in the folder was open, the move fell back to copying and deleting: half the project
+    stayed, client documents went missing from it, and both archive and restore then refused."""
+    p = new_project(projects)
+    before = sorted(str(f.relative_to(p)) for f in p.rglob("*"))
+
+    def in_use(src, dest):
+        raise PermissionError(32, "The process cannot access the file because it is being used by another process")
+
+    with monkeypatch.context() as m:
+        m.setattr(project_tool.os, "rename", in_use)
+        with pytest.raises(SystemExit, match="Nothing was archived.*close its files"):
+            run("archive", "leave-request")
+    assert sorted(str(f.relative_to(p)) for f in p.rglob("*")) == before
+    assert not (projects / "_archive" / "leave-request").exists()
+    run("archive", "leave-request")
+    with monkeypatch.context() as m:
+        m.setattr(project_tool.os, "rename", in_use)
+        with pytest.raises(SystemExit, match="Nothing was restored"):
+            run("restore", "leave-request")
+    assert (projects / "_archive" / "leave-request").exists() and not p.exists()

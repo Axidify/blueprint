@@ -104,7 +104,8 @@ def learn(sample):
         if t:
             print(f"  - {t}")
     print("\nUse these to write workspace/branding/document-format.yaml (only the keys that differ from the defaults),"
-          "\nand copy the sample to workspace/branding/document-template.docx if its header, footer or styles should be kept.")
+          "\nand copy the sample to workspace/branding/document-template.docx if its header, footer or styles should be kept"
+          "\n(only those are used: its text, comments and file properties never reach a generated document).")
 
 
 def preview():

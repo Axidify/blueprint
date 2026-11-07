@@ -66,7 +66,9 @@ as well as the mistakes; finish both.
 
 `python -I tools/uat.py render projects/<slug>` checks again and writes the workbook and the document next
 to the JSON. Open the document if the user wants to look it over; change the JSON and render again rather
-than editing the Word or Excel file.
+than editing the Word or Excel file. If it stops because the testers have filled in the workbook, say so and
+read their results first (`uat.py results`); add `--force` only when the user agrees (their workbook is kept
+beside the new one).
 
 ## Rules
 

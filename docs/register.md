@@ -2,7 +2,8 @@
 
 Each project has one register: every question, gap, assumption, decision and fix found at any stage,
 with its status. `register.json` (in the project's `_blueprint` folder) is the source of truth;
-`Questions and fixes register.xlsx`, at the top of the project folder, is the copy the BA takes to the client.
+`Questions and fixes register.xlsx`, at the top of the project folder, is the BA's copy, and
+`Questions for the client.xlsx` beside it is the one to send to the client.
 The skills keep both up to date. (In a project still in the old folder layout they are `register.json` and
 `register.xlsx` at the top; this page calls them `register.json` and `register.xlsx`.)
 
@@ -23,6 +24,15 @@ Where each item was found shows in two columns: **Document** (the document and i
 `register.json` keeps as it was noted; a note in a style Blueprint does not recognise is shown as it is.
 
 Internal fixes never appear on the client sheet.
+
+## The file for the client
+
+`Questions for the client.xlsx` is written with the register each time. It holds the **For client** sheet
+alone: no internal fixes, no All items or Summary, and its hidden note of what it held lists the client's
+items only. Send this file, never the register: deleting the internal sheets from the register by hand
+still leaves a hidden record of every item's status and answer in it. When the client sends it back with
+their answers, take them in with `register.py render projects/<slug> --from "<returned file>"` (the
+`client-answers` skill does). Do not type into it yourself: type into the register, and render again.
 
 ## Statuses
 

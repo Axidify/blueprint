@@ -1959,3 +1959,33 @@ def test_the_section_numbers_on_the_summary_and_sign_off_pages_are_links(wide):
     assert len(to_decisions) >= 2, "How to review it and the sign-off card both link to the decisions"
     for key in ("section:by-role", "section:screens"):
         assert anchor(key) in places and any(a == anchor(key) and text.startswith("section ") for a, text in links), key
+
+
+def test_nothing_of_the_word_template_but_its_look_reaches_a_generated_document(tmp_path):
+    """The template's body, comments and file properties used to be kept: a template made from an earlier
+    client's requirements document put that document, with its mandays and rates, into every new one."""
+    import zipfile
+
+    import docx
+
+    template = tmp_path / "document-template.docx"
+    d = docx.Document(str(support.ROOT / "templates" / "document-template.docx"))
+    d.add_paragraph("OTHER-CLIENT body: 42 mandays at 1500 a day")
+    d.sections[0].header.paragraphs[0].text = "Header kept {company}"
+    cp = d.core_properties
+    cp.title, cp.subject, cp.comments, cp.last_modified_by, cp.keywords = ("OTHER-TITLE", "OTHER-SUBJECT", "OTHER-COMMENT",
+                                                                          "OTHER-PERSON", "OTHER-KEYWORDS")
+    d.save(str(template))
+    fresh = generate_requirements.template_document(template)
+    assert fresh.paragraphs == [] or all(not p.text for p in fresh.paragraphs)
+    assert fresh.sections[0].header.paragraphs[0].text == "Header kept {company}", "the header and footer stay"
+    out = tmp_path / "out.docx"
+    fresh.add_paragraph("New content")
+    fresh.save(str(out))
+    raw = b"".join(zipfile.ZipFile(out).read(n) for n in zipfile.ZipFile(out).namelist())
+    assert b"OTHER-" not in raw
+    # Every generated Word file starts from it: the UAT document, the CR note, the agenda and the review too.
+    for tool in ("generate_requirements", "uat", "change_request", "workshop", "review_doc"):
+        source = (support.ROOT / "tools" / f"{tool}.py").read_text(encoding="utf-8")
+        assert 'Document(str(workspace.asset("document-template.docx")))' not in source, tool
+        assert "template_document()" in source, tool

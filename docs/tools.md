@@ -105,6 +105,9 @@ stops and lists them; `--overwrite` writes the file from `register.json` and dro
 their answers in **Client response** or a status changed), after the project's own file and by the same
 rules; the returned file is only read. An item that was also changed in `register.json` since the copy was
 written stops it, with both values. The `client-answers` skill uses it.
+Beside it, `render` writes `Questions for the client.xlsx`: the client's items alone, in no sheet, hidden or
+not, the only register file to send (the register's own file holds the internal fixes and a hidden record of
+every item). A copy of it that comes back filled in is taken in with `--from` like the register itself.
 See [The register](register.md).
 
 ### mockup.py
@@ -173,7 +176,8 @@ the old layout): every comment, one row each across all versions, with where it 
 outcome as a dot and a word, the note, the register item and the version it was worked into, filterable,
 with a summary by outcome and by version. The project overview writes it too when the comments changed. `undo` puts the spec and the project's own code
 back as they were before the last change, and makes its comments wait again (Received); it does not touch
-the register, so register items made for that change are put back with `register.py update` (it names them). `end` closes the session and says what to release. (`wait`,
+the register, so register items made for that change are put back with `register.py update` (it names them).
+When the copy kept before the change is missing, `undo` stops and changes nothing. `end` closes the session and says what to release. (`wait`,
 which returns as soon as a comment arrives, and `checkpoint`, which keeps the project without marking a
 comment, are there for working on each comment at once.) The mock-up is only ever sent a
 comment's text and one of four words (Received, Working on it, Applied, Noted for follow-up): notes,
@@ -300,7 +304,7 @@ mandays or cost. The file format is at the top of the script. Used by the `prep-
 ```bash
 python -I tools/uat.py draft   projects/<slug> [--current] [--date YYYY-MM-DD] [--force]
 python -I tools/uat.py check   projects/<slug> ["<scripts.json>"]
-python -I tools/uat.py render  projects/<slug> ["<scripts.json>"]
+python -I tools/uat.py render  projects/<slug> ["<scripts.json>"] [--force]
 python -I tools/uat.py results projects/<slug> ["<filled-in workbook.xlsx>"]
 ```
 `draft` writes `_blueprint/uat/<date> uat scripts v<version>.json` from the spec, the same way every
@@ -313,6 +317,9 @@ unique, every step has an expected result, roles and screens exist and nothing i
 rates, internal register items, platform findings), and lists the draft's `todo`s still open. `render`
 checks and writes, into `6 UAT/`, the workbook for the testers (one row per step, Pass/Fail chosen from a
 list, a summary of coverage and results) and the test scripts as a Word document in the company's format.
+When the testers have already typed results into that workbook (a Pass/Fail, an actual result, a tester, a
+date or a defect), `render` stops rather than write over them; `--force` writes it anyway and first keeps
+their workbook beside it as `<name> - results kept <date> <time>.xlsx`.
 `results` reads a filled-in workbook and lists the failed and blocked steps. The file format is at the top
 of the script. Used by the `uat-scripts` skill. See [UAT scripts](uat.md).
 
@@ -408,7 +415,8 @@ files become read-only and the generator refuses to overwrite it, so the next ch
 `file` moves a document into `1 Client documents/` with a dated, descriptive name such as
 `2026-11-12 client comments on v1.3.docx`. `archive` moves a delivered project to `projects/_archive/`,
 out of the status list; `restore` brings it back. `archive` refuses when an archived project already has
-that name, and moves nothing. `find` lists earlier work on the same or a similar system name (words like
+that name, and moves nothing. Both move the folder in one step or not at all: when a file in it is open
+(in Excel or Word, or OneDrive is syncing) they stop, move nothing and say to close it. `find` lists earlier work on the same or a similar system name (words like
 "system" and "phase 2" are ignored): active and archived projects, and systems delivered before, from
 `knowledge/actuals/` and the projects log; `new-project` and `process-inbox` run it so a new document for a
 system you already built is not treated as brand new. `check` reports projects missing parts of the
@@ -466,8 +474,8 @@ to Claude and a button that opens the document it needs), four figures (client q
 block sign-off, internal fixes, the mock-up, the requirements document), and then a card per stage in the
 order of the process: client documents, review, workshops, mock-up, requirements document and the
 estimate for the lead developer. Each document is a row that opens the real file, with a line about what
-it is and who it is for (From the client, For the client, Client sheet only, Show the client, Can be
-shared, Internal); a stage with nothing yet says how to get there. Estimates, facilitator notes, reviews
+it is and who it is for (From the client, For the client, Show the client, Can be shared, Internal; the
+register is Internal and `Questions for the client.xlsx` For the client); a stage with nothing yet says how to get there. Estimates, facilitator notes, reviews
 and change notes are marked Internal, and the page never shows mandays, rates or cost. It is rewritten only
 when something on it changed. For a project with a mock-up it also writes the **Open the mock-up**
 shortcuts (`Open the mock-up.cmd` for Windows, `Open the mock-up.command` for a Mac): they find Blueprint on

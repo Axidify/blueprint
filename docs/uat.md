@@ -17,6 +17,10 @@ In the project's `6 UAT` folder (the `.json` in `_blueprint/uat/`):
 
 Neither client file holds mandays, rates, cost, internal register items or platform findings.
 
+Rendering again (after the scripts changed) never writes over the testers' results: when the workbook has
+anything typed in their columns, `uat.py render` stops; `--force` writes a fresh workbook and keeps theirs
+beside it as `<name> - results kept <date> <time>.xlsx`.
+
 ## Which version is tested
 
 The scripts follow the version issued to the client last (`_blueprint/output/spec-v<version>.yaml`), because UAT
