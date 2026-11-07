@@ -262,3 +262,40 @@ def test_a_distinctive_word_of_an_archived_name_is_found_through_hyphens(two, te
     assert m["verdict"] == "unknown"
     m = project_tool.match_file(drop(two, "notes.txt", "Notes on the leave rollout: who signs off."))
     assert "a word of its system name: leave" in " ".join(e["what"] for e in m["projects"][0]["evidence"])
+
+
+def workbook(path, sheets):
+    import openpyxl
+
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+    for title, rows in sheets.items():
+        ws = wb.create_sheet(title)
+        for row in rows:
+            ws.append(row)
+    wb.save(path)
+    return path
+
+
+@pytest.mark.parametrize("name, content, kind", [
+    ("UAT results.xlsx", {"Summary": [["Scenarios", 2]], "Test steps": [["Case", "Step", "Result"], ["UAT-001", 1, "Pass"],
+                                                                         ["UAT-001", 2, "Fail"]]}, "UAT results"),
+    ("UAT workbook.xlsx", {"Test steps": [["Case", "Step", "Result"], ["UAT-001", 1, None]],
+                           "How to": [["Result: Pass, Fail or Blocked"]]}, "UAT workbook"),
+    ("register back.xlsx", {"For client": [["ID", "Question", "Client response"], ["R-001", "Who approves?", "HR"]]},
+     "client answers to the register"),
+    ("requests.txt", "From: HR\nSubject: UAT\n\nBesides the UAT results, the team has three requests.\n1. Add an export.", "change requests"),
+    ("note.txt", "Please treat this as a change request: an export of every application.", "change requests"),
+    ("effort.txt", "Actual effort from the lead developer\nForms: 12 MD\nWorkflow: 8 MD", "project actuals"),
+    ("answers.txt", "Answers to your questions\nR-001: the line manager approves.", "client answers"),
+    ("notes.txt", "Notes on the leave rollout: who signs off.", ""),
+])
+def test_the_kind_of_file_is_named(two, name, content, kind):
+    """A filled-in UAT workbook and a change-request e-mail came back with kind "" in the cold run."""
+    f = workbook(two / name, content) if name.endswith(".xlsx") else drop(two, name, content)
+    assert project_tool.match_file(f)["kind"] == kind
+
+
+def test_a_requirements_document_mentioning_uat_and_requests_is_not_a_change_request(two):
+    text = "\n".join(["The system shall let staff submit a leave request."] * 12 + ["UAT runs for two weeks; requests are logged."])
+    assert project_tool.guess_kind(two / "srs.docx", text, None) == "requirements document"

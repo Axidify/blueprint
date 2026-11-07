@@ -300,6 +300,29 @@ def lookup(project, request, top=8, version=None, basis=None):
     return basis, found[:top]
 
 
+PROBABLY, CHECK = 0.55, 0.40  # signed_leads: a close match, and one worth reading
+
+
+def in_signed(entry):
+    """Whether an entry is part of what the client signed: not an open item, a won't-fix, an out-of-scope line
+    or a decision made after the version was issued."""
+    if entry["kind"] in ("open item", "won't fix"):
+        return False
+    if entry["kind"] == "scope" and "out of scope" in entry["ref"]:
+        return False
+    return not (entry["kind"] == "decision" and "raised after the version was issued" in entry["where"])
+
+
+def signed_leads(project, text, basis=None, top=3):
+    """(level, leads) for something called a change request: how close the signed version comes to it.
+    level is "probably" (a close match: it may already be in scope), "check" (worth reading) or "none". A lead,
+    never a verdict: the score counts shared words."""
+    basis, found = lookup(project, text, top=20, basis=basis)
+    leads = [(s, e) for s, e in found if in_signed(e)][:top]
+    best = leads[0][0] if leads else 0
+    return ("probably" if best >= PROBABLY else "check" if best >= CHECK else "none"), leads
+
+
 def read_requests(path):
     path = Path(path)
     if not path.is_file():
@@ -784,7 +807,30 @@ def cmd_add(a):
             print(f"  {cr['id']} sized: {sized_text(sizing[cr['id']])} (internal)")
     for line in warnings:
         print(f"Note: {line}")
+    for line in new_but_signed(a.project, added):
+        print(f"Check: {line}")
     refresh(a.project)
+
+
+def new_but_signed(project, crs):
+    """A line for each CR marked New whose request reads closely like something in the signed version: billing
+    it, or learning from it as a gap, would be wrong if it was in scope all along."""
+    new = [cr for cr in crs if cr.get("verdict") == "new"]
+    if not new:
+        return []
+    try:
+        basis = signed_basis(project)
+    except SystemExit:
+        return []
+    out = []
+    for cr in new:
+        level, leads = signed_leads(project, f"{cr.get('title', '')}. {cr.get('request', '')}", basis)
+        if level == "probably":
+            s, e = leads[0]
+            quote = e["text"] if len(e["text"]) <= 160 else e["text"][:157] + "..."
+            out.append(f"{cr['id']} is marked New, but v{basis['version']} has {e['ref']} [{e['where']}] "
+                       f"(match {s:.2f}): “{quote}” Read it: if it is in scope, change the verdict (update --set verdict=in-scope).")
+    return out
 
 
 def parse_value(key, value):

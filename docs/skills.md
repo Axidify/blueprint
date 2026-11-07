@@ -203,9 +203,12 @@ from a returned Rates needed sheet: "save these rates") and to add the questions
 **Ask:** "close the project", "here are the actuals and the CR list"
 Records estimate vs actual effort and each CR, maps every CR to a gap pattern, and proposes updates to
 the knowledge base: it shows you every change (actuals, projects log, gap patterns, rates) and writes only
-what you agree to, because the knowledge base is shared by everyone using the workspace.
-**Output:** `knowledge/actuals/<name>.md`, a row in `knowledge/projects-log.md`, gap-pattern and
-building-block updates, each after you agree. Afterwards it offers to archive the project (`projects/_archive/`).
+what you agree to, because the knowledge base is shared by everyone using the workspace. The draft comes
+from the project's own records (`tools/close.py`), and every "CR" the lead developer lists is held against
+the signed version first: one that was in it is not a change request, and is not learnt as one. Test data
+is marked TEST, so estimates never count it.
+**Output:** the proposal in `_blueprint/close/` (internal), then `knowledge/actuals/<name>.md`, a row in
+`knowledge/projects-log.md`, gap-pattern and building-block updates, each after you agree. Afterwards it offers to archive the project (`projects/_archive/`).
 
 ### change-request
 

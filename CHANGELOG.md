@@ -48,6 +48,17 @@ See [docs/maintaining.md](docs/maintaining.md).
   CR id); the next round's workbook closes the defects that now pass and opens again those that fail. The inbox
   goes through the open defects with you: a bug for the developers, a new wish for `change-request`, or not a
   defect.
+- **Closing a project has a tool.** `close.py draft` drafts the actuals record, the projects-log row, the gap-pattern
+  evidence and building-block notes from the project's own estimate, CR log, register and the lead developer's
+  figures, into the project's `_blueprint/close/`. Nothing reaches the shared knowledge base until you agree and
+  `close.py apply` writes it; a figure nobody gave stays "not given". The close-project skill uses it.
+- **"CRs" that were in the signed version are caught.** At close-out every change request, from the CR log and the
+  lead developer's list, is held against the version the client signed (`close.py check`); one that was in scope is
+  left out of the billed CRs and the gap evidence, so the knowledge base does not learn the wrong lesson. Logging a
+  CR marked New that reads closely like the signed version now prints a `Check:` line too.
+- **Test data in the knowledge base.** A projects-log row with the word TEST in capitals (or a yes in a Test column)
+  is test data: estimates never count it as a delivered project, so a test run cannot make a platform look
+  calibrated. The close-out marks test figures this way.
 
 ### Changed
 - **The client sees first what still needs an answer.** In `Questions for the client.xlsx` and the register,
@@ -67,6 +78,14 @@ See [docs/maintaining.md](docs/maintaining.md).
   a screen shows, adding and editing a list's entries). A process step is made with the button named after it, and
   a draft or a rejected record goes on with its form's own button. The sample project's draft has no case left to
   refine (12 before).
+
+### Fixed
+- **The next step follows the project to the end.** Once a version has gone to the client, the start-up summary
+  follows the latest stage reached (UAT scripts, UAT results, change requests open or decided, close-out drafted)
+  instead of still pointing at an old workshop. The summary also counts the change requests.
+- **The inbox names more kinds of file.** `project.py match` now says what a filled-in UAT workbook, a change-request
+  e-mail, the lead developer's actuals, a returned register and a requirements document are (it used to say nothing
+  for most of them), so filing and the next step are suggested right.
 
 ## [1.5.0] - 2026-11-07
 

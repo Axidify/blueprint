@@ -1,6 +1,7 @@
 # <Project name> – actuals
 
-Filled in by the `close-project` skill after delivery.
+Drafted by `tools/close.py draft` (the `close-project` skill) after delivery. Test data says TEST DATA in
+the title.
 
 **Client:** · **Platform:** · **Team:** · **Phase:**
 
@@ -15,7 +16,11 @@ Filled in by the `close-project` skill after delivery.
 
 ## Change requests
 
-| # | CR | Billed (MD) | Actual (MD) | Gap pattern |
-|---|---|---|---|---|
+| # | CR | Verdict | Billed (MD) | Actual (MD) | Gap pattern |
+|---|---|---|---|---|---|
+
+## Listed as change requests, but in the signed version
+
+Not change requests: not billed, and not gap evidence.
 
 ## Lessons

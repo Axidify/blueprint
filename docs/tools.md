@@ -32,7 +32,10 @@ counts client items only) and suggested next step, plus files waiting in the inb
 the stage, in the words to say to Claude: review the documents or build a mock-up, prepare the workshop
 while high-priority client questions are open (or present the mock-up when one is prepared), apply
 feedback, generate the requirements document (again, when the spec changed since), review the generated
-document, record it as issued, close the project after delivery. A second `also:` line tells the lead
+document, record it as issued. Once a version has gone to the client, the latest stage the project reached
+decides instead, so an old workshop or comment never outlives the sign-off: the UAT scripts written, the UAT
+results filed, change requests open or decided (the summary line counts them), the close-out drafted, the
+actuals logged. A second `also:` line tells the lead
 developer when there is no estimate yet or the spec changed since the last one. The `--brief` form is what you see when Claude Code starts. A project with a damaged register,
 spec or feedback file is still listed, with a line saying which file could not be read; the other projects
 are shown as usual.
@@ -427,13 +430,37 @@ snapshot; with nothing issued, the current spec, with a warning) reads most like
 screens, dialogs, status rules, scope lines, integrations, notifications, non-functional requirements, and
 the register's decisions and open items, with ids and sections. It is a lead, not a verdict. `add` puts
 CRs in `_blueprint/changes/crs.json` with the next ids and checks the log; `update` changes their status and the sold
-figure the project lead gives. `ask` adds an Ambiguous request's client question to the register.
+figure the project lead gives. When `add` logs a CR marked New whose request reads closely like a
+requirement, screen, rule or decision of the signed version, it prints a `Check:` line with the text to read:
+billing it, or learning from it as a gap, would be wrong if it was in scope all along. `ask` adds an Ambiguous request's client question to the register.
 `check` checks the log and sizes each CR in building blocks with the estimate's rules, and shows the
 knowledge base's calibration notes about change requests; `render` also writes
 `Internal – estimates and change requests/CR log (internal).xlsx`. `note` writes the client's change request note (Word, company format,
 into `7 Change requests/`) for a New CR: no sizing in it, and "Quotation to follow" until the project lead has entered the sold
 figure. The file format is at the top of the script. Used by the `change-request` skill. See
 [Change requests](change-requests.md).
+
+### close.py
+
+```bash
+python -I tools/close.py check projects/<slug> [--actuals <actuals.json>]
+python -I tools/close.py draft projects/<slug> [--actuals <actuals.json>]
+python -I tools/close.py apply projects/<slug> [--only actuals|log] [--force]
+```
+For a delivered project. `check` holds every change request against the version the client signed: the
+CR log and the list the lead developer gives with the actuals. One with the verdict In scope, or one that
+reads closely like the signed version's requirements, screens, rules or decisions, is flagged: it is not a
+change request, and the knowledge base must not learn it as one (the match counts shared words; read the
+cited text). `draft` writes the close-out into `_blueprint/close/`: `actuals draft.md` (the record for
+`knowledge/actuals/<slug>.md`), `knowledge proposal.md` (the projects-log row, the gap-pattern evidence,
+building-block notes and the CR check, to show you) and `close.json`, from the spec, the issued version, the CR
+log, the register, the latest estimate and `_blueprint/close/actuals.json` (the lead developer's figures; the
+format is at the top of the script). A figure nobody gave stays "not given". Nothing reaches the shared
+knowledge base until `apply`, run after you agreed: it copies the actuals draft (as edited since) and adds or
+replaces the project's row in `projects-log.md`; an actuals record that exists is kept unless `--force`. Gap
+patterns and building blocks are edited by hand, in general terms. With `"test": true` in the actuals file,
+every draft says TEST DATA and the row is marked `(TEST)`, so estimates never count it. Used by the
+`close-project` skill.
 
 ### project.py
 
@@ -513,7 +540,14 @@ least twice its score, and no archived project comes within 25 points of it; **l
 least 15 points and 8 more than the next; otherwise **unknown**. Only a clear file may go into the plan
 without a question about it; the client's name alone (5 points) never decides. Archived projects and
 systems delivered before are listed apart, never as a place to file: restore first. `--json` gives the same
-for the skill (`verdict`, `best`, `summary`, `projects`, `archived`, `delivered`, `note`).
+for the skill (`kind`, `verdict`, `best`, `summary`, `projects`, `archived`, `delivered`, `note`).
+
+`kind` says what the file looks like, in `process-inbox`'s words, or is empty when nothing says: a mock-up
+comments export; UAT results (an Excel file with a "Test steps" sheet and Pass, Fail or Blocked in it) or a UAT
+workbook (not filled in); client answers to the register (a "For client" sheet with Client response); a
+requirements document (many "shall"s); project actuals (actual effort in mandays); change requests (a change
+request or CR id, or a short note or e-mail asking for things during UAT); client answers (register ids with
+answers). It is a hint for the filing name and the next step: read the file before acting on it.
 
 `hold` leaves a file where it is with a note of why, in a hidden `.notes.json` beside it (one file per
 folder, keyed by file name with the date and the reason); `match` shows the note, and `file` removes it when

@@ -130,6 +130,12 @@ The level starts at high and each rule can lower it. The estimator can lower it 
 
 Confidence improves as projects are closed with `close-project`: each one adds evidence for the rates.
 
+**Test data is never counted.** A row of `knowledge/projects-log.md` is test data when a cell holds the
+word `TEST` in capitals (`lps-etoss (TEST)` as the project, `TEST DATA.` in Notes), or when a `Test` column
+says yes. Such rows are not delivered projects: they never count towards the three, so a test run cannot
+make a platform's estimates look calibrated. `tools/close.py` marks the row this way when the actuals file
+says `"test": true`.
+
 ## Against the scope of work
 
 The scope of work's mandays are a commercial figure: they let the client gauge the cost and are often lower
