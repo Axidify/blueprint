@@ -1,7 +1,7 @@
 """Create a project folder.
 
 Usage:
-    python -I tools/new_project.py <slug> "<Project name>" "<Client name>" [--platform "Joget DX"]
+    python -I tools/new_project.py <slug> "<Project name>" "<Client name>" [--platform "<platform>"]
 
 Creates projects/<slug>/ in the folder layout people browse: "1 Client documents" for the client's documents,
 and _blueprint/ for Blueprint's working files (spec/, feedback/ and an empty register.json, with a README).
@@ -27,7 +27,9 @@ def main():
     ap.add_argument("slug")
     ap.add_argument("name")
     ap.add_argument("client")
-    ap.add_argument("--platform", default="Joget DX")
+    # No default: a project is on the platform its brief or scope of work names. A default once made every new
+    # project a Joget project, and its estimate, platform check and mock-up look followed.
+    ap.add_argument("--platform", default="")
     a = ap.parse_args()
     if not re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", a.slug):  # also rules out names starting with "_"
         sys.exit("The slug must be lowercase words joined by hyphens, e.g. courier-booking")
@@ -52,6 +54,9 @@ def main():
               + ". Any other look can be asked for when the mock-up is built.")
     except Exception:
         pass
+    if not a.platform.strip():
+        print("Platform: not set. Nothing assumes one: set it (the spec's project.platform) once the brief, scope of "
+              "work or the lead developer says what it is built on.")
     if earlier:
         print(f"Warning: earlier work on a system like '{a.name}':")
         for f in earlier:

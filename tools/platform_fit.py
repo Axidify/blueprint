@@ -109,8 +109,8 @@ def stack_of(spec):
     for product in [project.get("platform"), *(project.get("stack") or [])]:
         if product and str(product).strip() and str(product).strip() not in found:
             found.append(str(product).strip())
-    if not found:
-        found = [str(p) for p in (workspace.company().get("platforms") or [])[:1]]
+    # No fallback to the company's platforms: a spec that names none is checked against none, never against the
+    # first platform the company lists (it once checked a custom build against Joget).
     return found
 
 

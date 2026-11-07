@@ -29,7 +29,7 @@ name: Acme Solutions Sdn. Bhd.   # on the document cover, footer, standard wordi
 short_name: Acme                 # used in the standard wording, e.g. "Acme Solutions Sdn. Bhd. (Acme)"
 day_rate: 1500                   # used to cost estimates and variances
 currency: RM
-platforms: [Joget DX]            # offered when you create a project
+platforms: [Joget DX, Custom web]  # the choices offered when you create a project; never a default
 ```
 
 ## Branding (`branding/`)

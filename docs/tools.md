@@ -43,11 +43,13 @@ are shown as usual.
 ### new_project.py
 
 ```bash
-python -I tools/new_project.py courier-booking "Courier Booking System" "Acme Logistics Sdn. Bhd." --platform "Joget DX"
+python -I tools/new_project.py courier-booking "Courier Booking System" "Acme Logistics Sdn. Bhd." [--platform "<platform>"]
 ```
 Creates `projects/<slug>/` in the project folder layout (`1 Client documents/`, and `_blueprint/` with
 `spec/`, `feedback/`, an empty register and a README), says
-which look its mock-up starts with (`desk`, or `joget` when the platform is Joget) and what to do next. It refuses a folder name an archived project already has (restore that one with
+which look its mock-up starts with (`desk`, or `joget` when the platform is Joget) and what to do next.
+There is no default platform: without `--platform` the project has none, it says so, and nothing assumes one
+until it is set. It refuses a folder name an archived project already has (restore that one with
 `project.py restore`), and warns when an active, archived or delivered project has the same or a similar
 system name (see `project.py find`).
 
@@ -224,8 +226,8 @@ with feedback capture, captures screenshots with Edge, or lists saved feedback b
 
 When buttons in the spec move a record to another status (`set_status`, and `also_move` for a linked
 record), `build` says how many, lists the moves the status rules allow that no button makes, and names the
-moves the rules mark as made by the system on its own (`auto`). It says which theme it drew (`theme joget:
-the spec sets no theme, so it keeps joget` when the spec has none). It says
+moves the rules mark as made by the system on its own (`auto`). It says which theme it drew (`theme desk:
+the spec sets no theme, so it takes desk, from its platform` when the spec has none). It says
 which forms add a record when submitted (and to which list, in which status), and which main buttons only
 show their message, whether the screens of a custom build are left untagged, and how many parts of the mock-up carry a "Custom development" tag (from the spec's
 `platform_fit` and the project's own code). It also lists, as warnings, settings the mock-up ignores (a

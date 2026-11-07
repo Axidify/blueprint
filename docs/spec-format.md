@@ -64,9 +64,8 @@ the next workshop; `project.py ready` stops on one that is empty with no open re
 | `vivid` | A bold showcase: dark gradient menu, coloured header band | Demos and pitches |
 
 A new project's spec is written with `theme: desk`, or `theme: joget` when the platform is Joget
-(`mockup.default_theme()`; `new_project.py` says which). A spec without `theme` keeps `joget`, the look it
-always had, so no existing project changes look by itself: set `theme: desk` to move one over (its
-screenshots are then out of date). In `desk`, write the spec's own words (titles, menu items, labels,
+(`mockup.default_theme()`; `new_project.py` says which). A spec without `theme` takes the same look from
+its platform: `joget` only when the platform is Joget, otherwise `desk`. In `desk`, write the spec's own words (titles, menu items, labels,
 buttons) in sentence case: the mock-up draws them as written, and its own words (Sign out, Clear filters,
 Approval progress) already are. Status colours there: `green` is done, `amber` needs attention (orange),
 `red` refused or failed, `grey` neutral; a status without a colour whose name says it waits or is in

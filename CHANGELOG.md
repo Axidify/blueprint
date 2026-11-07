@@ -101,6 +101,19 @@ See [docs/maintaining.md](docs/maintaining.md).
   comment carries beside its own outcome.
 
 ### Changed
+- **Blueprint assumes no platform, rate or manday split.** It starts neutral: the company's name, currency
+  and platforms are asked at first launch; each new project's platform, rates and manday split are taken
+  from the files you give for it, and asked only when no file says them (the platform when the project is
+  created, the rates and split when it is estimated, with the knowledge base's figures shown as a starting
+  point), unless you say otherwise. A new project no longer
+  becomes a Joget project by default (`new_project.py` has no default platform), the platform check no
+  longer falls back to the company's first platform, a spec without a theme takes the look of its own
+  platform (Joget's only on Joget), and an estimate is refused when its platform is not the project's or a
+  line uses another platform's building block, so one platform's rates never price another's work. The
+  starter workspace names no platform: the eighteen general blocks (forms, lists, approvals, integrations …)
+  are in its All platforms table with what each counts, and a platform gets a table of its own only when
+  its figures differ. A block ID in no table is now refused. An end-to-end test had counted and priced a
+  custom build in Joget's blocks, checked it against Joget and shown it in Joget's look.
 - **The client sees first what still needs an answer.** In `Questions for the client.xlsx` and the register,
   the client's questions still to answer are on the **For client** sheet, and the ones already answered,
   settled or set aside on a new **Already answered** sheet, instead of mixed in one list. Answers typed into
